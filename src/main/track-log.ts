@@ -1,4 +1,6 @@
 import { app } from 'electron'
+import { is } from '@electron-toolkit/utils'
+import { mkdirSync } from 'fs'
 import { appendFile } from 'fs/promises'
 import { join } from 'path'
 
@@ -6,12 +8,24 @@ import type { ProlinkEngine } from '../engine/engine'
 import type { DeckId, TrackInfo } from '../engine/types'
 
 /**
- * Silent play history: appends one line per track to a log file in the
- * app's user-data directory, the first time a deck actually plays it.
+ * Where the play history lives: an explicit DECKTECTIVE_LOG_DIR wins,
+ * dev runs log into ./logs next to the project for easy access, and
+ * packaged builds use the app's user-data directory.
+ */
+function resolveLogDir(): string {
+  if (process.env.DECKTECTIVE_LOG_DIR) return process.env.DECKTECTIVE_LOG_DIR
+  return is.dev ? join(process.cwd(), 'logs') : app.getPath('userData')
+}
+
+/**
+ * Silent play history: appends one line per track to a log file, the
+ * first time a deck actually plays it.
  * Line format: ISO timestamp, deck, artist — title, BPM.
  */
 export function attachTrackLogger(engine: ProlinkEngine): string {
-  const logPath = join(app.getPath('userData'), 'played-tracks.log')
+  const logDir = resolveLogDir()
+  mkdirSync(logDir, { recursive: true })
+  const logPath = join(logDir, 'played-tracks.log')
   /** Tracks loaded on a deck but not yet logged as played. */
   const pending = new Map<DeckId, TrackInfo>()
 
