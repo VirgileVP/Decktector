@@ -6,14 +6,14 @@ import { useDecktectiveStore } from '../state/store'
 import { WaveformDetail } from './WaveformDetail'
 import { WaveformOverview } from './WaveformOverview'
 
-const PLAY_STATE_LABELS: Record<PlayState, string> = {
-  empty: 'NO TRACK',
-  loading: 'LOADING…',
-  cued: 'CUE',
-  playing: 'PLAY',
-  paused: 'PAUSE',
-  searching: 'SEARCH',
-  ended: 'END'
+const TRANSPORT_GLYPHS: Record<PlayState, string> = {
+  empty: '—',
+  loading: '…',
+  cued: '●',
+  playing: '▶',
+  paused: '❙❙',
+  searching: '≫',
+  ended: '■'
 }
 
 interface DeckPanelProps {
@@ -36,60 +36,64 @@ export function DeckPanel({ deckId, accentColor }: DeckPanelProps): React.JSX.El
     }
   }, [artworkUrl])
 
+  const playState = deck?.playState ?? 'empty'
   const playhead = deck?.playheadMs ?? null
   const remaining = track && playhead !== null ? track.durationMs - playhead : null
 
   return (
-    <section className="deck" style={{ ['--deck-color' as string]: accentColor }}>
-      <div className="deck-head">
-        <div className="deck-number">{deckId}</div>
+    <section
+      className={`deck ${deck?.isOnAir ? 'deck-onair' : ''}`}
+      style={{ ['--deck-color' as string]: accentColor }}
+    >
+      <div className="deck-bar">
+        <div className="deck-no">{deckId}</div>
 
-        <div className="deck-artwork">
-          {artworkUrl ? (
-            <img src={artworkUrl} alt="" />
-          ) : (
-            <div className="deck-artwork-empty">♪</div>
-          )}
+        <div className="deck-art">
+          {artworkUrl ? <img src={artworkUrl} alt="" /> : <span>♪</span>}
         </div>
 
-        <div className="deck-meta">
+        <div className="deck-info">
           <div className="deck-title">{track?.title ?? 'No track loaded'}</div>
-          <div className="deck-artist">{track?.artist ?? '—'}</div>
-          <div className="deck-tags">
-            {track?.key && <span className="tag">{track.key}</span>}
-            {track?.genre && <span className="tag">{track.genre}</span>}
-            {track?.album && <span className="tag tag-muted">{track.album}</span>}
+          <div className="deck-sub">
+            {track?.artist ?? '—'}
+            {track?.album ? ` · ${track.album}` : ''}
           </div>
         </div>
 
-        <div className="deck-badges">
-          <span className={`badge ${deck?.isOnAir ? 'badge-onair' : ''}`}>ON AIR</span>
-          <span className={`badge ${deck?.isMaster ? 'badge-master' : ''}`}>MASTER</span>
-          <span className={`badge ${deck?.isSynced ? 'badge-sync' : ''}`}>SYNC</span>
-          <span className={`badge badge-state state-${deck?.playState ?? 'empty'}`}>
-            {PLAY_STATE_LABELS[deck?.playState ?? 'empty']}
-          </span>
+        <div className="deck-props">
+          {track?.key && <span className="prop">{track.key}</span>}
+          {track?.genre && <span className="prop prop-muted">{track.genre}</span>}
         </div>
 
-        <div className="deck-stats">
-          <div className="stat-bpm">
-            <span className="stat-value">{deck?.effectiveBpm?.toFixed(1) ?? '--.-'}</span>
-            <span className="stat-label">BPM</span>
+        <div className={`deck-transport state-${playState}`}>{TRANSPORT_GLYPHS[playState]}</div>
+
+        <div className="deck-msync">
+          <span className={deck?.isMaster ? 'lit lit-master' : ''}>MASTER</span>
+          <span className={deck?.isSynced ? 'lit lit-sync' : ''}>SYNC</span>
+        </div>
+
+        <div className="deck-time">
+          <div className="time-main">
+            {playhead !== null ? formatTimeMs(playhead) : '--:--'}
+            <span className="time-sep"> / </span>
+            {track ? formatTimeMs(track.durationMs) : '--:--'}
           </div>
-          <div className="stat-pitch">
-            {deck ? `${deck.pitch >= 0 ? '+' : ''}${deck.pitch.toFixed(2)}%` : '--'}
-          </div>
-          <div className="stat-time">
-            <span>{playhead !== null ? formatTimeMs(playhead) : '--:--'}</span>
-            <span className="stat-remain">
-              {remaining !== null ? `-${formatTimeMs(remaining)}` : '--:--'}
+          <div className="time-sub">
+            <span className="time-bpm">
+              {deck?.effectiveBpm ? `${deck.effectiveBpm.toFixed(1)} BPM` : '--.- BPM'}
+            </span>
+            <span className="time-pitch">
+              {deck ? `${deck.pitch >= 0 ? '+' : ''}${deck.pitch.toFixed(2)}%` : ''}
+            </span>
+            <span className="time-remain">
+              {remaining !== null ? `-${formatTimeMs(remaining)}` : ''}
             </span>
           </div>
         </div>
       </div>
 
-      <WaveformDetail deckId={deckId} track={track} accentColor={accentColor} />
       <WaveformOverview deckId={deckId} track={track} accentColor={accentColor} />
+      <WaveformDetail deckId={deckId} track={track} accentColor={accentColor} />
     </section>
   )
 }

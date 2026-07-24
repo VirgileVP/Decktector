@@ -1,4 +1,4 @@
-import type { BeatGridBeat, TrackInfo, WaveformData, WaveformSegment } from '../types'
+import type { BeatGridBeat, TrackCue, TrackInfo, WaveformData, WaveformSegment } from '../types'
 import { buildPreviewFromDetail } from '../waveform'
 
 /** Columns per second in the generated detail waveform (matches HD waveforms). */
@@ -127,6 +127,33 @@ function buildWaveform(spec: SimTrackSpec, seed: number): WaveformData {
   }
 }
 
+/**
+ * Places cues the way a DJ would prep a track: hot cues on phrase starts,
+ * memory cues on the intro/outro, and a loop at the end for the mix out.
+ */
+function buildCues(spec: SimTrackSpec): TrackCue[] {
+  const barMs = (60000 / spec.bpm) * BEATS_PER_BAR
+  const phraseMs = barMs * BARS_PER_PHRASE
+  const durationMs = spec.durationSec * 1000
+  const cue = (
+    kind: TrackCue['kind'],
+    offsetMs: number,
+    button: string | null,
+    color: string,
+    label: string | null = null,
+    lengthMs: number | null = null
+  ): TrackCue => ({ kind, offsetMs, button, color, label, lengthMs })
+
+  return [
+    cue('memory', barMs, null, '#ff9f2e', 'Intro'),
+    cue('hotcue', phraseMs, 'A', '#12d17e'),
+    cue('hotcue', phraseMs * 2, 'B', '#0a84ff', 'Drop'),
+    cue('hotcue', phraseMs * 3, 'C', '#ffd60a', 'Break'),
+    cue('memory', durationMs - phraseMs, null, '#ff9f2e', 'Outro'),
+    cue('loop', durationMs - barMs * 8, null, '#ff8a00', null, barMs * 2)
+  ].filter((c) => c.offsetMs > 0 && c.offsetMs < durationMs)
+}
+
 export function buildSimTrack(spec: SimTrackSpec, trackId: number): TrackInfo {
   return {
     trackId,
@@ -141,6 +168,7 @@ export function buildSimTrack(spec: SimTrackSpec, trackId: number): TrackInfo {
     bpm: spec.bpm,
     artwork: null,
     beatGrid: buildBeatGrid(spec.bpm, spec.durationSec),
-    waveform: buildWaveform(spec, trackId * 7919)
+    waveform: buildWaveform(spec, trackId * 7919),
+    cues: buildCues(spec)
   }
 }

@@ -11,7 +11,10 @@ interface WaveformOverviewProps {
   accentColor: string
 }
 
-/** Whole-track minimap with the played portion dimmed and a position marker. */
+/**
+ * Whole-track minimap: monochrome mirrored waveform, cue ticks in their
+ * cue colors, played portion dimmed, and a position marker.
+ */
 export function WaveformOverview({
   deckId,
   track,
@@ -30,11 +33,12 @@ export function WaveformOverview({
       if (!ctx) return
       const width = canvas.clientWidth
       const height = canvas.clientHeight
+      const midY = height / 2
 
       const preview = track?.waveform?.preview
       if (!track || !preview || preview.length === 0) {
         ctx.fillStyle = 'rgba(255,255,255,0.05)'
-        ctx.fillRect(0, height / 2, width, 1)
+        ctx.fillRect(0, midY, width, 1)
         return
       }
 
@@ -46,17 +50,30 @@ export function WaveformOverview({
       for (let i = 0; i < preview.length; i++) {
         const segment = preview[i]
         const x = i * barWidth
-        const barHeight = Math.max(1, segment.height * (height - 4))
-        const [r, g, b] = segment.color
-        ctx.globalAlpha = x < playedX ? 0.35 : 0.9
-        ctx.fillStyle = `rgb(${r},${g},${b})`
-        ctx.fillRect(x, height - barHeight, Math.ceil(barWidth), barHeight)
+        const half = Math.max(0.5, segment.height * (midY - 2))
+        ctx.fillStyle = x < playedX ? 'rgba(148,158,178,0.30)' : 'rgba(196,204,220,0.75)'
+        ctx.fillRect(x, midY - half, Math.ceil(barWidth), half * 2)
       }
-      ctx.globalAlpha = 1
+
+      for (const cue of track.cues) {
+        const x = (cue.offsetMs / track.durationMs) * width
+        ctx.fillStyle = cue.color
+        if (cue.lengthMs !== null) {
+          const w = (cue.lengthMs / track.durationMs) * width
+          ctx.globalAlpha = 0.25
+          ctx.fillRect(x, 0, Math.max(w, 2), height)
+          ctx.globalAlpha = 1
+        }
+        ctx.fillRect(x - 0.75, 0, 1.5, height)
+      }
 
       if (playhead !== null) {
-        ctx.fillStyle = accentColor
-        ctx.fillRect(playedX - 1, 0, 2, height)
+        ctx.save()
+        ctx.shadowColor = accentColor
+        ctx.shadowBlur = 4
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(playedX - 0.75, 0, 1.5, height)
+        ctx.restore()
       }
     }
 

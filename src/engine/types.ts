@@ -71,6 +71,22 @@ export interface WaveformData {
   preview: WaveformSegment[] | null
 }
 
+export type CueKind = 'memory' | 'hotcue' | 'loop' | 'hotloop'
+
+/** A cue point, hot cue or loop stored with the track. */
+export interface TrackCue {
+  kind: CueKind
+  offsetMs: number
+  /** Loop length in ms; null for plain cue points */
+  lengthMs: number | null
+  /** Hot cue button letter (A-H); null for memory cues and plain loops */
+  button: string | null
+  /** Comment attached to the cue in Rekordbox */
+  label: string | null
+  /** CSS color of the marker, resolved engine-side */
+  color: string
+}
+
 /** Static description of a loaded track, fetched once per track change. */
 export interface TrackInfo {
   trackId: number
@@ -88,6 +104,7 @@ export interface TrackInfo {
   artwork: Uint8Array | null
   beatGrid: BeatGridBeat[] | null
   waveform: WaveformData | null
+  cues: TrackCue[]
 }
 
 /** Full engine state, used to hydrate the UI on (re)connection. */

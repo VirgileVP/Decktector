@@ -7,7 +7,13 @@ import { useDecktectiveStore } from '../state/store'
 
 /** Seconds of audio visible across the full width of the canvas. */
 const VISIBLE_WINDOW_SEC = 8
-const PLAYED_DIM_ALPHA = 0.45
+const PLAYED_DIM_ALPHA = 0.32
+/** 0 = raw rekordbox colors, 1 = fully washed to white. */
+const DESATURATION = 0.45
+/** Height reserved at the bottom for the beat-grid tick strip. */
+const TICK_STRIP = 12
+/** Height reserved at the top for cue flags. */
+const FLAG_STRIP = 14
 
 interface WaveformDetailProps {
   deckId: DeckId
@@ -16,8 +22,9 @@ interface WaveformDetailProps {
 }
 
 /**
- * Scrolling detailed waveform: the playhead stays centered while the
- * waveform moves under it, with beat-grid ticks along the top edge.
+ * Scrolling detailed waveform, mirrored around its center line: the
+ * playhead stays fixed in the middle while the waveform moves under it.
+ * Cue/loop markers and beat-grid ticks are drawn in the same pass.
  * Drawing happens in a rAF loop that reads the store directly, so the
  * playhead is interpolated at 60 fps between 5 Hz status packets.
  */
@@ -41,41 +48,52 @@ export function WaveformDetail({
       const height = canvas.clientHeight
       const centerX = width / 2
       const msPerPx = (VISIBLE_WINDOW_SEC * 1000) / width
+      const midY = FLAG_STRIP + (height - FLAG_STRIP - TICK_STRIP) / 2
+      const halfMax = (height - FLAG_STRIP - TICK_STRIP) / 2 - 2
 
       const waveform = track?.waveform
       const deck = useDecktectiveStore.getState().decks[deckId]
       const playhead = estimatePlayheadMs(deck, Date.now())
 
       if (!track || !waveform?.detail || playhead === null) {
-        ctx.strokeStyle = 'rgba(255,255,255,0.08)'
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)'
         ctx.beginPath()
-        ctx.moveTo(0, height / 2)
-        ctx.lineTo(width, height / 2)
+        ctx.moveTo(0, midY)
+        ctx.lineTo(width, midY)
         ctx.stroke()
         return
       }
 
+      const windowStartMs = playhead - centerX * msPerPx
+      const windowEndMs = playhead + (width - centerX) * msPerPx
       const detail = waveform.detail
-      const baseline = height - 14
+
+      // Loop regions first, under everything else
+      drawLoopRegions(ctx, track, windowStartMs, windowEndMs, msPerPx, height)
 
       for (let x = 0; x < width; x++) {
-        const tMs = playhead + (x - centerX) * msPerPx
+        const tMs = windowStartMs + x * msPerPx
         if (tMs < 0 || tMs >= track.durationMs) continue
         const segment = detail[Math.floor(tMs / waveform.msPerDetailSegment)]
         if (!segment) continue
-        const barHeight = Math.max(1, segment.height * (baseline - 6))
+        const half = Math.max(1, segment.height * halfMax)
         const [r, g, b] = segment.color
-        ctx.globalAlpha = x < centerX ? PLAYED_DIM_ALPHA : 1
-        ctx.fillStyle = `rgb(${r},${g},${b})`
-        ctx.fillRect(x, baseline - barHeight, 1, barHeight)
+        ctx.globalAlpha = x < centerX ? PLAYED_DIM_ALPHA : 0.95
+        ctx.fillStyle = `rgb(${soften(r)},${soften(g)},${soften(b)})`
+        ctx.fillRect(x, midY - half, 1, half * 2)
       }
       ctx.globalAlpha = 1
 
-      drawBeatTicks(ctx, track, playhead, centerX, msPerPx, width, baseline)
+      drawBeatTicks(ctx, track, windowStartMs, windowEndMs, msPerPx, height)
+      drawCueMarkers(ctx, track, windowStartMs, windowEndMs, msPerPx, height)
 
-      // Centered playhead
-      ctx.fillStyle = accentColor
-      ctx.fillRect(centerX - 1, 0, 2, height)
+      // Fixed centered playhead
+      ctx.save()
+      ctx.shadowColor = accentColor
+      ctx.shadowBlur = 6
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(centerX - 0.75, 0, 1.5, height)
+      ctx.restore()
     }
 
     raf = requestAnimationFrame(draw)
@@ -85,20 +103,79 @@ export function WaveformDetail({
   return <canvas ref={canvasRef} className="waveform-detail" />
 }
 
+/** Pulls a color channel toward white for a flatter, desaturated look. */
+function soften(channel: number): number {
+  return Math.round(channel + (235 - channel) * DESATURATION)
+}
+
+function drawLoopRegions(
+  ctx: CanvasRenderingContext2D,
+  track: TrackInfo,
+  windowStartMs: number,
+  windowEndMs: number,
+  msPerPx: number,
+  height: number
+): void {
+  for (const cue of track.cues) {
+    if (cue.lengthMs === null) continue
+    const endMs = cue.offsetMs + cue.lengthMs
+    if (endMs < windowStartMs || cue.offsetMs > windowEndMs) continue
+    const x0 = (cue.offsetMs - windowStartMs) / msPerPx
+    const x1 = (endMs - windowStartMs) / msPerPx
+    ctx.fillStyle = cue.color
+    ctx.globalAlpha = 0.12
+    ctx.fillRect(x0, FLAG_STRIP, x1 - x0, height - FLAG_STRIP - TICK_STRIP)
+    ctx.globalAlpha = 1
+  }
+}
+
+function drawCueMarkers(
+  ctx: CanvasRenderingContext2D,
+  track: TrackInfo,
+  windowStartMs: number,
+  windowEndMs: number,
+  msPerPx: number,
+  height: number
+): void {
+  for (const cue of track.cues) {
+    if (cue.offsetMs < windowStartMs || cue.offsetMs > windowEndMs) continue
+    const x = (cue.offsetMs - windowStartMs) / msPerPx
+
+    ctx.fillStyle = cue.color
+    ctx.globalAlpha = 0.85
+    ctx.fillRect(x - 0.5, FLAG_STRIP - 2, 1, height - FLAG_STRIP - TICK_STRIP + 2)
+    ctx.globalAlpha = 1
+
+    if (cue.button) {
+      // Hot cue: lettered square flag
+      ctx.fillRect(x - 6, 0, 12, 12)
+      ctx.fillStyle = '#0a0b0d'
+      ctx.font = '700 8px system-ui, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(cue.button, x, 6.5)
+    } else {
+      // Memory cue / loop: small triangle flag
+      ctx.beginPath()
+      ctx.moveTo(x - 5, 0)
+      ctx.lineTo(x + 5, 0)
+      ctx.lineTo(x, 8)
+      ctx.closePath()
+      ctx.fill()
+    }
+  }
+}
+
 function drawBeatTicks(
   ctx: CanvasRenderingContext2D,
   track: TrackInfo,
-  playhead: number,
-  centerX: number,
+  windowStartMs: number,
+  windowEndMs: number,
   msPerPx: number,
-  width: number,
-  baseline: number
+  height: number
 ): void {
   const grid = track.beatGrid
   if (!grid || grid.length === 0) return
-
-  const windowStartMs = playhead - centerX * msPerPx
-  const windowEndMs = playhead + (width - centerX) * msPerPx
 
   // Binary search for the first beat inside the visible window
   let lo = 0
@@ -109,11 +186,12 @@ function drawBeatTicks(
     else hi = mid
   }
 
+  const tickTop = height - TICK_STRIP + 3
   for (let i = lo; i < grid.length && grid[i].offsetMs <= windowEndMs; i++) {
     const beat = grid[i]
-    const x = centerX + (beat.offsetMs - playhead) / msPerPx
+    const x = (beat.offsetMs - windowStartMs) / msPerPx
     const isDownbeat = beat.beatInMeasure === 1
-    ctx.fillStyle = isDownbeat ? 'rgba(255,80,80,0.9)' : 'rgba(255,255,255,0.35)'
-    ctx.fillRect(x, baseline + 4, isDownbeat ? 2 : 1, isDownbeat ? 8 : 5)
+    ctx.fillStyle = isDownbeat ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.18)'
+    ctx.fillRect(x, tickTop, 1, isDownbeat ? 7 : 4)
   }
 }

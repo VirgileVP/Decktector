@@ -2,6 +2,7 @@ import type { CDJStatus, ConnectedProlinkNetwork } from 'prolink-connect'
 
 import type { TrackInfo, WaveformData } from '../types'
 import { buildPreviewFromDetail } from '../waveform'
+import { mapCues } from './cues'
 
 /** HD waveforms carry 150 columns per second of audio. */
 const HD_SEGMENTS_PER_SECOND = 150
@@ -86,6 +87,7 @@ export async function loadTrack(
         offsetMs: beat.offset,
         beatInMeasure: beat.count
       })) ?? null,
-    waveform: convertWaveform((waveforms?.waveformHd ?? track.waveformHd) as RawWaveformHd | null)
+    waveform: convertWaveform((waveforms?.waveformHd ?? track.waveformHd) as RawWaveformHd | null),
+    cues: mapCues(track.cueAndLoops)
   }
 }
