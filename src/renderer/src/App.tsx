@@ -1,8 +1,17 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
+import logo from './assets/logo.svg'
 import { DeckPanel } from './components/DeckPanel'
 import { connectStoreToEngine, useDecktectiveStore } from './state/store'
+
+type DeckView = 'stack' | 'quad'
+
+const VIEW_STORAGE_KEY = 'decktective.view'
+
+function loadView(): DeckView {
+  return localStorage.getItem(VIEW_STORAGE_KEY) === 'quad' ? 'quad' : 'stack'
+}
 
 /** Accent color per player number, applied to playheads and badges. */
 const DECK_COLORS: Record<number, string> = {
@@ -23,6 +32,12 @@ const NETWORK_LABELS: Record<string, string> = {
 function App(): React.JSX.Element {
   useEffect(() => connectStoreToEngine(), [])
 
+  const [view, setView] = useState<DeckView>(loadView)
+  const selectView = (next: DeckView): void => {
+    setView(next)
+    localStorage.setItem(VIEW_STORAGE_KEY, next)
+  }
+
   const networkState = useDecktectiveStore((s) => s.networkState)
   const deckIds = useDecktectiveStore(
     useShallow((s) =>
@@ -35,16 +50,45 @@ function App(): React.JSX.Element {
   return (
     <div className="app">
       <header className="app-header">
-        <h1 className="app-title">
-          Decktective <span className="app-title-icon">🕵️</span>
-        </h1>
-        <div className={`network-status network-${networkState}`}>
-          <span className="network-dot" />
-          {NETWORK_LABELS[networkState]}
+        <div className="app-brand">
+          <img className="app-logo" src={logo} alt="" />
+          <h1 className="app-title">Decktective</h1>
+        </div>
+        <div className="header-right">
+          <div className="view-toggle">
+            <button
+              type="button"
+              className={view === 'stack' ? 'active' : ''}
+              title="Stacked view"
+              onClick={() => selectView('stack')}
+            >
+              <svg viewBox="0 0 14 14" width="14" height="14">
+                <rect x="1" y="1.5" width="12" height="4.4" rx="1" />
+                <rect x="1" y="8.1" width="12" height="4.4" rx="1" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className={view === 'quad' ? 'active' : ''}
+              title="Quad view (2×2)"
+              onClick={() => selectView('quad')}
+            >
+              <svg viewBox="0 0 14 14" width="14" height="14">
+                <rect x="1" y="1" width="5.4" height="5.4" rx="1" />
+                <rect x="7.6" y="1" width="5.4" height="5.4" rx="1" />
+                <rect x="1" y="7.6" width="5.4" height="5.4" rx="1" />
+                <rect x="7.6" y="7.6" width="5.4" height="5.4" rx="1" />
+              </svg>
+            </button>
+          </div>
+          <div className={`network-status network-${networkState}`}>
+            <span className="network-dot" />
+            {NETWORK_LABELS[networkState]}
+          </div>
         </div>
       </header>
 
-      <main className="deck-grid">
+      <main className={`deck-grid view-${view}`}>
         {deckIds.length === 0 ? (
           <div className="empty-state">
             <p>Waiting for Pro DJ Link devices…</p>

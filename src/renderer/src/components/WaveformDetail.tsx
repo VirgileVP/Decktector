@@ -5,8 +5,12 @@ import { prepareCanvas } from '../lib/canvas'
 import { estimatePlayheadMs } from '../lib/playhead'
 import { useDecktectiveStore } from '../state/store'
 
-/** Seconds of audio visible across the full width of the canvas. */
-const VISIBLE_WINDOW_SEC = 8
+/** Default seconds of audio visible across the full width of the canvas. */
+const DEFAULT_WINDOW_SEC = 8
+const MIN_WINDOW_SEC = 2
+const MAX_WINDOW_SEC = 60
+/** Multiplier applied per wheel notch when zooming. */
+const ZOOM_STEP = 1.18
 const PLAYED_DIM_ALPHA = 0.32
 /** 0 = raw rekordbox colors, 1 = fully washed to white. */
 const DESATURATION = 0.45
@@ -34,10 +38,26 @@ export function WaveformDetail({
   accentColor
 }: WaveformDetailProps): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  /** Visible window in seconds; a ref so zooming never re-renders React. */
+  const windowSecRef = useRef(DEFAULT_WINDOW_SEC)
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return undefined
+
+    const onWheel = (event: WheelEvent): void => {
+      event.preventDefault()
+      const factor = event.deltaY > 0 ? ZOOM_STEP : 1 / ZOOM_STEP
+      windowSecRef.current = Math.min(
+        MAX_WINDOW_SEC,
+        Math.max(MIN_WINDOW_SEC, windowSecRef.current * factor)
+      )
+    }
+    const onDoubleClick = (): void => {
+      windowSecRef.current = DEFAULT_WINDOW_SEC
+    }
+    canvas.addEventListener('wheel', onWheel, { passive: false })
+    canvas.addEventListener('dblclick', onDoubleClick)
 
     let raf = 0
     const draw = (): void => {
@@ -47,7 +67,7 @@ export function WaveformDetail({
       const width = canvas.clientWidth
       const height = canvas.clientHeight
       const centerX = width / 2
-      const msPerPx = (VISIBLE_WINDOW_SEC * 1000) / width
+      const msPerPx = (windowSecRef.current * 1000) / width
       const midY = FLAG_STRIP + (height - FLAG_STRIP - TICK_STRIP) / 2
       const halfMax = (height - FLAG_STRIP - TICK_STRIP) / 2 - 2
 
@@ -94,10 +114,21 @@ export function WaveformDetail({
       ctx.fillStyle = '#ffffff'
       ctx.fillRect(centerX - 0.75, 0, 1.5, height)
       ctx.restore()
+
+      // Current zoom window, bottom-right corner
+      ctx.fillStyle = 'rgba(255,255,255,0.35)'
+      ctx.font = '500 9px system-ui, sans-serif'
+      ctx.textAlign = 'right'
+      ctx.textBaseline = 'bottom'
+      ctx.fillText(`${windowSecRef.current.toFixed(0)}s`, width - 5, height - 3)
     }
 
     raf = requestAnimationFrame(draw)
-    return () => cancelAnimationFrame(raf)
+    return () => {
+      cancelAnimationFrame(raf)
+      canvas.removeEventListener('wheel', onWheel)
+      canvas.removeEventListener('dblclick', onDoubleClick)
+    }
   }, [deckId, track, accentColor])
 
   return <canvas ref={canvasRef} className="waveform-detail" />

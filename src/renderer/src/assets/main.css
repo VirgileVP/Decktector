@@ -52,6 +52,18 @@ body {
   background: var(--bg);
 }
 
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.app-logo {
+  width: 22px;
+  height: 22px;
+  filter: drop-shadow(0 0 5px rgba(34, 211, 238, 0.55));
+}
+
 .app-title {
   font-size: 11px;
   font-weight: 700;
@@ -60,9 +72,49 @@ body {
   color: var(--text);
 }
 
-.app-title-icon {
-  font-size: 11px;
-  margin-left: 2px;
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.view-toggle {
+  display: flex;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.view-toggle button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 20px;
+  background: var(--bg-inset);
+  border: none;
+  cursor: pointer;
+}
+
+.view-toggle button + button {
+  border-left: 1px solid var(--border-strong);
+}
+
+.view-toggle svg rect {
+  fill: var(--text-faint);
+  transition: fill 0.15s ease;
+}
+
+.view-toggle button:hover svg rect {
+  fill: var(--text-muted);
+}
+
+.view-toggle button.active {
+  background: var(--border-strong);
+}
+
+.view-toggle button.active svg rect {
+  fill: var(--text);
 }
 
 .network-status {
@@ -112,6 +164,21 @@ body {
   gap: 8px;
   padding: 8px;
   overflow-y: auto;
+}
+
+.deck-grid.view-quad {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 1fr;
+}
+
+/* Quad cells are narrower: tighten the cue rail and hide secondary info */
+.view-quad .cue-list {
+  width: 128px;
+}
+
+.view-quad .deck-props {
+  display: none;
 }
 
 .empty-state {
