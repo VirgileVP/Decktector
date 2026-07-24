@@ -1,15 +1,31 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
+import type { ProlinkEngine } from '../engine/engine'
+import { SimEngine } from '../engine/sim/sim-engine'
+import { exposeEngineOverIpc } from './ipc'
+
+function createEngine(): ProlinkEngine {
+  if (process.env.DECKTECTIVE_SIM === '1') {
+    return new SimEngine()
+  }
+  // Real prolink-connect engine lands in a later milestone; until then the
+  // app always runs the simulation so it stays usable without hardware.
+  return new SimEngine()
+}
+
+const engine = createEngine()
+
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
+    width: 1280,
+    height: 800,
     show: false,
     autoHideMenuBar: true,
+    backgroundColor: '#0c0e14',
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -40,7 +56,7 @@ function createWindow(): void {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron')
+  electronApp.setAppUserModelId('com.decktective')
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
@@ -49,8 +65,10 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
+  exposeEngineOverIpc(engine)
+  engine.start().catch((error) => {
+    console.error('Failed to start engine:', error)
+  })
 
   createWindow()
 
@@ -70,5 +88,8 @@ app.on('window-all-closed', () => {
   }
 })
 
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.
+app.on('before-quit', () => {
+  engine.stop().catch((error) => {
+    console.error('Failed to stop engine:', error)
+  })
+})
