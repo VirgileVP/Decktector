@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
-import logo from './assets/logo.svg'
+import neonLogo from './assets/neon-logo.png'
 import { DeckPanel } from './components/DeckPanel'
 import { connectStoreToEngine, useDecktectiveStore } from './state/store'
 
@@ -52,10 +52,7 @@ function App(): React.JSX.Element {
   return (
     <div className="app">
       <header className="app-header">
-        <div className="app-brand">
-          <img className="app-logo" src={logo} alt="" />
-          <h1 className="app-title">Decktective</h1>
-        </div>
+        <img className="neon-logo" src={neonLogo} alt="NEON" />
         <div className="header-right">
           <div className="view-toggle">
             <button

@@ -52,24 +52,12 @@ body {
   background: var(--bg);
 }
 
-.app-brand {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-
-.app-logo {
-  width: 22px;
-  height: 22px;
-  filter: drop-shadow(0 0 5px rgba(34, 211, 238, 0.55));
-}
-
-.app-title {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--text);
+.neon-logo {
+  /* The source PNG carries a lot of vertical padding: the lettering itself
+     ends up roughly 40% of this height. */
+  height: 30px;
+  width: auto;
+  filter: drop-shadow(0 0 7px rgba(34, 211, 238, 0.45));
 }
 
 .header-right {
@@ -235,7 +223,9 @@ body {
   border: 1px solid var(--border-strong);
   border-radius: 4px;
   flex-shrink: 0;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .deck-onair {
@@ -451,7 +441,10 @@ body {
   padding: 3px 6px;
   border-radius: 3px;
   border: 1px solid transparent;
-  transition: opacity 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
 }
 
 .cue-marker {
