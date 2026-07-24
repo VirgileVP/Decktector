@@ -3,6 +3,7 @@ import { useEffect, useMemo } from 'react'
 import type { DeckId, PlayState } from '../../../engine/types'
 import { formatTimeMs } from '../lib/playhead'
 import { useDecktectiveStore } from '../state/store'
+import { CueList } from './CueList'
 import { WaveformDetail } from './WaveformDetail'
 import { WaveformOverview } from './WaveformOverview'
 
@@ -92,8 +93,13 @@ export function DeckPanel({ deckId, accentColor }: DeckPanelProps): React.JSX.El
         </div>
       </div>
 
-      <WaveformOverview deckId={deckId} track={track} accentColor={accentColor} />
-      <WaveformDetail deckId={deckId} track={track} accentColor={accentColor} />
+      <div className="deck-body">
+        <CueList deckId={deckId} track={track} />
+        <div className="deck-waves">
+          <WaveformOverview deckId={deckId} track={track} accentColor={accentColor} />
+          <WaveformDetail deckId={deckId} track={track} accentColor={accentColor} />
+        </div>
+      </div>
     </section>
   )
 }

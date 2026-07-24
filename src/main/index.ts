@@ -7,6 +7,7 @@ import type { ProlinkEngine } from '../engine/engine'
 import { ProlinkNetworkEngine } from '../engine/prolink/prolink-engine'
 import { SimEngine } from '../engine/sim/sim-engine'
 import { exposeEngineOverIpc } from './ipc'
+import { attachTrackLogger } from './track-log'
 
 function createEngine(): ProlinkEngine {
   if (process.env.DECKTECTIVE_SIM !== '1') return new ProlinkNetworkEngine()
@@ -64,6 +65,8 @@ app.whenReady().then(() => {
   })
 
   exposeEngineOverIpc(engine)
+  const trackLogPath = attachTrackLogger(engine)
+  console.log(`Played-tracks log: ${trackLogPath}`)
   engine.start().catch((error) => {
     console.error('Failed to start engine:', error)
   })

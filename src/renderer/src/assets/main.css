@@ -330,6 +330,102 @@ body {
   color: var(--onair);
 }
 
+/* ---------- Deck body: cue list + waveforms ---------- */
+
+.deck-body {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+
+.deck-waves {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.cue-list {
+  width: 168px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow-y: auto;
+}
+
+.cue-list-empty {
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--text-faint);
+}
+
+.cue-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 6px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  transition: opacity 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.cue-marker {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 700;
+  color: #0a0b0d;
+  flex-shrink: 0;
+}
+
+.cue-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+
+.cue-time {
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.cue-passed {
+  opacity: 0.32;
+}
+
+.cue-current {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--border-strong);
+}
+
+.cue-current .cue-name {
+  font-weight: 700;
+}
+
+.cue-upcoming .cue-name {
+  color: var(--text-muted);
+}
+
 /* ---------- Waveforms ---------- */
 
 .waveform-overview {

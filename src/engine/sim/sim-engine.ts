@@ -8,6 +8,16 @@ const TRACK_SWAP_MARGIN_MS = 8000
 const TRACK_LOAD_DELAY_MS = 1500
 const CUE_TO_PLAY_DELAY_MS = 2500
 
+/** Per-tick probabilities of spontaneous DJ actions on a playing deck. */
+const ACTION_ODDS = {
+  pause: 0.004,
+  cueJump: 0.006,
+  scratch: 0.004
+} as const
+const PAUSE_MIN_MS = 1000
+const PAUSE_MAX_MS = 4000
+const SCRATCH_MS = 800
+
 interface SimDeck {
   deckId: DeckId
   playState: PlayState
@@ -17,6 +27,8 @@ interface SimDeck {
   trackIndex: number
   pitchPhase: number
   swapping: boolean
+  /** True while a random action temporarily owns the play state */
+  busy: boolean
 }
 
 /**
@@ -75,7 +87,8 @@ export class SimEngine extends BaseEngine {
       playheadMs: 0,
       trackIndex,
       pitchPhase: deckId * 2.1,
-      swapping: false
+      swapping: false,
+      busy: false
     }
   }
 
@@ -92,9 +105,47 @@ export class SimEngine extends BaseEngine {
           deck.playheadMs = deck.track.durationMs
           deck.playState = 'ended'
         }
+        this.maybeAct(deck)
       }
       this.emitDeckState(deck, pitch)
     }
+  }
+
+  /** Occasionally behaves like a DJ: pauses, jumps to a cue, scratches. */
+  private maybeAct(deck: SimDeck): void {
+    if (deck.busy || deck.swapping || !deck.track) return
+    const roll = Math.random()
+
+    if (roll < ACTION_ODDS.pause) {
+      deck.busy = true
+      deck.playState = 'paused'
+      setTimeout(
+        () => this.resume(deck),
+        PAUSE_MIN_MS + Math.random() * (PAUSE_MAX_MS - PAUSE_MIN_MS)
+      )
+    } else if (roll < ACTION_ODDS.pause + ACTION_ODDS.cueJump) {
+      // Jump to a random cue not too close to the end of the track
+      const targets = deck.track.cues.filter(
+        (cue) => cue.offsetMs < deck.track!.durationMs - TRACK_SWAP_MARGIN_MS * 2
+      )
+      if (targets.length > 0) {
+        deck.playheadMs = targets[Math.floor(Math.random() * targets.length)].offsetMs
+      }
+    } else if (roll < ACTION_ODDS.pause + ACTION_ODDS.cueJump + ACTION_ODDS.scratch) {
+      deck.busy = true
+      deck.playState = 'searching'
+      const origin = deck.playheadMs
+      setTimeout(() => {
+        // Scratch lands slightly off where it started
+        deck.playheadMs = Math.max(0, origin + (Math.random() - 0.5) * 4000)
+        this.resume(deck)
+      }, SCRATCH_MS)
+    }
+  }
+
+  private resume(deck: SimDeck): void {
+    if (!deck.swapping && deck.track) deck.playState = 'playing'
+    deck.busy = false
   }
 
   /** Slow sinusoidal pitch drift, ±3%, unique phase per deck. */
