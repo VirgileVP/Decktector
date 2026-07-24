@@ -9,7 +9,9 @@ import { SimEngine } from '../engine/sim/sim-engine'
 import { exposeEngineOverIpc } from './ipc'
 
 function createEngine(): ProlinkEngine {
-  return process.env.DECKTECTIVE_SIM === '1' ? new SimEngine() : new ProlinkNetworkEngine()
+  if (process.env.DECKTECTIVE_SIM !== '1') return new ProlinkNetworkEngine()
+  const deckCount = Number(process.env.DECKTECTIVE_SIM_DECKS) || 2
+  return new SimEngine(Math.min(Math.max(deckCount, 1), 4))
 }
 
 const engine = createEngine()

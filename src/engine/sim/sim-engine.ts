@@ -28,10 +28,18 @@ export class SimEngine extends BaseEngine {
   private masterDeck: DeckId = 1
   private timer: NodeJS.Timeout | null = null
   private nextTrackId = 100
+  /** Rolling index into SIM_TRACKS so decks pick distinct tracks. */
+  private trackCursor = 0
+
+  constructor(private deckCount: number = 2) {
+    super()
+  }
 
   async start(): Promise<void> {
     this.updateNetworkState('searching')
-    this.simDecks = [this.createDeck(1, 0), this.createDeck(2, 1)]
+    this.simDecks = Array.from({ length: this.deckCount }, (_, i) =>
+      this.createDeck(i + 1, this.trackCursor++ % SIM_TRACKS.length)
+    )
 
     setTimeout(() => {
       this.updateNetworkState('connected')
@@ -43,11 +51,12 @@ export class SimEngine extends BaseEngine {
         })
         this.updateDeckTrack(deck.deckId, deck.track)
       }
-      // Deck 1 is already rolling, deck 2 joins the mix a few seconds later
-      this.simDecks[0].playState = 'playing'
-      setTimeout(() => {
-        this.simDecks[1].playState = 'playing'
-      }, 5000)
+      // Deck 1 is already rolling, the others join the mix staggered
+      for (const [i, deck] of this.simDecks.entries()) {
+        setTimeout(() => {
+          deck.playState = 'playing'
+        }, i * 5000)
+      }
       this.timer = setInterval(() => this.tick(), TICK_MS)
     }, 800)
   }
@@ -101,7 +110,7 @@ export class SimEngine extends BaseEngine {
     if (other && other.playState === 'playing') this.masterDeck = other.deckId
 
     setTimeout(() => {
-      deck.trackIndex = (deck.trackIndex + 2) % SIM_TRACKS.length
+      deck.trackIndex = this.trackCursor++ % SIM_TRACKS.length
       deck.playState = 'loading'
       deck.track = null
       deck.playheadMs = 0
