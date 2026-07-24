@@ -12,7 +12,8 @@ import { attachTrackLogger } from './track-log'
 function createEngine(): ProlinkEngine {
   if (process.env.DECKTECTIVE_SIM !== '1') return new ProlinkNetworkEngine()
   const deckCount = Number(process.env.DECKTECTIVE_SIM_DECKS) || 2
-  return new SimEngine(Math.min(Math.max(deckCount, 1), 4))
+  // Pro DJ Link networks top out at 6 players
+  return new SimEngine(Math.min(Math.max(deckCount, 1), 6))
 }
 
 const engine = createEngine()

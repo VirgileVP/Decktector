@@ -18,7 +18,9 @@ const DECK_COLORS: Record<number, string> = {
   1: '#4da3ff',
   2: '#ffb84d',
   3: '#6ee7a0',
-  4: '#ff6b81'
+  4: '#ff6b81',
+  5: '#c084fc',
+  6: '#22d3ee'
 }
 const FALLBACK_COLOR = '#9aa4b2'
 
