@@ -40,10 +40,11 @@ export function DeckPanel({ deckId, accentColor }: DeckPanelProps): React.JSX.El
   const playState = deck?.playState ?? 'empty'
   const playhead = deck?.playheadMs ?? null
   const remaining = track && playhead !== null ? track.durationMs - playhead : null
+  const isOnAir = deck?.isOnAir ?? false
 
   return (
     <section
-      className={`deck ${deck?.isOnAir ? 'deck-onair' : ''}`}
+      className={`deck ${isOnAir ? 'deck-onair' : 'deck-idle'}`}
       style={{ ['--deck-color' as string]: accentColor }}
     >
       <div className="deck-bar">
@@ -69,6 +70,7 @@ export function DeckPanel({ deckId, accentColor }: DeckPanelProps): React.JSX.El
         <div className={`deck-transport state-${playState}`}>{TRANSPORT_GLYPHS[playState]}</div>
 
         <div className="deck-msync">
+          <span className={isOnAir ? 'lit lit-onair' : ''}>ON AIR</span>
           <span className={deck?.isMaster ? 'lit lit-master' : ''}>MASTER</span>
           <span className={deck?.isSynced ? 'lit lit-sync' : ''}>SYNC</span>
         </div>

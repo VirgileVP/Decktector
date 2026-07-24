@@ -7,7 +7,10 @@
   --text: #e8eaf0;
   --text-muted: #8b93a5;
   --text-faint: #565d6d;
+  --bg-idle-panel: #0a0b0e;
   --onair: #ff453a;
+  /* Dimming applied to the waveforms of decks that are not on air */
+  --waveform-idle-filter: brightness(0.4) saturate(0.5);
   --master: #ffffff;
   --sync: #b7c1d4;
   font-family:
@@ -200,6 +203,10 @@ body {
   padding: 8px 10px;
   min-height: 0;
   flex: 1;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .deck-bar {
@@ -239,6 +246,16 @@ body {
   border-color: var(--onair);
   box-shadow: 0 0 8px rgba(255, 69, 58, 0.45);
   color: var(--onair);
+}
+
+/* Decks that are not on air recede so the live ones read at a glance. */
+.deck-idle {
+  background: var(--bg-idle-panel);
+  border-color: var(--border);
+}
+
+.deck-idle .deck-bar {
+  opacity: 0.6;
 }
 
 .deck-art {
@@ -354,6 +371,11 @@ body {
 
 .deck-msync .lit-sync {
   color: var(--sync);
+}
+
+.deck-msync .lit-onair {
+  color: var(--onair);
+  text-shadow: 0 0 6px rgba(255, 69, 58, 0.55);
 }
 
 /* ---------- Time block ---------- */
@@ -502,6 +524,13 @@ body {
   border-radius: 3px;
   background: var(--bg-inset);
   border: 1px solid var(--border);
+  transition: filter 0.2s ease;
+}
+
+/* Idle decks: waveforms darkened and washed out, live decks stay full brightness. */
+.deck-idle .waveform-overview,
+.deck-idle .waveform-detail {
+  filter: var(--waveform-idle-filter);
 }
 
 .waveform-detail {
@@ -511,4 +540,5 @@ body {
   border-radius: 3px;
   background: var(--bg-inset);
   border: 1px solid var(--border);
+  transition: filter 0.2s ease;
 }
