@@ -6,8 +6,13 @@ import icon from '../../resources/icon.png?asset'
 import type { ProlinkEngine } from '../engine/engine'
 import { ProlinkNetworkEngine } from '../engine/prolink/prolink-engine'
 import { SimEngine } from '../engine/sim/sim-engine'
+import { installCrashGuard } from './crash-guard'
 import { exposeEngineOverIpc } from './ipc'
 import { attachTrackLogger } from './track-log'
+
+// Installed before anything opens a socket, so no packet can slip through
+// before the guard is in place.
+installCrashGuard()
 
 function createEngine(): ProlinkEngine {
   if (process.env.DECKTECTIVE_SIM !== '1') return new ProlinkNetworkEngine()
