@@ -4,16 +4,12 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
 import type { ProlinkEngine } from '../engine/engine'
+import { ProlinkNetworkEngine } from '../engine/prolink/prolink-engine'
 import { SimEngine } from '../engine/sim/sim-engine'
 import { exposeEngineOverIpc } from './ipc'
 
 function createEngine(): ProlinkEngine {
-  if (process.env.DECKTECTIVE_SIM === '1') {
-    return new SimEngine()
-  }
-  // Real prolink-connect engine lands in a later milestone; until then the
-  // app always runs the simulation so it stays usable without hardware.
-  return new SimEngine()
+  return process.env.DECKTECTIVE_SIM === '1' ? new SimEngine() : new ProlinkNetworkEngine()
 }
 
 const engine = createEngine()

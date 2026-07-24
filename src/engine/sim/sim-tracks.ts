@@ -1,8 +1,8 @@
 import type { BeatGridBeat, TrackInfo, WaveformData, WaveformSegment } from '../types'
+import { buildPreviewFromDetail } from '../waveform'
 
 /** Columns per second in the generated detail waveform (matches HD waveforms). */
 const DETAIL_SEGMENTS_PER_SECOND = 150
-const PREVIEW_SEGMENT_COUNT = 400
 const BEATS_PER_BAR = 4
 /** Bars per musical phrase used to shape the energy envelope. */
 const BARS_PER_PHRASE = 16
@@ -120,26 +120,10 @@ function buildWaveform(spec: SimTrackSpec, seed: number): WaveformData {
     detail[i] = { height, color }
   }
 
-  const preview: WaveformSegment[] = new Array(PREVIEW_SEGMENT_COUNT)
-  const chunk = totalSegments / PREVIEW_SEGMENT_COUNT
-  for (let i = 0; i < PREVIEW_SEGMENT_COUNT; i++) {
-    const start = Math.floor(i * chunk)
-    const end = Math.min(totalSegments, Math.ceil((i + 1) * chunk))
-    let maxHeight = 0
-    let sampleColor: [number, number, number] = [40, 90, 255]
-    for (let j = start; j < end; j++) {
-      if (detail[j].height > maxHeight) {
-        maxHeight = detail[j].height
-        sampleColor = detail[j].color
-      }
-    }
-    preview[i] = { height: maxHeight, color: sampleColor }
-  }
-
   return {
     detail,
     msPerDetailSegment: 1000 / DETAIL_SEGMENTS_PER_SECOND,
-    preview
+    preview: buildPreviewFromDetail(detail)
   }
 }
 
