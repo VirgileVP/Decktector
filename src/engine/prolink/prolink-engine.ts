@@ -10,6 +10,7 @@ import { BaseEngine } from '../engine'
 import type { DeckId } from '../types'
 import { normalizeStatus } from './normalize'
 import { PositionTracker } from './position'
+import { PrecisePositionListener } from './precise-position'
 import { loadTrack } from './track-loader'
 
 /**
@@ -25,6 +26,7 @@ export class ProlinkNetworkEngine extends BaseEngine {
   private positions = new Map<DeckId, PositionTracker>()
   /** Track id last seen per deck, to detect load/unload transitions. */
   private knownTrackIds = new Map<DeckId, number>()
+  private precisePositions = new PrecisePositionListener()
 
   async start(): Promise<void> {
     this.updateNetworkState('searching')
@@ -62,6 +64,9 @@ export class ProlinkNetworkEngine extends BaseEngine {
 
       this.updateNetworkState('connected')
       network.statusEmitter.on('status', (status) => this.handleStatus(network, status))
+      this.precisePositions.start((sample) =>
+        this.trackerFor(sample.deckId).setPrecisePosition(sample.positionMs, Date.now())
+      )
     } catch (error) {
       console.error('Failed to bring Pro DJ Link network online:', error)
       this.updateNetworkState('failed')
@@ -69,6 +74,7 @@ export class ProlinkNetworkEngine extends BaseEngine {
   }
 
   async stop(): Promise<void> {
+    this.precisePositions.stop()
     await this.network?.disconnect()
     this.network = null
     this.updateNetworkState('offline')
