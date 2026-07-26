@@ -19,6 +19,35 @@ Primary targets: **XDJ-XZ** and **XDJ-1000MK2** (works with 2 to 4 CDJ-2000-era 
   virtual-player slot on the Pro DJ Link network.
 - Tracks must come from Rekordbox-analyzed media (USB/SD) for metadata and waveforms
   to be available.
+- Node must be built for the same architecture as the machine. The Rekordbox database
+  downloaded from the players is read through `better-sqlite3`, a native module, and
+  `postinstall` builds it for whatever architecture `node` reports: an x64 Node under
+  Rosetta on an Apple Silicon Mac produces a module arm64 Electron cannot load, and
+  every metadata lookup fails with a `dlopen` architecture error. Check with
+  `node -p process.arch`, and rebuild after switching Node:
+
+```sh
+npx electron-builder install-app-deps --arch arm64
+```
+
+## Metadata on a full four-player network
+
+Players only answer media-slot queries and metadata requests coming from a virtual
+CDJ numbered 1-4. With four players on the network all four numbers are taken, ours
+is 5, and both of those doors are closed — the track database is then read straight
+off the player over NFS instead, which needs no player number (see
+`src/engine/prolink/media-slot-bypass.ts`).
+
+A CDJ-3000 can be renumbered to player 5 or 6, which frees a number in range. Set
+one player that way, then claim the freed number:
+
+```sh
+DECKTECTIVE_VCDJ_ID=4 npm run dev
+```
+
+Never point it at a number a device already uses — two devices sharing one breaks the
+network. Every metadata lookup is traced to `prolink-diagnostic.log` in the log
+directory (`./logs` in dev, the app's user-data directory in packaged builds).
 
 ## Getting started
 

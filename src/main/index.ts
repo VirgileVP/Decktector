@@ -8,6 +8,7 @@ import { ProlinkNetworkEngine } from '../engine/prolink/prolink-engine'
 import { SimEngine } from '../engine/sim/sim-engine'
 import { installCrashGuard } from './crash-guard'
 import { exposeEngineOverIpc } from './ipc'
+import { attachDiagnosticLog } from './prolink-log'
 import { attachTrackLogger } from './track-log'
 
 // Installed before anything opens a socket, so no packet can slip through
@@ -73,6 +74,7 @@ app.whenReady().then(() => {
   exposeEngineOverIpc(engine)
   const trackLogPath = attachTrackLogger(engine)
   console.log(`Played-tracks log: ${trackLogPath}`)
+  console.log(`Pro DJ Link diagnostic log: ${attachDiagnosticLog()}`)
   engine.start().catch((error) => {
     console.error('Failed to start engine:', error)
   })
