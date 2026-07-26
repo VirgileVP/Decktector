@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 
 import neonLogo from './assets/neon-logo.png'
 import { DeckPanel } from './components/DeckPanel'
+import { HeaderClock } from './components/HeaderClock'
 import { connectStoreToEngine, useDecktectiveStore } from './state/store'
 
 type DeckView = 'stack' | 'quad'
@@ -53,6 +54,7 @@ function App(): React.JSX.Element {
     <div className="app">
       <header className="app-header">
         <img className="neon-logo" src={neonLogo} alt="NEON" />
+        <HeaderClock />
         <div className="header-right">
           <div className="view-toggle">
             <button
