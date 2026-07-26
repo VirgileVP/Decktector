@@ -7,3 +7,4 @@ out
 .env
 .env.*
 logs
+graphify-out
