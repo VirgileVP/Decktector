@@ -1,4 +1,4 @@
-import type { DeckState } from '../../../engine/types'
+import type { DeckState } from '../model'
 
 /**
  * Estimates the current playhead position by extrapolating from the last

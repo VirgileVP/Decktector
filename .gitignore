@@ -1,6 +1,5 @@
 node_modules
 dist
-out
 .DS_Store
 .eslintcache
 *.log*
@@ -9,3 +8,4 @@ out
 logs
 graphify-out
 target
+src-tauri/gen/schemas

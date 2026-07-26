@@ -152,24 +152,60 @@ fn build_cues(spec: &SimTrackSpec) -> Vec<TrackCue> {
     let phrase_ms = bar_ms * BARS_PER_PHRASE as f64;
     let duration_ms = spec.duration_sec * 1000.0;
 
-    let cue = |kind, offset_ms, button: Option<&str>, color: &str, label: Option<&str>, length_ms| {
-        TrackCue {
-            kind,
-            offset_ms,
-            length_ms,
-            button: button.map(str::to_owned),
-            label: label.map(str::to_owned),
-            color: color.to_owned(),
-        }
-    };
+    let cue =
+        |kind, offset_ms, button: Option<&str>, color: &str, label: Option<&str>, length_ms| {
+            TrackCue {
+                kind,
+                offset_ms,
+                length_ms,
+                button: button.map(str::to_owned),
+                label: label.map(str::to_owned),
+                color: color.to_owned(),
+            }
+        };
 
     [
-        cue(CueKind::Memory, bar_ms, None, "#ff9f2e", Some("Intro"), None),
+        cue(
+            CueKind::Memory,
+            bar_ms,
+            None,
+            "#ff9f2e",
+            Some("Intro"),
+            None,
+        ),
         cue(CueKind::Hotcue, phrase_ms, Some("A"), "#12d17e", None, None),
-        cue(CueKind::Hotcue, phrase_ms * 2.0, Some("B"), "#0a84ff", Some("Drop"), None),
-        cue(CueKind::Hotcue, phrase_ms * 3.0, Some("C"), "#ffd60a", Some("Break"), None),
-        cue(CueKind::Memory, duration_ms - phrase_ms, None, "#ff9f2e", Some("Outro"), None),
-        cue(CueKind::Loop, duration_ms - bar_ms * 8.0, None, "#ff8a00", None, Some(bar_ms * 2.0)),
+        cue(
+            CueKind::Hotcue,
+            phrase_ms * 2.0,
+            Some("B"),
+            "#0a84ff",
+            Some("Drop"),
+            None,
+        ),
+        cue(
+            CueKind::Hotcue,
+            phrase_ms * 3.0,
+            Some("C"),
+            "#ffd60a",
+            Some("Break"),
+            None,
+        ),
+        cue(
+            CueKind::Memory,
+            duration_ms - phrase_ms,
+            None,
+            "#ff9f2e",
+            Some("Outro"),
+            None,
+        ),
+        cue(
+            CueKind::Loop,
+            duration_ms - bar_ms * 8.0,
+            None,
+            "#ff8a00",
+            None,
+            Some(bar_ms * 2.0),
+        ),
     ]
     .into_iter()
     .filter(|cue| cue.offset_ms > 0.0 && cue.offset_ms < duration_ms)
@@ -229,7 +265,14 @@ mod tests {
         assert_eq!(track.title, "Midnight Interrogation");
         assert!(!track.cues.is_empty());
         assert_eq!(
-            track.waveform.as_ref().unwrap().preview.as_ref().unwrap().len(),
+            track
+                .waveform
+                .as_ref()
+                .unwrap()
+                .preview
+                .as_ref()
+                .unwrap()
+                .len(),
             PREVIEW_SEGMENT_COUNT
         );
     }

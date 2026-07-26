@@ -163,7 +163,9 @@ impl SimEngine {
     }
 
     fn task_slot(&self) -> std::sync::MutexGuard<'_, Option<JoinHandle<()>>> {
-        self.task.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.task
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 
@@ -381,6 +383,7 @@ fn epoch_ms() -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::EngineEvent;
 
     fn deck() -> SimDeck {
         SimDeck::new(1, 0, FIRST_TRACK_ID)
@@ -454,5 +457,48 @@ mod tests {
         assert!(!state.is_master);
         assert!(!state.is_on_air);
         assert_eq!(state.beat_in_measure, None);
+    }
+
+    /// Exercises the path the renderer actually depends on: a started engine
+    /// reports itself connected, announces its decks, and streams deck state.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn a_started_engine_reports_devices_tracks_and_deck_state() {
+        let engine = SimEngine::new(2);
+        let mut events = engine.handle().subscribe();
+        engine.start().await.expect("engine started");
+
+        let mut devices = 0;
+        let mut tracks = 0;
+        let mut deck_states = 0;
+        let mut connected = false;
+
+        // Long enough to cover the connect delay and several ticks; the
+        // paused clock advances on its own, so this does not actually wait.
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+        while tokio::time::Instant::now() < deadline {
+            match tokio::time::timeout(Duration::from_secs(3), events.recv()).await {
+                Ok(Ok(EngineEvent::NetworkState(NetworkState::Connected))) => connected = true,
+                Ok(Ok(EngineEvent::DeviceConnected(_))) => devices += 1,
+                Ok(Ok(EngineEvent::DeckTrack(_))) => tracks += 1,
+                Ok(Ok(EngineEvent::DeckState(_))) => deck_states += 1,
+                Ok(Ok(_)) => {}
+                Ok(Err(error)) => panic!("event stream ended: {error}"),
+                Err(_) => break,
+            }
+        }
+
+        assert!(connected, "engine never reported itself connected");
+        assert_eq!(devices, 2, "both simulated decks should announce");
+        assert_eq!(tracks, 2, "both decks should report a loaded track");
+        assert!(
+            deck_states > 4,
+            "deck state should stream, got {deck_states}"
+        );
+
+        engine.stop().await.expect("engine stopped");
+        assert_eq!(
+            engine.handle().snapshot().network_state,
+            NetworkState::Offline
+        );
     }
 }

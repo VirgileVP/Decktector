@@ -1,13 +1,16 @@
+import { invoke, isTauri } from '@tauri-apps/api/core'
+import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { create } from 'zustand'
 
 import type {
   DeckId,
   DeckState,
+  DeckTrack,
   DeviceInfo,
   EngineSnapshot,
   NetworkState,
   TrackInfo
-} from '../../../engine/types'
+} from '../model'
 
 interface DecktectiveStore {
   networkState: NetworkState
@@ -33,26 +36,54 @@ function applySnapshot(snapshot: EngineSnapshot): void {
 }
 
 /**
- * Wires the store to the engine IPC events and hydrates it from the
- * current snapshot. Returns the teardown function.
+ * Wires the store to the engine events and hydrates it from the current
+ * snapshot. Returns the teardown function.
+ *
+ * Listeners are attached before the snapshot is requested, so nothing the
+ * engine reports while we are hydrating is lost.
  */
 export function connectStoreToEngine(): () => void {
   const { setState } = useDecktectiveStore
-  const api = window.decktective
-  if (!api) {
-    // Renderer opened outside Electron (plain browser): no engine available
-    console.warn('Decktective API unavailable; engine events will not be received')
+
+  if (!isTauri()) {
+    // The renderer is being served on its own (a plain browser tab): the
+    // Tauri bridge is absent and reaching for it throws synchronously, which
+    // inside an effect would unmount the whole UI. No engine costs the deck
+    // data, not the window.
+    console.warn('Decktective app shell unavailable; engine events will not be received')
     return () => {}
   }
 
-  const unsubscribes = [
-    api.onNetworkState((networkState) => setState({ networkState })),
-    api.onDeviceConnected((device) =>
+  const pending = subscribe(setState)
+
+  Promise.all(pending)
+    .then(() => invoke<EngineSnapshot>('engine_snapshot'))
+    .then(applySnapshot)
+    .catch((error) => console.error('Failed to hydrate from the engine snapshot:', error))
+
+  return () => {
+    for (const listener of pending) {
+      // A listener still being attached when the store tears down must not
+      // outlive it, so unsubscribe as soon as it resolves. Attach failures
+      // were already reported by the hydration chain above.
+      listener.then((unlisten) => unlisten(), ignoreAttachFailure)
+    }
+  }
+}
+
+type SetState = typeof useDecktectiveStore.setState
+
+function subscribe(setState: SetState): Promise<UnlistenFn>[] {
+  return [
+    listen<NetworkState>('engine:network:state', ({ payload }) =>
+      setState({ networkState: payload })
+    ),
+    listen<DeviceInfo>('engine:device:connected', ({ payload: device }) =>
       setState((s) => ({
         devices: [...s.devices.filter((d) => d.deckId !== device.deckId), device]
       }))
     ),
-    api.onDeviceDisconnected((device) =>
+    listen<DeviceInfo>('engine:device:disconnected', ({ payload: device }) =>
       setState((s) => {
         const decks = { ...s.decks }
         const tracks = { ...s.tracks }
@@ -61,15 +92,13 @@ export function connectStoreToEngine(): () => void {
         return { devices: s.devices.filter((d) => d.deckId !== device.deckId), decks, tracks }
       })
     ),
-    api.onDeckState((deck) => setState((s) => ({ decks: { ...s.decks, [deck.deckId]: deck } }))),
-    api.onDeckTrack((deckId, track) =>
+    listen<DeckState>('engine:deck:state', ({ payload: deck }) =>
+      setState((s) => ({ decks: { ...s.decks, [deck.deckId]: deck } }))
+    ),
+    listen<DeckTrack>('engine:deck:track', ({ payload: { deckId, track } }) =>
       setState((s) => ({ tracks: { ...s.tracks, [deckId]: track } }))
     )
   ]
-
-  api.getSnapshot().then(applySnapshot, (error) => {
-    console.error('Failed to load engine snapshot:', error)
-  })
-
-  return () => unsubscribes.forEach((unsubscribe) => unsubscribe())
 }
+
+function ignoreAttachFailure(): void {}

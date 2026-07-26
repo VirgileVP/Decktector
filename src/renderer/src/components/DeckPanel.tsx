@@ -1,6 +1,4 @@
-import { useEffect, useMemo } from 'react'
-
-import type { DeckId, PlayState } from '../../../engine/types'
+import type { DeckId, PlayState } from '../model'
 import { formatTimeMs } from '../lib/playhead'
 import { useDecktectiveStore } from '../state/store'
 import { CueList } from './CueList'
@@ -26,16 +24,9 @@ export function DeckPanel({ deckId, accentColor }: DeckPanelProps): React.JSX.El
   const deck = useDecktectiveStore((s) => s.decks[deckId])
   const track = useDecktectiveStore((s) => s.tracks[deckId] ?? null)
 
-  const artworkUrl = useMemo(() => {
-    if (!track?.artwork) return null
-    return URL.createObjectURL(new Blob([track.artwork as BlobPart]))
-  }, [track])
-
-  useEffect(() => {
-    return () => {
-      if (artworkUrl) URL.revokeObjectURL(artworkUrl)
-    }
-  }, [artworkUrl])
+  // The engine resolves artwork to a data: URL, so it drops straight into
+  // an <img> with nothing to allocate or revoke.
+  const artworkUrl = track?.artwork ?? null
 
   const playState = deck?.playState ?? 'empty'
   const playhead = deck?.playheadMs ?? null

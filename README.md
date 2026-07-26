@@ -11,6 +11,12 @@ for every deck:
 
 Primary targets: **XDJ-XZ** and **XDJ-1000MK2** (works with 2 to 4 CDJ-2000-era players).
 
+> **Status — Rust rewrite in progress.** The app is being moved off Electron onto a
+> Rust backend with Tauri, keeping the same UI. The shell, the domain model and the
+> simulation engine are in place; **the Pro DJ Link backend is not ported yet**, so
+> only `npm run dev:sim` does anything useful right now. The Electron implementation
+> remains on the `master` branch. See [Architecture](#architecture) for the plan.
+
 ## Requirements
 
 - The computer must be on the **same LAN** as the players (Ethernet into the booth
@@ -19,24 +25,17 @@ Primary targets: **XDJ-XZ** and **XDJ-1000MK2** (works with 2 to 4 CDJ-2000-era 
   virtual-player slot on the Pro DJ Link network.
 - Tracks must come from Rekordbox-analyzed media (USB/SD) for metadata and waveforms
   to be available.
-- Node must be built for the same architecture as the machine. The Rekordbox database
-  downloaded from the players is read through `better-sqlite3`, a native module, and
-  `postinstall` builds it for whatever architecture `node` reports: an x64 Node under
-  Rosetta on an Apple Silicon Mac produces a module arm64 Electron cannot load, and
-  every metadata lookup fails with a `dlopen` architecture error. Check with
-  `node -p process.arch`, and rebuild after switching Node:
-
-```sh
-npx electron-builder install-app-deps --arch arm64
-```
+- A [Rust toolchain](https://rustup.rs) and the platform's webview: WebView2 on
+  Windows (preinstalled on Windows 11), WebKitGTK on Linux, WKWebView on macOS. No
+  native Node modules are involved anymore, so there is nothing to rebuild per
+  architecture.
 
 ## Metadata on a full four-player network
 
 Players only answer media-slot queries and metadata requests coming from a virtual
 CDJ numbered 1-4. With four players on the network all four numbers are taken, ours
 is 5, and both of those doors are closed — the track database is then read straight
-off the player over NFS instead, which needs no player number (see
-`src/engine/prolink/media-slot-bypass.ts`).
+off the player over NFS instead, which needs no player number.
 
 A CDJ-3000 can be renumbered to player 5 or 6, which frees a number in range. Set
 one player that way, then claim the freed number:
@@ -46,50 +45,65 @@ DECKTECTIVE_VCDJ_ID=4 npm run dev
 ```
 
 Never point it at a number a device already uses — two devices sharing one breaks the
-network. Every metadata lookup is traced to `prolink-diagnostic.log` in the log
-directory (`./logs` in dev, the app's user-data directory in packaged builds).
+network.
+
+This behaviour is documented here because it is a hard-won constraint the port has
+to preserve; it lands with phase 3.
 
 ## Getting started
 
 ```sh
 npm install
 
-# Run against real hardware
-npm run dev
-
 # Run with two simulated decks (no hardware needed)
 npm run dev:sim
+
+# Four simulated decks
+npm run dev:sim4
+```
+
+```sh
+npm run test:rust    # Rust tests, and regenerates the renderer's model types
+npm run lint:rust    # clippy, warnings as errors
+npm run typecheck    # renderer
 ```
 
 ## Building
 
 ```sh
-npm run build:mac    # .dmg (arm64 + x64) — must run on macOS
-npm run build:win    # .exe installer
+npm run build
 ```
 
-CI (GitHub Actions) builds unsigned macOS dmg and Windows installer artifacts on
-every push to master — see `.github/workflows/build.yml`. macOS builds are
-unsigned for now: right-click → Open on first launch, or configure a Developer ID
-certificate in CI to sign and notarize.
+Produces an NSIS installer on Windows, a `.dmg` on macOS and `.AppImage`/`.deb` on
+Linux — each must be built on its own platform.
 
 ## Architecture
 
 ```
-src/
-├── engine/          # Domain layer, no Electron/UI dependency
-│   ├── types.ts     #   Normalized model (DeckState, TrackInfo, WaveformData…)
-│   ├── engine.ts    #   ProlinkEngine interface + snapshot bookkeeping
-│   ├── prolink/     #   Real implementation on top of prolink-connect
-│   └── sim/         #   Scripted simulation (npm run dev:sim)
-├── main/            # Electron main: window + engine → IPC bridge
-├── preload/         # contextBridge: typed window.decktective API
-└── renderer/        # React UI: deck panels + canvas waveforms
+crates/
+├── prolink/            # Pro DJ Link protocol, no app dependency
+└── decktective-core/   # Domain layer, no UI dependency
+    ├── model.rs        #   Normalized model (DeckState, TrackInfo, WaveformData…)
+    ├── engine.rs       #   Engine trait + snapshot bookkeeping + event stream
+    └── sim/            #   Scripted simulation (npm run dev:sim)
+src-tauri/              # App shell: window, commands, engine → event bridge
+src/renderer/           # React UI: deck panels + canvas waveforms
+    └── src/model/      #   TypeScript generated from model.rs by `cargo test`
 ```
 
-The UI only ever consumes the normalized model, so the protocol backend can be
-swapped (e.g. for a beat-link sidecar) without touching components. The same
-engine layer can later feed a web server for remote viewing.
+The UI only ever consumes the normalized model, and the model itself is generated
+from the Rust definitions — a divergence between engine and renderer fails the
+build rather than surfacing mid-set. The same engine layer can later feed a web
+server for remote viewing, or a native front-end, without touching the protocol.
+
+### Porting status
+
+| Phase | Scope                                                          | State |
+| ----- | -------------------------------------------------------------- | ----- |
+| 1     | App shell, domain model, simulation engine                     | done  |
+| 2     | UDP layer: announce, discovery, status, beat, precise position | to do |
+| 3     | Metadata over NFS, PDB/ANLZ parsing via `rekordcrate`          | to do |
+| 4     | Remote database (dbserver) fallback                            | to do |
 
 ### Protocol notes
 
@@ -102,8 +116,11 @@ engine layer can later feed a web server for remote viewing.
 
 ## Credits
 
-- [prolink-connect](https://github.com/evanpurkhiser/prolink-connect) — TypeScript
-  implementation of the Pro DJ Link protocol.
 - [Deep Symmetry's beat-link](https://github.com/Deep-Symmetry/beat-link) and the
   [DJ Link packet analysis](https://djl-analysis.deepsymmetry.org/) — the protocol
   research that makes all of this possible.
+- [prolink-connect](https://github.com/evanpurkhiser/prolink-connect) — the
+  TypeScript implementation this project ran on until the Rust port, and the
+  reference the port follows.
+- [rekordcrate](https://github.com/Holzhaus/rekordcrate) — Rust parser for
+  Rekordbox device exports (PDB and analysis files).

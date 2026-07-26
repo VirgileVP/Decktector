@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-import type { DeckId, TrackInfo } from '../../../engine/types'
+import type { DeckId, TrackInfo } from '../model'
 import { prepareCanvas } from '../lib/canvas'
 import { canvasInk, type CanvasInk } from '../lib/ink'
 import { estimatePlayheadMs } from '../lib/playhead'

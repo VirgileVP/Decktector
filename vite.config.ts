@@ -1,0 +1,31 @@
+import { resolve } from 'path'
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+/** Fixed so Tauri's devUrl in tauri.conf.json can point at it. */
+const DEV_PORT = 1420
+
+export default defineConfig({
+  root: 'src/renderer',
+  // Tauri serves the built assets from the bundle root, not from a host.
+  base: './',
+  resolve: {
+    alias: {
+      '@renderer': resolve(__dirname, 'src/renderer/src')
+    }
+  },
+  plugins: [react()],
+  build: {
+    outDir: resolve(__dirname, 'dist'),
+    emptyOutDir: true,
+    // The webview ships with the app, so there is no old browser to support.
+    target: 'esnext'
+  },
+  server: {
+    port: DEV_PORT,
+    // Fail loudly instead of silently moving to another port Tauri won't load.
+    strictPort: true
+  },
+  // Vite hides these from the client by default; Tauri's own vars are safe.
+  envPrefix: ['VITE_', 'TAURI_']
+})

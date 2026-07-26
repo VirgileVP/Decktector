@@ -1,4 +1,4 @@
-import type { DeckId, TrackCue, TrackInfo } from '../../../engine/types'
+import type { DeckId, TrackCue, TrackInfo } from '../model'
 import { formatTimeMs } from '../lib/playhead'
 import { useDecktectiveStore } from '../state/store'
 

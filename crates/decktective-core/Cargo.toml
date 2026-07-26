@@ -14,3 +14,7 @@ serde = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 ts-rs = { workspace = true }
+
+[dev-dependencies]
+# `start_paused` lets the timing-driven simulation tests run instantly.
+tokio = { version = "1", features = ["rt", "macros", "test-util"] }

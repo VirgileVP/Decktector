@@ -1,19 +1,30 @@
+import { invoke, isTauri } from '@tauri-apps/api/core'
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
+
 import { applyTheme } from '../lib/theme'
 import { useSettings, type Settings } from './settings'
 
 /**
- * Settings the renderer cannot honour by itself; the main process owns the
- * window and the power-save blocker.
+ * Settings the renderer cannot honour by itself; the Rust side owns the
+ * window and the sleep inhibitor.
  */
 function pushWindowPrefs(settings: Settings): void {
-  const api = window.decktective
-  if (!api) return
-  api
-    .setWindowPrefs({
+  invoke('set_window_prefs', {
+    prefs: {
       alwaysOnTop: settings.alwaysOnTop,
       preventSleep: settings.preventSleep
-    })
-    .catch((error) => console.error('Failed to apply window preferences:', error))
+    }
+  }).catch((error) => console.error('Failed to apply window preferences:', error))
+}
+
+/**
+ * Applies the UI scale through the webview's own zoom rather than a CSS
+ * transform: it reflows the layout instead of scaling a fixed-size picture.
+ */
+function pushUiScale(uiScale: number): void {
+  getCurrentWebviewWindow()
+    .setZoom(uiScale)
+    .catch((error) => console.error('Failed to apply the UI scale:', error))
 }
 
 /**
@@ -27,10 +38,14 @@ function apply(settings: Settings, previous?: Settings): void {
   if (previous?.dimIdleDecks !== settings.dimIdleDecks) {
     document.documentElement.dataset.dimIdle = settings.dimIdleDecks ? 'on' : 'off'
   }
+
+  // Everything below needs the app shell, which reaching for throws outright
+  // when the renderer is served on its own. The theme and the idle dimming
+  // are pure DOM and still apply there.
+  if (!isTauri()) return
+
   if (previous?.uiScale !== settings.uiScale) {
-    // Chromium's own zoom rather than a CSS transform: it reflows the layout
-    // instead of scaling a fixed-size picture.
-    window.electron?.webFrame.setZoomFactor(settings.uiScale)
+    pushUiScale(settings.uiScale)
   }
   if (
     previous?.alwaysOnTop !== settings.alwaysOnTop ||

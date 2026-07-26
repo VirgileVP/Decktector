@@ -153,7 +153,9 @@ impl EngineHandle {
     /// The bookkeeping mutex is only ever held for a field update, so a
     /// panic while holding it is not recoverable state we want to preserve.
     fn lock(&self) -> std::sync::MutexGuard<'_, Bookkeeping> {
-        self.state.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 

@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-mac:
-    runs-on: macos-latest
+  check:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -17,28 +17,53 @@ jobs:
           node-version: 22
           cache: npm
 
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Tauri's Linux build needs the system webview and its GTK stack.
+      - name: Install Linux webview dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck and lint
+      # Also regenerates the renderer's model types, so the typecheck below
+      # fails if the Rust model and the committed bindings have drifted.
+      - name: Rust tests
+        run: npm run test:rust
+
+      - name: Fail if the generated model types are stale
+        run: git diff --exit-code src/renderer/src/model
+
+      - name: Lint and typecheck
         run: |
+          cargo fmt --all --check
+          npm run lint:rust
           npm run typecheck
           npm run lint
 
-      - name: Build macOS app (unsigned dmg, arm64 + x64)
-        run: npm run build:mac -- --publish never
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+  build:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            artifact: decktective-macos
+            bundle: target/release/bundle/dmg/*.dmg
+          - platform: windows-latest
+            artifact: decktective-windows
+            bundle: target/release/bundle/nsis/*-setup.exe
+          - platform: ubuntu-latest
+            artifact: decktective-linux
+            bundle: target/release/bundle/appimage/*.AppImage
 
-      - name: Upload dmg artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: decktective-macos
-          path: dist/*.dmg
-          if-no-files-found: error
-
-  build-win:
-    runs-on: windows-latest
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
@@ -47,15 +72,25 @@ jobs:
           node-version: 22
           cache: npm
 
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Linux webview dependencies
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Windows app
-        run: npm run build:win -- --publish never
+      - name: Build
+        run: npm run build
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: decktective-windows
-          path: dist/*-setup.exe
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.bundle }}
           if-no-files-found: error
