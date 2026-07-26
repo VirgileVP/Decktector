@@ -1,0 +1,5 @@
+[env]
+# Where `ts-rs` writes the TypeScript counterparts of the domain model.
+# Relative to this file's parent (the workspace root), so `cargo test` from
+# anywhere in the workspace lands the bindings in the renderer.
+TS_RS_EXPORT_DIR = { value = "src/renderer/src/model", relative = true }

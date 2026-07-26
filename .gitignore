@@ -8,3 +8,4 @@ out
 .env.*
 logs
 graphify-out
+target

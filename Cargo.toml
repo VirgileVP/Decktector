@@ -1,0 +1,31 @@
+[workspace]
+resolver = "2"
+members = ["crates/decktective-core", "crates/prolink"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Virgile Pornet"]
+license = "MIT"
+
+[workspace.dependencies]
+decktective-core = { path = "crates/decktective-core" }
+prolink = { path = "crates/prolink" }
+
+anyhow = "1"
+async-trait = "0.1"
+rand = { version = "0.9", features = ["small_rng"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net"] }
+tracing = "0.1"
+ts-rs = "10"
+
+[profile.release]
+# A visualizer running next to a live set: prefer a small, fast binary and
+# accept the longer build.
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

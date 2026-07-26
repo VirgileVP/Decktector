@@ -1,0 +1,11 @@
+[package]
+name = "prolink"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Pro DJ Link protocol client: virtual CDJ, device discovery, player status and metadata"
+
+[dependencies]
+thiserror = { workspace = true }
+tracing = { workspace = true }
