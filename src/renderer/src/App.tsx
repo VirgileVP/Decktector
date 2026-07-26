@@ -4,6 +4,7 @@ import { useShallow } from 'zustand/react/shallow'
 import neonLogo from './assets/neon-logo.png'
 import { DeckPanel } from './components/DeckPanel'
 import { HeaderClock } from './components/HeaderClock'
+import { LineupNow } from './components/LineupNow'
 import { SettingsDialog } from './components/SettingsDialog'
 import { deckColor } from './lib/deck-colors'
 import { useSettings } from './state/settings'
@@ -54,7 +55,10 @@ function App(): React.JSX.Element {
     <div className="app">
       <header className="app-header">
         <img className="neon-logo" src={neonLogo} alt="NEON" />
-        <HeaderClock />
+        <div className="header-center">
+          <HeaderClock />
+          <LineupNow />
+        </div>
         <div className="header-right">
           <div className={`network-status network-${networkState}`}>
             <span className="network-dot" />

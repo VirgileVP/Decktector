@@ -7,6 +7,14 @@ import { DEFAULT_THEME, type ThemeId } from '../lib/theme'
 export const WAVEFORM_DESATURATION_RANGE = { min: 0, max: 1, step: 0.05 } as const
 export const UI_SCALE_RANGE = { min: 0.8, max: 1.6, step: 0.05 } as const
 
+/** How much of the running order the header shows. */
+export type LineupView = 'full' | 'around'
+
+export const LINEUP_VIEW_OPTIONS = [
+  { value: 'full', label: 'Whole lineup' },
+  { value: 'around', label: 'Previous, current, next' }
+] as const satisfies readonly { value: LineupView; label: string }[]
+
 export interface Settings {
   theme: ThemeId
   /** 0 = raw rekordbox waveform colors, 1 = fully washed to the theme's target. */
@@ -15,6 +23,8 @@ export interface Settings {
   dimIdleDecks: boolean
   /** Renderer zoom factor, for booth screens from 13" to 27". */
   uiScale: number
+  /** Whether the header shows the whole running order or only what is around now. */
+  lineupView: LineupView
   /** Accent color overrides keyed by player number; absent means the default. */
   deckColors: Record<number, string>
   /** Keep the window above every other application. */
@@ -28,6 +38,7 @@ export const DEFAULT_SETTINGS: Settings = {
   waveformDesaturation: 0.45,
   dimIdleDecks: true,
   uiScale: 1,
+  lineupView: 'full',
   deckColors: {},
   alwaysOnTop: false,
   preventSleep: false
@@ -70,6 +81,7 @@ function pickSettings(state: Settings): Settings {
     waveformDesaturation,
     dimIdleDecks,
     uiScale,
+    lineupView,
     deckColors,
     alwaysOnTop,
     preventSleep
@@ -79,6 +91,7 @@ function pickSettings(state: Settings): Settings {
     waveformDesaturation,
     dimIdleDecks,
     uiScale,
+    lineupView,
     deckColors,
     alwaysOnTop,
     preventSleep

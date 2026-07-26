@@ -23,6 +23,45 @@ export function ToggleRow({ label, hint, checked, onChange }: ToggleRowProps): R
   )
 }
 
+interface ChoiceRowProps<T extends string> {
+  label: string
+  hint: string
+  value: T
+  options: readonly { value: T; label: string }[]
+  onChange: (value: T) => void
+}
+
+/** Segmented picker for a handful of named alternatives, one per line. */
+export function ChoiceRow<T extends string>({
+  label,
+  hint,
+  value,
+  options,
+  onChange
+}: ChoiceRowProps<T>): React.JSX.Element {
+  return (
+    <div className="setting-row">
+      <span className="setting-text">
+        <span className="setting-label">{label}</span>
+        <span className="setting-hint">{hint}</span>
+      </span>
+      <div className="setting-choice">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className={option.value === value ? 'active' : ''}
+            aria-pressed={option.value === value}
+            onClick={() => onChange(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 interface SliderRowProps {
   label: string
   hint: string

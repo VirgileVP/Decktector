@@ -5,6 +5,11 @@
   --onair: rgb(var(--onair-rgb));
   --ok: rgb(var(--ok-rgb));
   --header-height: 55px;
+  /* Room kept clear on each side of the centred block. Sized on the widest the
+     right-hand group ever gets ("Searching for devices…", 268px) plus the header
+     padding and a little air, and mirrored on the left so the block stays
+     centred on the window rather than between two unequal groups. */
+  --header-gutter: 296px;
   --idle-bar-opacity: 0.6;
   font-family:
     Inter,
@@ -59,11 +64,24 @@ body {
 
 /* Taken out of the flex flow so it centers on the header, not between its
    left and right groups, whose widths differ. */
-.header-clock {
+.header-center {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  /* A percentage cannot work here: the right-hand group is content-sized, so it
+     would be overlapped on a narrow window and under-used on a wide one. */
+  max-width: calc(100% - 2 * var(--header-gutter));
+}
+
+.header-clock {
   font-size: 15px;
+  /* Pinned rather than `normal`: the two lines have to fit the header's content
+     box whatever font the machine actually resolves. */
+  line-height: 18px;
   font-weight: 500;
   letter-spacing: 0.08em;
   font-variant-numeric: tabular-nums;
@@ -184,6 +202,72 @@ body {
   }
 }
 
+/* ---------- Lineup ---------- */
+
+/* Sits under the clock in the header's centre column, so it costs the deck grid
+   nothing: the header's content box has room for a second line at this size. */
+.lineup-now {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  /* Centring a column shrink-wraps its items, so the parent's max-width alone
+     would let a long name spill out of the header instead of eliding. */
+  max-width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+  line-height: 14px;
+}
+
+.lineup-set {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+
+.lineup-set + .lineup-set::before {
+  content: '·';
+  margin-right: 5px;
+  color: var(--text-faint);
+}
+
+.lineup-set-time {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+.lineup-set-artist {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.lineup-passed {
+  opacity: 0.4;
+}
+
+/* The set on air never gives up room: it is the one the booth reads. */
+.lineup-current {
+  flex-shrink: 0;
+}
+
+.lineup-current .lineup-set-time {
+  color: var(--text-muted);
+}
+
+.lineup-current .lineup-set-artist {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.lineup-upcoming .lineup-set-artist {
+  color: var(--text-muted);
+}
+
 /* ---------- Settings ---------- */
 
 .settings-backdrop {
@@ -272,6 +356,12 @@ body {
   color: var(--text);
 }
 
+.settings-reset:disabled {
+  opacity: 0.35;
+  cursor: default;
+  text-decoration: none;
+}
+
 /* ---------- Settings rows ---------- */
 
 .setting-row {
@@ -313,6 +403,146 @@ body {
   font-size: 10px;
   line-height: 1.4;
   color: var(--text-muted);
+}
+
+.setting-choice {
+  display: flex;
+  flex-shrink: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.setting-choice button {
+  padding: 3px 8px;
+  background: var(--bg-inset);
+  border: none;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.setting-choice button + button {
+  border-left: 1px solid var(--border-strong);
+}
+
+.setting-choice button:hover {
+  color: var(--text-muted);
+}
+
+.setting-choice button.active {
+  background: var(--border-strong);
+  color: var(--text);
+}
+
+.lineup-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.lineup-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lineup-time-field,
+.lineup-name-field {
+  padding: 4px 6px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  outline: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  /* Text selection is off globally, which a typed field cannot inherit. */
+  user-select: text;
+  transition: border-color 0.15s ease;
+}
+
+.lineup-time-field:focus,
+.lineup-name-field:focus {
+  border-color: var(--sync);
+}
+
+.lineup-time-field {
+  flex-shrink: 0;
+  width: 78px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lineup-name-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.lineup-duration {
+  flex-shrink: 0;
+  width: 38px;
+  text-align: right;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+.lineup-remove {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  color: var(--text-faint);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.lineup-remove:hover {
+  color: var(--onair);
+}
+
+.lineup-add {
+  padding: 4px 8px;
+  background: none;
+  border: 1px dashed var(--border-strong);
+  border-radius: 3px;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.lineup-add:hover {
+  color: var(--text);
+  border-color: var(--sync);
+}
+
+/* Set apart from the sets above it: it closes the night rather than opening one. */
+.lineup-row-end {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.lineup-end-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.lineup-warning {
+  color: var(--warn);
 }
 
 .setting-toggle {

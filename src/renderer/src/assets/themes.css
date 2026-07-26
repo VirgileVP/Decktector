@@ -5,10 +5,14 @@
  *
  * `--onair-rgb` and `--ok-rgb` are raw channel triplets rather than colors:
  * glows and washes derive from them with rgb(var(--x) / <alpha>).
+ *
+ * `color-scheme` belongs to the palette too: it is what makes native controls —
+ * the lineup's time fields and their picker — match the theme they sit in.
  */
 
 :root,
 [data-theme='neon'] {
+  color-scheme: dark;
   --bg: #08090b;
   --bg-panel: #0d0e12;
   --bg-inset: #0a0b0e;
@@ -38,6 +42,7 @@
 }
 
 [data-theme='dark'] {
+  color-scheme: dark;
   --bg: #101012;
   --bg-panel: #17171a;
   --bg-inset: #121214;
@@ -67,6 +72,7 @@
 }
 
 [data-theme='light'] {
+  color-scheme: light;
   --bg: #f4f5f7;
   --bg-panel: #ffffff;
   --bg-inset: #eceef2;
@@ -97,6 +103,7 @@
 }
 
 [data-theme='contrast'] {
+  color-scheme: dark;
   --bg: #000000;
   --bg-panel: #000000;
   --bg-inset: #0a0a0a;
@@ -126,6 +133,7 @@
 }
 
 [data-theme='amber'] {
+  color-scheme: dark;
   --bg: #0b0803;
   --bg-panel: #120d05;
   --bg-inset: #0d0904;
@@ -155,6 +163,7 @@
 }
 
 [data-theme='midnight'] {
+  color-scheme: dark;
   --bg: #0a0f1c;
   --bg-panel: #101728;
   --bg-inset: #0c1220;

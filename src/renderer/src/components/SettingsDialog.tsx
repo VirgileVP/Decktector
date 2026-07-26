@@ -8,6 +8,7 @@ import {
   useSettings,
   type Settings
 } from '../state/settings'
+import { LineupEditor } from './LineupEditor'
 import { SliderRow, ToggleRow } from './SettingControls'
 
 const asPercent = (value: number): string => `${Math.round(value * 100)} %`
@@ -51,6 +52,8 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Elem
             ×
           </button>
         </header>
+
+        <LineupEditor />
 
         <section className="settings-section">
           <h3>Theme</h3>
