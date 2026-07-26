@@ -10,6 +10,7 @@ import { installCrashGuard } from './crash-guard'
 import { exposeEngineOverIpc } from './ipc'
 import { attachDiagnosticLog } from './prolink-log'
 import { attachTrackLogger } from './track-log'
+import { handleWindowPrefsOverIpc } from './window-prefs'
 
 // Installed before anything opens a socket, so no packet can slip through
 // before the guard is in place.
@@ -72,6 +73,7 @@ app.whenReady().then(() => {
   })
 
   exposeEngineOverIpc(engine)
+  handleWindowPrefsOverIpc()
   const trackLogPath = attachTrackLogger(engine)
   console.log(`Played-tracks log: ${trackLogPath}`)
   console.log(`Pro DJ Link diagnostic log: ${attachDiagnosticLog()}`)

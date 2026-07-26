@@ -4,6 +4,10 @@ import { useShallow } from 'zustand/react/shallow'
 import neonLogo from './assets/neon-logo.png'
 import { DeckPanel } from './components/DeckPanel'
 import { HeaderClock } from './components/HeaderClock'
+import { SettingsDialog } from './components/SettingsDialog'
+import { deckColor } from './lib/deck-colors'
+import { useSettings } from './state/settings'
+import { connectSettingsToApp } from './state/settings-sync'
 import { connectStoreToEngine, useDecktectiveStore } from './state/store'
 
 type DeckView = 'stack' | 'quad'
@@ -14,16 +18,8 @@ function loadView(): DeckView {
   return localStorage.getItem(VIEW_STORAGE_KEY) === 'quad' ? 'quad' : 'stack'
 }
 
-/** Accent color per player number, applied to playheads and badges. */
-const DECK_COLORS: Record<number, string> = {
-  1: '#4da3ff',
-  2: '#ffb84d',
-  3: '#6ee7a0',
-  4: '#ff6b81',
-  5: '#c084fc',
-  6: '#22d3ee'
-}
-const FALLBACK_COLOR = '#9aa4b2'
+/** Evenly spaced teeth of the settings gear icon, in degrees. */
+const GEAR_TOOTH_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315] as const
 
 const NETWORK_LABELS: Record<string, string> = {
   offline: 'Offline',
@@ -34,12 +30,16 @@ const NETWORK_LABELS: Record<string, string> = {
 
 function App(): React.JSX.Element {
   useEffect(() => connectStoreToEngine(), [])
+  useEffect(() => connectSettingsToApp(), [])
 
   const [view, setView] = useState<DeckView>(loadView)
   const selectView = (next: DeckView): void => {
     setView(next)
     localStorage.setItem(VIEW_STORAGE_KEY, next)
   }
+
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const deckColors = useSettings((s) => s.deckColors)
 
   const networkState = useDecktectiveStore((s) => s.networkState)
   const deckIds = useDecktectiveStore(
@@ -56,6 +56,10 @@ function App(): React.JSX.Element {
         <img className="neon-logo" src={neonLogo} alt="NEON" />
         <HeaderClock />
         <div className="header-right">
+          <div className={`network-status network-${networkState}`}>
+            <span className="network-dot" />
+            {NETWORK_LABELS[networkState]}
+          </div>
           <div className="view-toggle">
             <button
               type="button"
@@ -82,12 +86,36 @@ function App(): React.JSX.Element {
               </svg>
             </button>
           </div>
-          <div className={`network-status network-${networkState}`}>
-            <span className="network-dot" />
-            {NETWORK_LABELS[networkState]}
-          </div>
+          <button
+            type="button"
+            className="settings-button"
+            title="Settings"
+            aria-label="Settings"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+              {GEAR_TOOTH_ANGLES.map((angle) => (
+                <rect
+                  key={angle}
+                  x="10.7"
+                  y="1.4"
+                  width="2.6"
+                  height="6"
+                  rx="1.1"
+                  transform={`rotate(${angle} 12 12)`}
+                />
+              ))}
+              {/* Hub with the center punched out by the even-odd rule. */}
+              <path
+                fillRule="evenodd"
+                d="M12 5a7 7 0 1 0 0 14 7 7 0 1 0 0-14Zm0 4a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z"
+              />
+            </svg>
+          </button>
         </div>
       </header>
+
+      {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
 
       <main className={`deck-grid view-${view}`}>
         {deckIds.length === 0 ? (
@@ -100,11 +128,7 @@ function App(): React.JSX.Element {
           </div>
         ) : (
           deckIds.map((deckId) => (
-            <DeckPanel
-              key={deckId}
-              deckId={deckId}
-              accentColor={DECK_COLORS[deckId] ?? FALLBACK_COLOR}
-            />
+            <DeckPanel key={deckId} deckId={deckId} accentColor={deckColor(deckId, deckColors)} />
           ))
         )}
       </main>

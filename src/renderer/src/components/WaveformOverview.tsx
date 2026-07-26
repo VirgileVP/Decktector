@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 
 import type { DeckId, TrackInfo } from '../../../engine/types'
 import { prepareCanvas } from '../lib/canvas'
+import { canvasInk } from '../lib/ink'
 import { estimatePlayheadMs } from '../lib/playhead'
 import { useDecktectiveStore } from '../state/store'
 
@@ -34,10 +35,11 @@ export function WaveformOverview({
       const width = canvas.clientWidth
       const height = canvas.clientHeight
       const midY = height / 2
+      const ink = canvasInk()
 
       const preview = track?.waveform?.preview
       if (!track || !preview || preview.length === 0) {
-        ctx.fillStyle = 'rgba(255,255,255,0.05)'
+        ctx.fillStyle = ink.empty
         ctx.fillRect(0, midY, width, 1)
         return
       }
@@ -51,7 +53,7 @@ export function WaveformOverview({
         const segment = preview[i]
         const x = i * barWidth
         const half = Math.max(0.5, segment.height * (midY - 2))
-        ctx.fillStyle = x < playedX ? 'rgba(148,158,178,0.30)' : 'rgba(196,204,220,0.75)'
+        ctx.fillStyle = x < playedX ? ink.played : ink.unplayed
         ctx.fillRect(x, midY - half, Math.ceil(barWidth), half * 2)
       }
 
@@ -71,7 +73,7 @@ export function WaveformOverview({
         ctx.save()
         ctx.shadowColor = accentColor
         ctx.shadowBlur = 4
-        ctx.fillStyle = '#ffffff'
+        ctx.fillStyle = ink.playhead
         ctx.fillRect(playedX - 0.75, 0, 1.5, height)
         ctx.restore()
       }

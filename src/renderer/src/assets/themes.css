@@ -1,0 +1,184 @@
+﻿/**
+ * Theme palettes. Every theme defines the same set of custom properties, so
+ * the rest of the stylesheet never needs to know which one is active.
+ * Ids match `ThemeId` in `lib/theme.ts`.
+ *
+ * `--onair-rgb` and `--ok-rgb` are raw channel triplets rather than colors:
+ * glows and washes derive from them with rgb(var(--x) / <alpha>).
+ */
+
+:root,
+[data-theme='neon'] {
+  --bg: #08090b;
+  --bg-panel: #0d0e12;
+  --bg-inset: #0a0b0e;
+  --bg-idle-panel: #0a0b0e;
+  --border: #1d2027;
+  --border-strong: #2a2e38;
+  --text: #e8eaf0;
+  --text-muted: #8b93a5;
+  --text-faint: #565d6d;
+  --onair-rgb: 255, 69, 58;
+  --ok-rgb: 48, 209, 88;
+  --warn: #ffd60a;
+  --master: #ffffff;
+  --sync: #b7c1d4;
+  --row-highlight: rgba(255, 255, 255, 0.06);
+  --logo-glow: rgba(34, 211, 238, 0.45);
+  --waveform-idle-filter: brightness(0.4) saturate(0.5);
+  --wave-empty: rgba(255, 255, 255, 0.05);
+  --wave-played: rgba(148, 158, 178, 0.3);
+  --wave-unplayed: rgba(196, 204, 220, 0.75);
+  --playhead: #ffffff;
+  --grid-downbeat: rgba(255, 255, 255, 0.55);
+  --grid-beat: rgba(255, 255, 255, 0.18);
+  --overlay-text: rgba(255, 255, 255, 0.35);
+  --flag-text: #0a0b0d;
+  --wave-soften-target: 235;
+}
+
+[data-theme='dark'] {
+  --bg: #101012;
+  --bg-panel: #17171a;
+  --bg-inset: #121214;
+  --bg-idle-panel: #121214;
+  --border: #26262b;
+  --border-strong: #37373e;
+  --text: #ececef;
+  --text-muted: #9a9aa3;
+  --text-faint: #63636c;
+  --onair-rgb: 255, 82, 72;
+  --ok-rgb: 48, 209, 88;
+  --warn: #f5c518;
+  --master: #ffffff;
+  --sync: #c3c3cc;
+  --row-highlight: rgba(255, 255, 255, 0.07);
+  --logo-glow: rgba(160, 160, 175, 0.35);
+  --waveform-idle-filter: brightness(0.45) saturate(0.5);
+  --wave-empty: rgba(255, 255, 255, 0.05);
+  --wave-played: rgba(150, 150, 160, 0.3);
+  --wave-unplayed: rgba(205, 205, 215, 0.75);
+  --playhead: #ffffff;
+  --grid-downbeat: rgba(255, 255, 255, 0.55);
+  --grid-beat: rgba(255, 255, 255, 0.18);
+  --overlay-text: rgba(255, 255, 255, 0.35);
+  --flag-text: #101012;
+  --wave-soften-target: 235;
+}
+
+[data-theme='light'] {
+  --bg: #f4f5f7;
+  --bg-panel: #ffffff;
+  --bg-inset: #eceef2;
+  --bg-idle-panel: #f0f1f4;
+  --border: #d9dce3;
+  --border-strong: #bec3cd;
+  --text: #1a1d23;
+  --text-muted: #5b6270;
+  --text-faint: #8b93a1;
+  --onair-rgb: 214, 40, 40;
+  --ok-rgb: 22, 150, 70;
+  --warn: #b7791f;
+  --master: #1a1d23;
+  --sync: #55606f;
+  --row-highlight: rgba(0, 0, 0, 0.06);
+  --logo-glow: rgba(8, 145, 178, 0.35);
+  /* Fading works better than dimming when the surface behind is bright. */
+  --waveform-idle-filter: saturate(0.4) opacity(0.5);
+  --wave-empty: rgba(0, 0, 0, 0.05);
+  --wave-played: rgba(90, 100, 120, 0.35);
+  --wave-unplayed: rgba(60, 70, 90, 0.8);
+  --playhead: #1a1d23;
+  --grid-downbeat: rgba(0, 0, 0, 0.5);
+  --grid-beat: rgba(0, 0, 0, 0.16);
+  --overlay-text: rgba(0, 0, 0, 0.4);
+  --flag-text: #ffffff;
+  --wave-soften-target: 40;
+}
+
+[data-theme='contrast'] {
+  --bg: #000000;
+  --bg-panel: #000000;
+  --bg-inset: #0a0a0a;
+  --bg-idle-panel: #000000;
+  --border: #4a4a4a;
+  --border-strong: #7a7a7a;
+  --text: #ffffff;
+  --text-muted: #d0d0d0;
+  --text-faint: #9a9a9a;
+  --onair-rgb: 255, 59, 48;
+  --ok-rgb: 0, 230, 118;
+  --warn: #ffea00;
+  --master: #ffffff;
+  --sync: #00e5ff;
+  --row-highlight: rgba(255, 255, 255, 0.14);
+  --logo-glow: rgba(0, 229, 255, 0.55);
+  --waveform-idle-filter: brightness(0.55);
+  --wave-empty: rgba(255, 255, 255, 0.08);
+  --wave-played: rgba(255, 255, 255, 0.35);
+  --wave-unplayed: rgba(255, 255, 255, 0.9);
+  --playhead: #ffffff;
+  --grid-downbeat: rgba(255, 255, 255, 0.75);
+  --grid-beat: rgba(255, 255, 255, 0.3);
+  --overlay-text: rgba(255, 255, 255, 0.5);
+  --flag-text: #000000;
+  --wave-soften-target: 255;
+}
+
+[data-theme='amber'] {
+  --bg: #0b0803;
+  --bg-panel: #120d05;
+  --bg-inset: #0d0904;
+  --bg-idle-panel: #0d0904;
+  --border: #3a2a10;
+  --border-strong: #59401a;
+  --text: #ffb545;
+  --text-muted: #b3803a;
+  --text-faint: #6e5024;
+  --onair-rgb: 255, 99, 40;
+  --ok-rgb: 200, 150, 50;
+  --warn: #ffcc55;
+  --master: #ffd9a0;
+  --sync: #c98f3f;
+  --row-highlight: rgba(255, 181, 69, 0.1);
+  --logo-glow: rgba(255, 181, 69, 0.45);
+  --waveform-idle-filter: brightness(0.45) saturate(0.6);
+  --wave-empty: rgba(255, 181, 69, 0.06);
+  --wave-played: rgba(255, 181, 69, 0.28);
+  --wave-unplayed: rgba(255, 181, 69, 0.75);
+  --playhead: #ffd9a0;
+  --grid-downbeat: rgba(255, 181, 69, 0.5);
+  --grid-beat: rgba(255, 181, 69, 0.16);
+  --overlay-text: rgba(255, 181, 69, 0.35);
+  --flag-text: #0b0803;
+  --wave-soften-target: 200;
+}
+
+[data-theme='midnight'] {
+  --bg: #0a0f1c;
+  --bg-panel: #101728;
+  --bg-inset: #0c1220;
+  --bg-idle-panel: #0c1220;
+  --border: #1e2a44;
+  --border-strong: #2d3d5e;
+  --text: #dce6f7;
+  --text-muted: #8296b8;
+  --text-faint: #55698c;
+  --onair-rgb: 255, 92, 110;
+  --ok-rgb: 52, 211, 153;
+  --warn: #fbbf24;
+  --master: #ffffff;
+  --sync: #8fd4ff;
+  --row-highlight: rgba(140, 180, 255, 0.08);
+  --logo-glow: rgba(99, 179, 255, 0.45);
+  --waveform-idle-filter: brightness(0.45) saturate(0.55);
+  --wave-empty: rgba(220, 230, 247, 0.05);
+  --wave-played: rgba(130, 150, 184, 0.3);
+  --wave-unplayed: rgba(190, 214, 255, 0.75);
+  --playhead: #ffffff;
+  --grid-downbeat: rgba(220, 230, 247, 0.55);
+  --grid-beat: rgba(220, 230, 247, 0.18);
+  --overlay-text: rgba(220, 230, 247, 0.35);
+  --flag-text: #0a0f1c;
+  --wave-soften-target: 235;
+}

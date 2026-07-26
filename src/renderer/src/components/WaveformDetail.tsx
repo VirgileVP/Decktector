@@ -2,7 +2,9 @@ import { useEffect, useRef } from 'react'
 
 import type { DeckId, TrackInfo } from '../../../engine/types'
 import { prepareCanvas } from '../lib/canvas'
+import { canvasInk, type CanvasInk } from '../lib/ink'
 import { estimatePlayheadMs } from '../lib/playhead'
+import { useSettings } from '../state/settings'
 import { useDecktectiveStore } from '../state/store'
 
 /** Default seconds of audio visible across the full width of the canvas. */
@@ -12,8 +14,6 @@ const MAX_WINDOW_SEC = 60
 /** Multiplier applied per wheel notch when zooming. */
 const ZOOM_STEP = 1.18
 const PLAYED_DIM_ALPHA = 0.32
-/** 0 = raw rekordbox colors, 1 = fully washed to white. */
-const DESATURATION = 0.45
 /** Height reserved at the bottom for the beat-grid tick strip. */
 const TICK_STRIP = 12
 /** Height reserved at the top for cue flags. */
@@ -74,9 +74,12 @@ export function WaveformDetail({
       const waveform = track?.waveform
       const deck = useDecktectiveStore.getState().decks[deckId]
       const playhead = estimatePlayheadMs(deck, Date.now())
+      const ink = canvasInk()
+      // Read straight from the store: the rAF loop must not depend on a render.
+      const wash = useSettings.getState().waveformDesaturation
 
       if (!track || !waveform?.detail || playhead === null) {
-        ctx.strokeStyle = 'rgba(255,255,255,0.06)'
+        ctx.strokeStyle = ink.empty
         ctx.beginPath()
         ctx.moveTo(0, midY)
         ctx.lineTo(width, midY)
@@ -99,24 +102,24 @@ export function WaveformDetail({
         const half = Math.max(1, segment.height * halfMax)
         const [r, g, b] = segment.color
         ctx.globalAlpha = x < centerX ? PLAYED_DIM_ALPHA : 0.95
-        ctx.fillStyle = `rgb(${soften(r)},${soften(g)},${soften(b)})`
+        ctx.fillStyle = `rgb(${soften(r, ink, wash)},${soften(g, ink, wash)},${soften(b, ink, wash)})`
         ctx.fillRect(x, midY - half, 1, half * 2)
       }
       ctx.globalAlpha = 1
 
-      drawBeatTicks(ctx, track, windowStartMs, windowEndMs, msPerPx, height)
-      drawCueMarkers(ctx, track, windowStartMs, windowEndMs, msPerPx, height)
+      drawBeatTicks(ctx, track, windowStartMs, windowEndMs, msPerPx, height, ink)
+      drawCueMarkers(ctx, track, windowStartMs, windowEndMs, msPerPx, height, ink)
 
       // Fixed centered playhead
       ctx.save()
       ctx.shadowColor = accentColor
       ctx.shadowBlur = 6
-      ctx.fillStyle = '#ffffff'
+      ctx.fillStyle = ink.playhead
       ctx.fillRect(centerX - 0.75, 0, 1.5, height)
       ctx.restore()
 
       // Current zoom window, bottom-right corner
-      ctx.fillStyle = 'rgba(255,255,255,0.35)'
+      ctx.fillStyle = ink.overlayText
       ctx.font = '500 9px system-ui, sans-serif'
       ctx.textAlign = 'right'
       ctx.textBaseline = 'bottom'
@@ -134,9 +137,12 @@ export function WaveformDetail({
   return <canvas ref={canvasRef} className="waveform-detail" />
 }
 
-/** Pulls a color channel toward white for a flatter, desaturated look. */
-function soften(channel: number): number {
-  return Math.round(channel + (235 - channel) * DESATURATION)
+/**
+ * Pulls a color channel toward the theme's target for a flatter look.
+ * `wash` is how far to go: 0 leaves the rekordbox color untouched, 1 replaces it.
+ */
+function soften(channel: number, ink: CanvasInk, wash: number): number {
+  return Math.round(channel + (ink.softenTarget - channel) * wash)
 }
 
 function drawLoopRegions(
@@ -166,7 +172,8 @@ function drawCueMarkers(
   windowStartMs: number,
   windowEndMs: number,
   msPerPx: number,
-  height: number
+  height: number,
+  ink: CanvasInk
 ): void {
   for (const cue of track.cues) {
     if (cue.offsetMs < windowStartMs || cue.offsetMs > windowEndMs) continue
@@ -180,7 +187,7 @@ function drawCueMarkers(
     if (cue.button) {
       // Hot cue: lettered square flag
       ctx.fillRect(x - 6, 0, 12, 12)
-      ctx.fillStyle = '#0a0b0d'
+      ctx.fillStyle = ink.flagText
       ctx.font = '700 8px system-ui, sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
@@ -203,7 +210,8 @@ function drawBeatTicks(
   windowStartMs: number,
   windowEndMs: number,
   msPerPx: number,
-  height: number
+  height: number,
+  ink: CanvasInk
 ): void {
   const grid = track.beatGrid
   if (!grid || grid.length === 0) return
@@ -222,7 +230,7 @@ function drawBeatTicks(
     const beat = grid[i]
     const x = (beat.offsetMs - windowStartMs) / msPerPx
     const isDownbeat = beat.beatInMeasure === 1
-    ctx.fillStyle = isDownbeat ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.18)'
+    ctx.fillStyle = isDownbeat ? ink.gridDownbeat : ink.gridBeat
     ctx.fillRect(x, tickTop, 1, isDownbeat ? 7 : 4)
   }
 }

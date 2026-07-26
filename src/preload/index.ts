@@ -9,7 +9,7 @@ import type {
   NetworkState,
   TrackInfo
 } from '../engine/types'
-import type { DecktectiveApi } from './api'
+import type { DecktectiveApi, WindowPrefs } from './api'
 
 /** Subscribes to an engine IPC channel; returns the unsubscribe function. */
 function subscribe<Args extends unknown[]>(
@@ -23,6 +23,8 @@ function subscribe<Args extends unknown[]>(
 
 const decktective: DecktectiveApi = {
   getSnapshot: (): Promise<EngineSnapshot> => ipcRenderer.invoke('engine:snapshot'),
+  setWindowPrefs: (prefs: WindowPrefs): Promise<void> =>
+    ipcRenderer.invoke('window:set-prefs', prefs),
   onNetworkState: (listener: (state: NetworkState) => void): (() => void) =>
     subscribe('engine:network:state', listener),
   onDeviceConnected: (listener: (device: DeviceInfo) => void): (() => void) =>
