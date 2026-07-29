@@ -7,5 +7,10 @@ license.workspace = true
 description = "Pro DJ Link protocol client: virtual CDJ, device discovery, player status and metadata"
 
 [dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+socket2 = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 tracing = { workspace = true }
+ts-rs = { workspace = true }

@@ -18,8 +18,11 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 anyhow = { workspace = true }
+chrono = { workspace = true }
 decktective-core = { workspace = true }
+decktective-timecode = { workspace = true }
 keepawake = "0.5"
+prolink = { workspace = true }
 serde = { workspace = true }
 tauri = { version = "2", features = [] }
 tokio = { workspace = true }

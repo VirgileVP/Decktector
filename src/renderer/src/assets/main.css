@@ -77,6 +77,12 @@ body {
   max-width: calc(100% - 2 * var(--header-gutter));
 }
 
+.header-clocks {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
 .header-clock {
   font-size: 15px;
   /* Pinned rather than `normal`: the two lines have to fit the header's content
@@ -86,6 +92,59 @@ body {
   letter-spacing: 0.08em;
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
+}
+
+/* Fixed, theme-independent: the standard fluorescent green of a hardware TC
+   readout, not a color the app's palette gets to touch. */
+.timecode-clock {
+  font-size: 15px;
+  line-height: 18px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  color: #39ff14;
+  text-shadow: 0 0 6px rgba(57, 255, 20, 0.55);
+}
+
+/* Idle: no source deck picked yet, or the protocol is off. Same fixed slot
+   in the header, no glow, so turning it on does not shift anything. */
+.timecode-clock-idle {
+  color: var(--text-faint);
+  text-shadow: none;
+}
+
+.tc-source-buttons {
+  display: flex;
+  gap: 3px;
+}
+
+.tc-source-buttons button {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.tc-source-buttons button:hover {
+  color: var(--text-muted);
+}
+
+.tc-source-buttons button.active {
+  color: #39ff14;
+  border-color: #39ff14;
+  text-shadow: 0 0 6px rgba(57, 255, 20, 0.55);
 }
 
 .neon-logo {
@@ -282,9 +341,10 @@ body {
 }
 
 .settings-panel {
+  display: flex;
+  flex-direction: column;
   width: min(560px, 100%);
-  max-height: 100%;
-  overflow-y: auto;
+  height: min(640px, 100%);
   background: var(--bg-panel);
   border: 1px solid var(--border-strong);
   border-radius: 8px;
@@ -321,6 +381,44 @@ body {
 
 .settings-close:hover {
   color: var(--text);
+}
+
+.settings-tabs {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-tab-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.settings-tab {
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.settings-tab:hover {
+  color: var(--text);
+}
+
+.settings-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--sync);
 }
 
 .settings-section + .settings-section {
@@ -366,9 +464,10 @@ body {
 
 .setting-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 8px 16px;
   padding: 7px 0;
   cursor: pointer;
 }
@@ -381,7 +480,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-width: 0;
+  flex: 1 1 160px;
+  min-width: 160px;
 }
 
 .setting-label {
@@ -407,7 +507,8 @@ body {
 
 .setting-choice {
   display: flex;
-  flex-shrink: 0;
+  flex-wrap: wrap;
+  max-width: 100%;
   border: 1px solid var(--border-strong);
   border-radius: 4px;
   overflow: hidden;
@@ -615,6 +716,59 @@ body {
   border: 1px solid var(--border-strong);
   border-radius: 4px;
   cursor: pointer;
+}
+
+.device-table {
+  width: 100%;
+  margin-top: 4px;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.device-table th,
+.device-table td {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.device-table th {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.device-table td {
+  color: var(--text);
+}
+
+.device-mono {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.device-kind {
+  padding: 2px 7px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+}
+
+.device-kind-player {
+  color: var(--sync);
+  border-color: var(--sync);
+}
+
+.device-kind-mixer {
+  color: var(--warn);
+  border-color: var(--warn);
 }
 
 .theme-grid {
@@ -922,6 +1076,49 @@ body {
   text-shadow: 0 0 6px rgba(var(--onair-rgb), 0.55);
 }
 
+/* Sits between the title and the transport glyph — the flexible
+   `.deck-info` column pushes everything after it into the middle of the
+   bar, which is exactly where this needs to be seen and clicked.
+   Idle state is styled off `--text` — the palette's primary foreground
+   color — instead of the faint gray of `.deck-no`/`.prop`, so it reads
+   solid against the panel in every theme: light gray on the dark themes,
+   near-black on the light theme, each already tuned for that surface. An
+   operator has to hit this fast, not hunt for it. */
+.deck-tc-button {
+  width: 34px;
+  height: 28px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: var(--bg-inset);
+  border: 1px solid var(--text);
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.deck-tc-button:hover {
+  background: var(--row-highlight);
+}
+
+/* Same fixed fluorescent green as `.timecode-clock`: this button is what
+   turns that clock on for the deck it sits on. */
+.deck-tc-button.active {
+  background: rgba(57, 255, 20, 0.16);
+  color: #39ff14;
+  border-color: #39ff14;
+  box-shadow: 0 0 8px rgba(57, 255, 20, 0.35);
+}
+
 /* ---------- Time block ---------- */
 
 .deck-time {
@@ -968,14 +1165,18 @@ body {
   gap: 8px;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .deck-waves {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 5px;
+  container-type: size;
+  container-name: waves;
 }
 
 .cue-list {
@@ -1065,6 +1266,7 @@ body {
 .waveform-overview {
   width: 100%;
   height: 30px;
+  flex-shrink: 0;
   border-radius: 3px;
   background: var(--bg-inset);
   border: 1px solid var(--border);
@@ -1080,9 +1282,30 @@ body {
 .waveform-detail {
   width: 100%;
   flex: 1;
-  min-height: 90px;
+  min-height: 0;
   border-radius: 3px;
   background: var(--bg-inset);
   border: 1px solid var(--border);
   transition: filter 0.2s ease;
+}
+
+/* Waveform detail turned off in settings — overview alone takes full height. */
+.deck-waves-overview-only .waveform-overview {
+  height: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Below 100px tall, drop overview wave — detail alone takes full height.
+   Skipped when detail is off in settings: with no detail to take over, the
+   overview must stay put regardless of how little room it gets. */
+@container waves (max-height: 100px) {
+  .deck-waves:not(.deck-waves-overview-only) .waveform-overview {
+    display: none;
+  }
+
+  .waveform-detail {
+    flex: 1;
+    min-height: 0;
+  }
 }

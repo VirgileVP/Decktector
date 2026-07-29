@@ -1,6 +1,8 @@
 import type { DeckId, PlayState } from '../model'
 import { formatTimeMs } from '../lib/playhead'
+import { useSettings } from '../state/settings'
 import { useDecktectiveStore } from '../state/store'
+import { selectTimecodeSource, useTimecodeStore } from '../state/timecode'
 import { CueList } from './CueList'
 import { WaveformDetail } from './WaveformDetail'
 import { WaveformOverview } from './WaveformOverview'
@@ -23,6 +25,15 @@ interface DeckPanelProps {
 export function DeckPanel({ deckId, accentColor }: DeckPanelProps): React.JSX.Element {
   const deck = useDecktectiveStore((s) => s.decks[deckId])
   const track = useDecktectiveStore((s) => s.tracks[deckId] ?? null)
+  const isTimecodeSource = useTimecodeStore((s) => s.sourceDeckId === deckId)
+  const showTrackTags = useSettings((s) => s.showDeckTrackTags)
+  const showSyncBadges = useSettings((s) => s.showDeckSyncBadges)
+  const showPitch = useSettings((s) => s.showDeckPitch)
+  const showTimeRemaining = useSettings((s) => s.showDeckTimeRemaining)
+  const showCueList = useSettings((s) => s.showDeckCueList)
+  const showArtwork = useSettings((s) => s.showDeckArtwork)
+  const showWaveformOverview = useSettings((s) => s.showDeckWaveformOverview)
+  const showWaveformDetail = useSettings((s) => s.showDeckWaveformDetail)
 
   // The engine resolves artwork to a data: URL, so it drops straight into
   // an <img> with nothing to allocate or revoke.
@@ -41,9 +52,11 @@ export function DeckPanel({ deckId, accentColor }: DeckPanelProps): React.JSX.El
       <div className="deck-bar">
         <div className="deck-no">{deckId}</div>
 
-        <div className="deck-art">
-          {artworkUrl ? <img src={artworkUrl} alt="" /> : <span>♪</span>}
-        </div>
+        {showArtwork && (
+          <div className="deck-art">
+            {artworkUrl ? <img src={artworkUrl} alt="" /> : <span>♪</span>}
+          </div>
+        )}
 
         <div className="deck-info">
           <div className="deck-title">{track?.title ?? 'No track loaded'}</div>
@@ -53,18 +66,32 @@ export function DeckPanel({ deckId, accentColor }: DeckPanelProps): React.JSX.El
           </div>
         </div>
 
-        <div className="deck-props">
-          {track?.key && <span className="prop">{track.key}</span>}
-          {track?.genre && <span className="prop prop-muted">{track.genre}</span>}
-        </div>
+        {showTrackTags && (
+          <div className="deck-props">
+            {track?.key && <span className="prop">{track.key}</span>}
+            {track?.genre && <span className="prop prop-muted">{track.genre}</span>}
+          </div>
+        )}
+
+        <button
+          type="button"
+          className={`deck-tc-button${isTimecodeSource ? ' active' : ''}`}
+          title={isTimecodeSource ? 'Stop sending timecode from this deck' : 'Send timecode from this deck'}
+          aria-pressed={isTimecodeSource}
+          onClick={() => selectTimecodeSource(isTimecodeSource ? null : deckId)}
+        >
+          TC
+        </button>
 
         <div className={`deck-transport state-${playState}`}>{TRANSPORT_GLYPHS[playState]}</div>
 
-        <div className="deck-msync">
-          <span className={isOnAir ? 'lit lit-onair' : ''}>ON AIR</span>
-          <span className={deck?.isMaster ? 'lit lit-master' : ''}>MASTER</span>
-          <span className={deck?.isSynced ? 'lit lit-sync' : ''}>SYNC</span>
-        </div>
+        {showSyncBadges && (
+          <div className="deck-msync">
+            <span className={isOnAir ? 'lit lit-onair' : ''}>ON AIR</span>
+            <span className={deck?.isMaster ? 'lit lit-master' : ''}>MASTER</span>
+            <span className={deck?.isSynced ? 'lit lit-sync' : ''}>SYNC</span>
+          </div>
+        )}
 
         <div className="deck-time">
           <div className="time-main">
@@ -76,22 +103,36 @@ export function DeckPanel({ deckId, accentColor }: DeckPanelProps): React.JSX.El
             <span className="time-bpm">
               {deck?.effectiveBpm ? `${deck.effectiveBpm.toFixed(1)} BPM` : '--.- BPM'}
             </span>
-            <span className="time-pitch">
-              {deck ? `${deck.pitch >= 0 ? '+' : ''}${deck.pitch.toFixed(2)}%` : ''}
-            </span>
-            <span className="time-remain">
-              {remaining !== null ? `-${formatTimeMs(remaining)}` : ''}
-            </span>
+            {showPitch && (
+              <span className="time-pitch">
+                {deck ? `${deck.pitch >= 0 ? '+' : ''}${deck.pitch.toFixed(2)}%` : ''}
+              </span>
+            )}
+            {showTimeRemaining && (
+              <span className="time-remain">
+                {remaining !== null ? `-${formatTimeMs(remaining)}` : ''}
+              </span>
+            )}
           </div>
         </div>
       </div>
 
       <div className="deck-body">
-        <CueList deckId={deckId} track={track} />
-        <div className="deck-waves">
-          <WaveformOverview deckId={deckId} track={track} accentColor={accentColor} />
-          <WaveformDetail deckId={deckId} track={track} accentColor={accentColor} />
-        </div>
+        {showCueList && <CueList deckId={deckId} track={track} />}
+        {(showWaveformOverview || showWaveformDetail) && (
+          <div
+            className={`deck-waves${
+              showWaveformOverview && !showWaveformDetail ? ' deck-waves-overview-only' : ''
+            }`}
+          >
+            {showWaveformOverview && (
+              <WaveformOverview deckId={deckId} track={track} accentColor={accentColor} />
+            )}
+            {showWaveformDetail && (
+              <WaveformDetail deckId={deckId} track={track} accentColor={accentColor} />
+            )}
+          </div>
+        )}
       </div>
     </section>
   )

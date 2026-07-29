@@ -62,6 +62,32 @@ export function ChoiceRow<T extends string>({
   )
 }
 
+interface TextRowProps {
+  label: string
+  hint: string
+  value: string
+  type?: 'text' | 'number'
+  onChange: (value: string) => void
+}
+
+/** Single free-text or numeric field, one per line. */
+export function TextRow({ label, hint, value, type = 'text', onChange }: TextRowProps): React.JSX.Element {
+  return (
+    <label className="setting-row">
+      <span className="setting-text">
+        <span className="setting-label">{label}</span>
+        <span className="setting-hint">{hint}</span>
+      </span>
+      <input
+        type={type}
+        className="setting-text-input"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  )
+}
+
 interface SliderRowProps {
   label: string
   hint: string

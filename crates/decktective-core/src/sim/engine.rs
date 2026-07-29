@@ -1,6 +1,7 @@
 //! Scripted engine for developing the UI without Pro DJ Link hardware:
 //! decks that play, drift in pitch, chain generated tracks, and occasionally
-//! behave like a DJ.
+//! behave like a DJ — including keeping only one or two decks playing at
+//! once, as a real set would.
 
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -29,12 +30,25 @@ const DECK_START_STAGGER: Duration = Duration::from_secs(5);
 const PAUSE_ODDS: f64 = 0.004;
 const CUE_JUMP_ODDS: f64 = 0.006;
 const SCRATCH_ODDS: f64 = 0.004;
+const SPIN_ODDS: f64 = 0.0015;
 
 const PAUSE_MIN: Duration = Duration::from_millis(1000);
 const PAUSE_MAX: Duration = Duration::from_millis(4000);
 const SCRATCH: Duration = Duration::from_millis(800);
 /// How far a scratch can land either side of where it started.
 const SCRATCH_SPREAD_MS: f64 = 4000.0;
+/// How long a vinyl-style spinback takes to land.
+const SPIN: Duration = Duration::from_millis(900);
+/// How far back a spinback throws the playhead.
+const SPIN_BACK_MIN_MS: f64 = 2000.0;
+const SPIN_BACK_MAX_MS: f64 = 8000.0;
+
+/// DJs mostly run a single deck; a second is occasional, a third rare.
+/// A fourth deck and beyond never gets a slot.
+const SECOND_DECK_ODDS: f64 = 0.1;
+const THIRD_DECK_ODDS: f64 = 0.02;
+/// How long a deck waits before checking again for a free slot to play in.
+const START_RETRY_DELAY: Duration = Duration::from_secs(3);
 /// Full period of the sinusoidal pitch drift, in seconds.
 const PITCH_DRIFT_PERIOD_SEC: f64 = 30.0;
 /// Amplitude of the pitch drift, in percent.
@@ -55,6 +69,8 @@ enum Scheduled {
     Resume,
     /// Land the playhead near `origin_ms` and resume, ending a scratch.
     LandScratch { origin_ms: f64 },
+    /// Land the playhead at `target_ms` and resume, ending a spinback.
+    LandSpin { target_ms: f64 },
     /// Unload the current track and show the deck as loading.
     UnloadTrack,
     /// Load the next track and cue it.
@@ -238,13 +254,32 @@ async fn run(deck_count: u8, handle: Arc<EngineHandle>) {
 
         for index in 0..decks.len() {
             if let Some(action) = decks[index].take_due(now) {
-                apply_scheduled(
-                    &mut decks[index],
-                    action,
-                    &mut track_cursor,
-                    &mut next_track_id,
-                    &handle,
-                );
+                if matches!(action, Scheduled::StartPlaying) {
+                    let other_playing = decks
+                        .iter()
+                        .enumerate()
+                        .filter(|(i, deck)| *i != index && deck.play_state == PlayState::Playing)
+                        .count();
+                    if should_promote_to_playing(other_playing, &mut rng) {
+                        apply_scheduled(
+                            &mut decks[index],
+                            action,
+                            &mut track_cursor,
+                            &mut next_track_id,
+                            &handle,
+                        );
+                    } else {
+                        decks[index].schedule(START_RETRY_DELAY, Scheduled::StartPlaying);
+                    }
+                } else {
+                    apply_scheduled(
+                        &mut decks[index],
+                        action,
+                        &mut track_cursor,
+                        &mut next_track_id,
+                        &handle,
+                    );
+                }
             }
 
             let pitch = decks[index].advance_pitch();
@@ -275,6 +310,11 @@ fn apply_scheduled(
         Scheduled::LandScratch { origin_ms } => {
             // A scratch lands slightly off where it started.
             deck.playhead_ms = origin_ms.max(0.0);
+            deck.resume();
+        }
+        Scheduled::LandSpin { target_ms } => {
+            // A spinback throws the playhead well behind where it started.
+            deck.playhead_ms = target_ms.max(0.0);
             deck.resume();
         }
         Scheduled::UnloadTrack => {
@@ -352,6 +392,24 @@ fn maybe_act(deck: &mut SimDeck, rng: &mut SmallRng) {
         let drift = (rng.random::<f64>() - 0.5) * SCRATCH_SPREAD_MS;
         let origin_ms = deck.playhead_ms + drift;
         deck.schedule(SCRATCH, Scheduled::LandScratch { origin_ms });
+    } else if roll < PAUSE_ODDS + CUE_JUMP_ODDS + SCRATCH_ODDS + SPIN_ODDS {
+        deck.busy = true;
+        deck.play_state = PlayState::Searching;
+        let back = rng.random_range(SPIN_BACK_MIN_MS..SPIN_BACK_MAX_MS);
+        let target_ms = deck.playhead_ms - back;
+        deck.schedule(SPIN, Scheduled::LandSpin { target_ms });
+    }
+}
+
+/// Decides whether a deck about to roll actually gets a slot: the first deck
+/// always gets in, a second is an occasional dice roll, a third rarer still,
+/// as a real DJ set would.
+fn should_promote_to_playing(other_decks_playing: usize, rng: &mut SmallRng) -> bool {
+    match other_decks_playing {
+        0 => true,
+        1 => rng.random::<f64>() < SECOND_DECK_ODDS,
+        2 => rng.random::<f64>() < THIRD_DECK_ODDS,
+        _ => false,
     }
 }
 
@@ -422,6 +480,55 @@ mod tests {
 
         assert_eq!(deck.playhead_ms, 0.0);
         assert!(!deck.busy);
+    }
+
+    #[test]
+    fn a_spin_never_lands_before_the_start_of_the_track() {
+        let mut deck = deck();
+        deck.busy = true;
+
+        apply_scheduled(
+            &mut deck,
+            Scheduled::LandSpin { target_ms: -5000.0 },
+            &mut 0,
+            &mut 0,
+            &EngineHandle::new(),
+        );
+
+        assert_eq!(deck.playhead_ms, 0.0);
+        assert!(!deck.busy);
+    }
+
+    #[test]
+    fn a_second_and_third_deck_rarely_get_to_play_but_a_fourth_never_does() {
+        let mut rng = SmallRng::seed_from_u64(1);
+
+        assert!(should_promote_to_playing(0, &mut rng));
+
+        let second_allowed = (0..1000)
+            .filter(|_| should_promote_to_playing(1, &mut rng))
+            .count();
+        assert!(second_allowed > 0, "a second deck should sometimes play");
+        assert!(
+            (second_allowed as f64) < 1000.0 * (SECOND_DECK_ODDS + 0.05),
+            "a second deck should stay occasional, got {second_allowed}/1000"
+        );
+
+        let third_allowed = (0..1000)
+            .filter(|_| should_promote_to_playing(2, &mut rng))
+            .count();
+        assert!(third_allowed > 0, "a third deck should sometimes play");
+        assert!(
+            (third_allowed as f64) < 1000.0 * (THIRD_DECK_ODDS + 0.03),
+            "a third deck should stay rare, got {third_allowed}/1000"
+        );
+        assert!(
+            third_allowed < second_allowed,
+            "a third deck should be rarer than a second"
+        );
+
+        assert!(!should_promote_to_playing(3, &mut rng));
+        assert!(!should_promote_to_playing(4, &mut rng));
     }
 
     #[test]

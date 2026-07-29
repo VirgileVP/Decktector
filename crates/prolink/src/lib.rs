@@ -11,6 +11,8 @@
 //! Landing in phases: the UDP layer (announce, discovery, status, beat) comes
 //! first, then metadata over NFS, then the remote database fallback.
 
+pub mod discovery;
+
 /// UDP port players announce themselves on.
 pub const ANNOUNCE_PORT: u16 = 50000;
 /// UDP port carrying beat and precise-position packets.

@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 import { DEFAULT_THEME, type ThemeId } from '../lib/theme'
+import type { FrameRate } from '../model'
 
 /** Bounds of the sliders in the settings panel. */
 export const WAVEFORM_DESATURATION_RANGE = { min: 0, max: 1, step: 0.05 } as const
@@ -14,6 +15,34 @@ export const LINEUP_VIEW_OPTIONS = [
   { value: 'full', label: 'Whole lineup' },
   { value: 'around', label: 'Previous, current, next' }
 ] as const satisfies readonly { value: LineupView; label: string }[]
+
+/** Where the timecode generator sends its output. `off` disables it entirely. */
+export type TimecodeProtocolChoice = 'off' | 'artnet' | 'mtc' | 'ltc'
+
+export const TIMECODE_PROTOCOL_OPTIONS = [
+  { value: 'off', label: 'Off' },
+  { value: 'artnet', label: 'Art-Net TC' },
+  { value: 'mtc', label: 'MIDI Time Code' },
+  { value: 'ltc', label: 'LTC (audio)' }
+] as const satisfies readonly { value: TimecodeProtocolChoice; label: string }[]
+
+export const TIMECODE_FRAME_RATE_OPTIONS = [
+  { value: 'film24', label: '24 fps' },
+  { value: 'ebu25', label: '25 fps' },
+  { value: 'smpte30', label: '30 fps' }
+] as const satisfies readonly { value: FrameRate; label: string }[]
+
+/** Port every Art-Net node listens on by convention. */
+export const ART_NET_DEFAULT_PORT = 6454
+
+/** Placeholder interface name meaning "nothing picked yet". */
+export const NO_NETWORK_INTERFACE = ''
+
+/** Placeholder MIDI port name meaning "nothing picked yet". */
+export const NO_MIDI_PORT = ''
+
+/** Placeholder LTC output device name meaning "nothing picked yet". */
+export const NO_LTC_DEVICE = ''
 
 export interface Settings {
   theme: ThemeId
@@ -31,6 +60,36 @@ export interface Settings {
   alwaysOnTop: boolean
   /** Hold off the screen saver while a set is running. */
   preventSleep: boolean
+  /** Protocol the timecode generator sends to; the deck it reads from is
+   *  picked from the header, not here — see `state/timecode.ts`. */
+  timecodeProtocol: TimecodeProtocolChoice
+  timecodeFrameRate: FrameRate
+  /** Name of the network adapter to broadcast from, e.g. `"eth0"` — picked
+   *  from `list_network_interfaces`, not typed in. */
+  timecodeArtNetInterface: string
+  timecodeArtNetPort: number
+  /** Name of the MIDI output port to send MTC to — picked from
+   *  `list_midi_output_ports`, not typed in. */
+  timecodeMtcPort: string
+  /** Name of the audio output device to send LTC to — picked from
+   *  `list_ltc_output_devices`, not typed in. */
+  timecodeLtcDevice: string
+  /** Whether the deck bar shows the key/genre tags. */
+  showDeckTrackTags: boolean
+  /** Whether the deck bar shows the ON AIR / MASTER / SYNC badges. */
+  showDeckSyncBadges: boolean
+  /** Whether the time block shows the pitch percentage. */
+  showDeckPitch: boolean
+  /** Whether the time block shows the time remaining. */
+  showDeckTimeRemaining: boolean
+  /** Whether each deck shows its cue list. */
+  showDeckCueList: boolean
+  /** Whether the deck bar shows the track artwork. */
+  showDeckArtwork: boolean
+  /** Whether each deck shows the full-track waveform overview. */
+  showDeckWaveformOverview: boolean
+  /** Whether each deck shows the zoomed-in waveform detail. */
+  showDeckWaveformDetail: boolean
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -41,7 +100,21 @@ export const DEFAULT_SETTINGS: Settings = {
   lineupView: 'full',
   deckColors: {},
   alwaysOnTop: false,
-  preventSleep: false
+  preventSleep: false,
+  timecodeProtocol: 'off',
+  timecodeFrameRate: 'smpte30',
+  timecodeArtNetInterface: NO_NETWORK_INTERFACE,
+  timecodeArtNetPort: ART_NET_DEFAULT_PORT,
+  timecodeMtcPort: NO_MIDI_PORT,
+  timecodeLtcDevice: NO_LTC_DEVICE,
+  showDeckTrackTags: true,
+  showDeckSyncBadges: true,
+  showDeckPitch: true,
+  showDeckTimeRemaining: true,
+  showDeckCueList: true,
+  showDeckArtwork: true,
+  showDeckWaveformOverview: true,
+  showDeckWaveformDetail: true
 }
 
 interface SettingsActions {
@@ -84,7 +157,21 @@ function pickSettings(state: Settings): Settings {
     lineupView,
     deckColors,
     alwaysOnTop,
-    preventSleep
+    preventSleep,
+    timecodeProtocol,
+    timecodeFrameRate,
+    timecodeArtNetInterface,
+    timecodeArtNetPort,
+    timecodeMtcPort,
+    timecodeLtcDevice,
+    showDeckTrackTags,
+    showDeckSyncBadges,
+    showDeckPitch,
+    showDeckTimeRemaining,
+    showDeckCueList,
+    showDeckArtwork,
+    showDeckWaveformOverview,
+    showDeckWaveformDetail
   } = state
   return {
     theme,
@@ -94,6 +181,20 @@ function pickSettings(state: Settings): Settings {
     lineupView,
     deckColors,
     alwaysOnTop,
-    preventSleep
+    preventSleep,
+    timecodeProtocol,
+    timecodeFrameRate,
+    timecodeArtNetInterface,
+    timecodeArtNetPort,
+    timecodeMtcPort,
+    timecodeLtcDevice,
+    showDeckTrackTags,
+    showDeckSyncBadges,
+    showDeckPitch,
+    showDeckTimeRemaining,
+    showDeckCueList,
+    showDeckArtwork,
+    showDeckWaveformOverview,
+    showDeckWaveformDetail
   }
 }

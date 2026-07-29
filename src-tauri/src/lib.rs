@@ -4,7 +4,10 @@
 //! Everything domain-related lives in `decktective-core`; this crate only
 //! wires it to Tauri.
 
+mod devices;
 mod events;
+mod timecode;
+mod track_log;
 mod window_prefs;
 
 use std::sync::Arc;
@@ -12,6 +15,8 @@ use std::sync::Arc;
 use decktective_core::model::EngineSnapshot;
 use decktective_core::sim::SimEngine;
 use decktective_core::Engine;
+use decktective_timecode::TimecodeService;
+use prolink::discovery::DeviceWatcher;
 use tauri::{Manager, State, Window};
 
 use window_prefs::{SleepBlocker, WindowPrefs};
@@ -68,13 +73,30 @@ pub fn run() {
         .init();
 
     let engine = create_engine();
+    let timecode = TimecodeService::new(Arc::clone(&engine));
+    let device_watcher = DeviceWatcher::new();
 
     tauri::Builder::default()
         .manage(Arc::clone(&engine))
+        .manage(Arc::clone(&timecode))
+        .manage(Arc::clone(&device_watcher))
         .manage(SleepBlocker::default())
-        .invoke_handler(tauri::generate_handler![engine_snapshot, set_window_prefs])
+        .invoke_handler(tauri::generate_handler![
+            engine_snapshot,
+            set_window_prefs,
+            timecode::timecode_status,
+            timecode::set_timecode_source,
+            timecode::set_timecode_config,
+            timecode::list_network_interfaces,
+            timecode::list_midi_output_ports,
+            timecode::list_ltc_output_devices,
+            devices::list_devices
+        ])
         .setup(move |app| {
             events::forward_to_renderer(app.handle().clone(), Arc::clone(&engine));
+            timecode::forward_to_renderer(app.handle().clone(), Arc::clone(&timecode));
+            devices::forward_to_renderer(app.handle().clone(), Arc::clone(&device_watcher));
+            track_log::attach(app.handle().clone(), Arc::clone(&engine));
 
             let engine = Arc::clone(&engine);
             tauri::async_runtime::spawn(async move {
@@ -82,6 +104,8 @@ pub fn run() {
                     tracing::error!(%error, "failed to start engine");
                 }
             });
+            tauri::async_runtime::spawn(Arc::clone(&timecode).run());
+            tauri::async_runtime::spawn(Arc::clone(&device_watcher).run());
             Ok(())
         })
         .on_window_event(|window, event| {

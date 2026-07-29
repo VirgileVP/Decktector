@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/decktective-core", "crates/prolink", "src-tauri"]
+members = ["crates/decktective-core", "crates/decktective-timecode", "crates/prolink", "src-tauri"]
 
 [workspace.package]
 version = "0.1.0"
@@ -10,13 +10,19 @@ license = "MIT"
 
 [workspace.dependencies]
 decktective-core = { path = "crates/decktective-core" }
+decktective-timecode = { path = "crates/decktective-timecode" }
 prolink = { path = "crates/prolink" }
 
 anyhow = "1"
 async-trait = "0.1"
+chrono = "0.4"
+cpal = "0.15"
+if-addrs = "0.13"
+midir = "0.10"
 rand = { version = "0.9", features = ["small_rng"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+socket2 = "0.6"
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net"] }
 tracing = "0.1"

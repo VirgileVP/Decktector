@@ -2,6 +2,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core'
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
 
 import { applyTheme } from '../lib/theme'
+import type { TimecodeConfig } from '../model'
 import { useSettings, type Settings } from './settings'
 
 /**
@@ -25,6 +26,29 @@ function pushUiScale(uiScale: number): void {
   getCurrentWebviewWindow()
     .setZoom(uiScale)
     .catch((error) => console.error('Failed to apply the UI scale:', error))
+}
+
+/** Builds the tagged config the Rust side expects from the flat settings fields. */
+function toTimecodeConfig(settings: Settings): TimecodeConfig {
+  const protocol: TimecodeConfig['protocol'] =
+    settings.timecodeProtocol === 'artnet'
+      ? {
+          type: 'artNet',
+          interface_name: settings.timecodeArtNetInterface,
+          port: settings.timecodeArtNetPort
+        }
+      : settings.timecodeProtocol === 'mtc'
+        ? { type: 'mtc', port_name: settings.timecodeMtcPort }
+        : settings.timecodeProtocol === 'ltc'
+          ? { type: 'ltc', device_name: settings.timecodeLtcDevice }
+          : { type: 'off' }
+  return { protocol, frameRate: settings.timecodeFrameRate }
+}
+
+function pushTimecodeConfig(settings: Settings): void {
+  invoke('set_timecode_config', { config: toTimecodeConfig(settings) }).catch((error) =>
+    console.error('Failed to apply the timecode config:', error)
+  )
 }
 
 /**
@@ -52,6 +76,16 @@ function apply(settings: Settings, previous?: Settings): void {
     previous?.preventSleep !== settings.preventSleep
   ) {
     pushWindowPrefs(settings)
+  }
+  if (
+    previous?.timecodeProtocol !== settings.timecodeProtocol ||
+    previous?.timecodeFrameRate !== settings.timecodeFrameRate ||
+    previous?.timecodeArtNetInterface !== settings.timecodeArtNetInterface ||
+    previous?.timecodeArtNetPort !== settings.timecodeArtNetPort ||
+    previous?.timecodeMtcPort !== settings.timecodeMtcPort ||
+    previous?.timecodeLtcDevice !== settings.timecodeLtcDevice
+  ) {
+    pushTimecodeConfig(settings)
   }
 }
 

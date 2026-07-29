@@ -9,3 +9,8 @@ logs
 graphify-out
 target
 src-tauri/gen/schemas
+.agents
+agent
+.claude/settings.local.json
+skills-lock.json
+*.tsbuildinfo

@@ -6,10 +6,14 @@ import { DeckPanel } from './components/DeckPanel'
 import { HeaderClock } from './components/HeaderClock'
 import { LineupNow } from './components/LineupNow'
 import { SettingsDialog } from './components/SettingsDialog'
+import { TimecodeClock } from './components/TimecodeClock'
+import { TimecodeSourceButtons } from './components/TimecodeSourceButtons'
 import { deckColor } from './lib/deck-colors'
+import { connectDevicesToEngine } from './state/devices'
 import { useSettings } from './state/settings'
 import { connectSettingsToApp } from './state/settings-sync'
 import { connectStoreToEngine, useDecktectiveStore } from './state/store'
+import { connectTimecodeToEngine } from './state/timecode'
 
 type DeckView = 'stack' | 'quad'
 
@@ -32,6 +36,8 @@ const NETWORK_LABELS: Record<string, string> = {
 function App(): React.JSX.Element {
   useEffect(() => connectStoreToEngine(), [])
   useEffect(() => connectSettingsToApp(), [])
+  useEffect(() => connectTimecodeToEngine(), [])
+  useEffect(() => connectDevicesToEngine(), [])
 
   const [view, setView] = useState<DeckView>(loadView)
   const selectView = (next: DeckView): void => {
@@ -56,7 +62,11 @@ function App(): React.JSX.Element {
       <header className="app-header">
         <img className="neon-logo" src={neonLogo} alt="NEON" />
         <div className="header-center">
-          <HeaderClock />
+          <div className="header-clocks">
+            <HeaderClock />
+            <TimecodeClock />
+            <TimecodeSourceButtons />
+          </div>
           <LineupNow />
         </div>
         <div className="header-right">
