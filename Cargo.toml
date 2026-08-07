@@ -1,6 +1,12 @@
 [workspace]
 resolver = "2"
-members = ["crates/decktective-core", "crates/decktective-timecode", "crates/prolink", "src-tauri"]
+members = [
+    "crates/decktective-core",
+    "crates/decktective-remote",
+    "crates/decktective-timecode",
+    "crates/prolink",
+    "src-tauri",
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -10,6 +16,7 @@ license = "MIT"
 
 [workspace.dependencies]
 decktective-core = { path = "crates/decktective-core" }
+decktective-remote = { path = "crates/decktective-remote" }
 decktective-timecode = { path = "crates/decktective-timecode" }
 prolink = { path = "crates/prolink" }
 
