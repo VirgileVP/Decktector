@@ -8,4 +8,7 @@
 //! [`Engine`]: decktective_core::Engine
 
 pub mod hub;
+pub mod server;
 pub mod wire;
+
+pub use server::{RemoteConfig, RemoteService, RemoteStatus, DEFAULT_REMOTE_PORT};
