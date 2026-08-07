@@ -21,6 +21,10 @@ const asPercent = (value: number): string => `${Math.round(value * 100)} %`
 const SETTINGS_TABS = ['Interface', 'Deck view', 'Line up', 'Timecode', 'Devices'] as const
 type SettingsTab = (typeof SETTINGS_TABS)[number]
 
+/** The Timecode tab drives desktop-only gear — a remote browser has nothing to send it to. */
+const IS_TAURI = isTauri()
+const VISIBLE_SETTINGS_TABS = SETTINGS_TABS.filter((tab) => IS_TAURI || tab !== 'Timecode')
+
 interface SettingsDialogProps {
   onClose: () => void
 }
@@ -88,7 +92,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Elem
         </header>
 
         <nav className="settings-tabs" role="tablist" aria-label="Settings sections">
-          {SETTINGS_TABS.map((tab) => (
+          {VISIBLE_SETTINGS_TABS.map((tab) => (
             <button
               key={tab}
               type="button"
@@ -185,21 +189,23 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Elem
                 </p>
               </section>
 
-              <section className="settings-section">
-                <h3>Window</h3>
-                <ToggleRow
-                  label="Always on top"
-                  hint="Keeps Decktective above every other application"
-                  checked={settings.alwaysOnTop}
-                  onChange={update('alwaysOnTop')}
-                />
-                <ToggleRow
-                  label="Keep the screen awake"
-                  hint="Holds off the screen saver while a set is running"
-                  checked={settings.preventSleep}
-                  onChange={update('preventSleep')}
-                />
-              </section>
+              {IS_TAURI && (
+                <section className="settings-section">
+                  <h3>Window</h3>
+                  <ToggleRow
+                    label="Always on top"
+                    hint="Keeps Decktective above every other application"
+                    checked={settings.alwaysOnTop}
+                    onChange={update('alwaysOnTop')}
+                  />
+                  <ToggleRow
+                    label="Keep the screen awake"
+                    hint="Holds off the screen saver while a set is running"
+                    checked={settings.preventSleep}
+                    onChange={update('preventSleep')}
+                  />
+                </section>
+              )}
             </>
           )}
 
@@ -261,7 +267,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Elem
 
           {activeTab === 'Line up' && <LineupEditor />}
 
-          {activeTab === 'Timecode' && (
+          {IS_TAURI && activeTab === 'Timecode' && (
             <section className="settings-section">
               <h3>Timecode</h3>
               <ChoiceRow
