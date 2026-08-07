@@ -7,4 +7,5 @@
 //!
 //! [`Engine`]: decktective_core::Engine
 
+pub mod hub;
 pub mod wire;
