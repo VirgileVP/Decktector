@@ -1011,6 +1011,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "decktective-core",
+ "decktective-remote",
  "decktective-timecode",
  "keepawake",
  "prolink",

@@ -345,3 +345,22 @@ async fn handle_socket(mut socket: WebSocket, service: Arc<RemoteService>) {
 
     service.client_disconnected();
 }
+
+#[cfg(test)]
+mod tests {
+    use decktective_core::sim::SimEngine;
+
+    use super::*;
+
+    #[test]
+    fn a_freshly_constructed_service_is_off_until_the_settings_turn_it_on() {
+        let engine: Arc<dyn Engine> = Arc::new(SimEngine::new(2));
+        let service = RemoteService::new(engine);
+
+        let status = service.status();
+
+        assert!(!status.listening);
+        assert_eq!(status.port, DEFAULT_REMOTE_PORT);
+        assert!(status.token.is_none());
+    }
+}

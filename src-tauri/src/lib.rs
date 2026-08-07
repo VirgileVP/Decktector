@@ -6,6 +6,7 @@
 
 mod devices;
 mod events;
+mod remote;
 mod timecode;
 mod track_log;
 mod window_prefs;
@@ -15,6 +16,7 @@ use std::sync::Arc;
 use decktective_core::model::EngineSnapshot;
 use decktective_core::sim::SimEngine;
 use decktective_core::Engine;
+use decktective_remote::RemoteService;
 use decktective_timecode::TimecodeService;
 use prolink::discovery::DeviceWatcher;
 use tauri::{Manager, State, Window};
@@ -74,11 +76,13 @@ pub fn run() {
 
     let engine = create_engine();
     let timecode = TimecodeService::new(Arc::clone(&engine));
+    let remote = RemoteService::new(Arc::clone(&engine));
     let device_watcher = DeviceWatcher::new();
 
     tauri::Builder::default()
         .manage(Arc::clone(&engine))
         .manage(Arc::clone(&timecode))
+        .manage(Arc::clone(&remote))
         .manage(Arc::clone(&device_watcher))
         .manage(SleepBlocker::default())
         .invoke_handler(tauri::generate_handler![
@@ -90,11 +94,14 @@ pub fn run() {
             timecode::list_network_interfaces,
             timecode::list_midi_output_ports,
             timecode::list_ltc_output_devices,
+            remote::remote_status,
+            remote::set_remote_config,
             devices::list_devices
         ])
         .setup(move |app| {
             events::forward_to_renderer(app.handle().clone(), Arc::clone(&engine));
             timecode::forward_to_renderer(app.handle().clone(), Arc::clone(&timecode));
+            remote::forward_to_renderer(app.handle().clone(), Arc::clone(&remote));
             devices::forward_to_renderer(app.handle().clone(), Arc::clone(&device_watcher));
             track_log::attach(app.handle().clone(), Arc::clone(&engine));
 
@@ -105,6 +112,7 @@ pub fn run() {
                 }
             });
             tauri::async_runtime::spawn(Arc::clone(&timecode).run());
+            tauri::async_runtime::spawn(remote.hub().run());
             tauri::async_runtime::spawn(Arc::clone(&device_watcher).run());
             Ok(())
         })
