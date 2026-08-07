@@ -7,8 +7,10 @@
 //!
 //! [`Engine`]: decktective_core::Engine
 
+pub mod assets;
 pub mod hub;
 pub mod server;
 pub mod wire;
 
+pub use assets::AssetSource;
 pub use server::{RemoteConfig, RemoteService, RemoteStatus, DEFAULT_REMOTE_PORT};

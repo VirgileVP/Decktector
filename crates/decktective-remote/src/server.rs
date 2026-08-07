@@ -11,7 +11,8 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use axum::extract::ws::{Message, WebSocket};
-use axum::extract::{Query, State, WebSocketUpgrade};
+use axum::extract::{Query, Request, State, WebSocketUpgrade};
+use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::Router;
@@ -24,6 +25,7 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::task::JoinHandle;
 use ts_rs::TS;
 
+use crate::assets::{asset_router, AssetSource};
 use crate::hub::RemoteHub;
 
 /// Default port for the remote view. Picked well clear of the Pro DJ Link
@@ -96,17 +98,20 @@ impl Inner {
 }
 
 /// Starts, stops and restarts the remote listener to match the applied
-/// [`RemoteConfig`], and answers `/ws` and `/health` for whoever connects.
+/// [`RemoteConfig`], and answers `/ws`, `/health` and the asset routes for
+/// whoever connects.
 pub struct RemoteService {
     hub: Arc<RemoteHub>,
+    assets: AssetSource,
     inner: Mutex<Inner>,
     status_tx: broadcast::Sender<RemoteStatus>,
 }
 
 impl RemoteService {
-    pub fn new(engine: Arc<dyn Engine>) -> Arc<Self> {
+    pub fn new(engine: Arc<dyn Engine>, assets: AssetSource) -> Arc<Self> {
         Arc::new(Self {
             hub: RemoteHub::new(engine),
+            assets,
             inner: Mutex::new(Inner::initial()),
             status_tx: broadcast::channel(STATUS_BUFFER).0,
         })
@@ -259,11 +264,23 @@ fn generate_token() -> String {
         .collect()
 }
 
+/// `/ws` and `/health` need `State<Arc<RemoteService>>`, so they are closed
+/// out with `.with_state` first; the asset routes need no state of their
+/// own, only the token-gate layer, so the two merge as a single `Router<()>`
+/// ready to hand to `axum::serve`. `/health` sits outside the gate (the
+/// settings panel probes it to prove the server is up, with no token yet to
+/// offer) and `/ws` gates itself inline, so only the asset routes are
+/// wrapped in the shared middleware here.
 fn build_router(service: Arc<RemoteService>) -> Router {
-    Router::new()
+    let engine_routes = Router::new()
         .route("/ws", get(ws_handler))
         .route("/health", get(health_handler))
-        .with_state(service)
+        .with_state(service.clone());
+
+    let gated_assets =
+        asset_router(service.assets.clone()).layer(middleware::from_fn_with_state(service, require_token));
+
+    engine_routes.merge(gated_assets)
 }
 
 async fn health_handler() -> &'static str {
@@ -271,13 +288,28 @@ async fn health_handler() -> &'static str {
 }
 
 #[derive(Debug, Deserialize)]
-struct WsQuery {
+struct TokenQuery {
     token: Option<String>,
+}
+
+/// Gates the asset routes behind the same token every other remote route
+/// requires, so there is one gate for the whole surface rather than assets
+/// being an unauthenticated side door into the app.
+async fn require_token(
+    State(service): State<Arc<RemoteService>>,
+    Query(query): Query<TokenQuery>,
+    request: Request,
+    next: Next,
+) -> Response {
+    if !service.token_matches(query.token.as_deref()) {
+        return (axum::http::StatusCode::UNAUTHORIZED, "invalid or missing token").into_response();
+    }
+    next.run(request).await
 }
 
 async fn ws_handler(
     State(service): State<Arc<RemoteService>>,
-    Query(query): Query<WsQuery>,
+    Query(query): Query<TokenQuery>,
     upgrade: WebSocketUpgrade,
 ) -> Response {
     if !service.token_matches(query.token.as_deref()) {
@@ -355,7 +387,7 @@ mod tests {
     #[test]
     fn a_freshly_constructed_service_is_off_until_the_settings_turn_it_on() {
         let engine: Arc<dyn Engine> = Arc::new(SimEngine::new(2));
-        let service = RemoteService::new(engine);
+        let service = RemoteService::new(engine, AssetSource::DevServer(1420));
 
         let status = service.status();
 

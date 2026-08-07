@@ -7,6 +7,7 @@ use std::time::Duration;
 use decktective_core::sim::SimEngine;
 use decktective_core::Engine;
 use decktective_remote::server::{RemoteConfig, RemoteService};
+use decktective_remote::AssetSource;
 use decktective_remote::wire::{RemoteMessage, SNAPSHOT_CHANNEL};
 use tokio_tungstenite::tungstenite::Message;
 
@@ -16,7 +17,7 @@ const TEST_DECK_COUNT: u8 = 2;
 
 async fn start_test_service() -> (Arc<RemoteService>, u16) {
     let engine: Arc<dyn Engine> = Arc::new(SimEngine::new(TEST_DECK_COUNT));
-    let service = RemoteService::new(engine);
+    let service = RemoteService::new(engine, AssetSource::DevServer(1420));
 
     service
         .clone()

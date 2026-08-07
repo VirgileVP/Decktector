@@ -7,12 +7,44 @@
 
 use std::sync::Arc;
 
-use decktective_remote::{RemoteConfig, RemoteService, RemoteStatus};
-use tauri::{AppHandle, Emitter, State};
+use decktective_remote::{AssetSource, RemoteConfig, RemoteService, RemoteStatus};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::broadcast::error::RecvError;
 
 /// Renderer's subscription key for [`RemoteStatus`] changes.
 const STATUS_CHANNEL: &str = "remote:status";
+
+/// Vite's fixed dev-server port — matches `vite.config.ts`'s `DEV_PORT` and
+/// `tauri.conf.json`'s `devUrl`, which both hardcode the same value for the
+/// same reason: Tauri's `devUrl` has to point at a fixed port.
+const VITE_DEV_PORT: u16 = 1420;
+
+/// Where the remote server should get the UI it hands to browsers: the
+/// packaged app's bundled `web` resource (see `tauri.conf.json`'s
+/// `bundle.resources`) if it exists, otherwise a redirect to the Vite dev
+/// server that owns the assets during `tauri dev`.
+pub fn resolve_asset_source(app: &AppHandle) -> AssetSource {
+    match app.path().resource_dir() {
+        Ok(resource_dir) => {
+            let web_dir = resource_dir.join("web");
+            if web_dir.is_dir() {
+                tracing::info!(
+                    path = %web_dir.display(),
+                    "serving the remote view from the bundled web resource"
+                );
+                return AssetSource::Directory(web_dir);
+            }
+        }
+        Err(error) => {
+            tracing::warn!(%error, "failed to resolve the app's resource directory");
+        }
+    }
+    tracing::info!(
+        port = VITE_DEV_PORT,
+        "no bundled web resource found; redirecting the remote view to the Vite dev server"
+    );
+    AssetSource::DevServer(VITE_DEV_PORT)
+}
 
 /// Subscribes to the service and forwards its status changes for the
 /// lifetime of the app.

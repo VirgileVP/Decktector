@@ -76,13 +76,11 @@ pub fn run() {
 
     let engine = create_engine();
     let timecode = TimecodeService::new(Arc::clone(&engine));
-    let remote = RemoteService::new(Arc::clone(&engine));
     let device_watcher = DeviceWatcher::new();
 
     tauri::Builder::default()
         .manage(Arc::clone(&engine))
         .manage(Arc::clone(&timecode))
-        .manage(Arc::clone(&remote))
         .manage(Arc::clone(&device_watcher))
         .manage(SleepBlocker::default())
         .invoke_handler(tauri::generate_handler![
@@ -99,6 +97,13 @@ pub fn run() {
             devices::list_devices
         ])
         .setup(move |app| {
+            // Resolving the asset source needs the resource-dir lookup,
+            // which only exists once the app handle is available — this is
+            // the earliest point that is true, so the service is built here
+            // rather than alongside `timecode` and `device_watcher` above.
+            let remote = RemoteService::new(Arc::clone(&engine), remote::resolve_asset_source(app.handle()));
+            app.manage(Arc::clone(&remote));
+
             events::forward_to_renderer(app.handle().clone(), Arc::clone(&engine));
             timecode::forward_to_renderer(app.handle().clone(), Arc::clone(&timecode));
             remote::forward_to_renderer(app.handle().clone(), Arc::clone(&remote));
