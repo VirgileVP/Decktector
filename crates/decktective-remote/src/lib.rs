@@ -6,3 +6,5 @@
 //! only on `decktective-core`, the same shape as `decktective-timecode`.
 //!
 //! [`Engine`]: decktective_core::Engine
+
+pub mod wire;
