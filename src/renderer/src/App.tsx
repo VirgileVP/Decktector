@@ -10,6 +10,7 @@ import { SettingsDialog } from './components/SettingsDialog'
 import { TimecodeClock } from './components/TimecodeClock'
 import { TimecodeSourceButtons } from './components/TimecodeSourceButtons'
 import { deckColor } from './lib/deck-colors'
+import { remoteFocusedDeck } from './lib/remote-url'
 import { connectDevicesToEngine } from './state/devices'
 import { connectRemoteToEngine } from './state/remote'
 import { useSettings } from './state/settings'
@@ -42,6 +43,7 @@ function App(): React.JSX.Element {
   useEffect(() => connectDevicesToEngine(), [])
   useEffect(() => connectRemoteToEngine(), [])
 
+  const [focusedDeckId] = useState<number | null>(() => remoteFocusedDeck(window.location))
   const [view, setView] = useState<DeckView>(loadView)
   const selectView = (next: DeckView): void => {
     setView(next)
@@ -59,6 +61,12 @@ function App(): React.JSX.Element {
         .sort((a, b) => a - b)
     )
   )
+  // Full-screen focus (via `?deck=N`) forces the single-column layout
+  // regardless of the view toggle — a `view-quad` grid would otherwise
+  // leave the one visible deck sharing the screen with empty cells.
+  const visibleDeckIds =
+    focusedDeckId !== null && deckIds.includes(focusedDeckId) ? [focusedDeckId] : deckIds
+  const effectiveView: DeckView = focusedDeckId !== null ? 'stack' : view
 
   return (
     <div className="app">
@@ -135,8 +143,8 @@ function App(): React.JSX.Element {
 
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
 
-      <main className={`deck-grid view-${view}`}>
-        {deckIds.length === 0 ? (
+      <main className={`deck-grid view-${effectiveView}`}>
+        {visibleDeckIds.length === 0 ? (
           <div className="empty-state">
             <p>Waiting for Pro DJ Link devices…</p>
             <p className="empty-hint">
@@ -145,7 +153,7 @@ function App(): React.JSX.Element {
             </p>
           </div>
         ) : (
-          deckIds.map((deckId) => (
+          visibleDeckIds.map((deckId) => (
             <DeckPanel key={deckId} deckId={deckId} accentColor={deckColor(deckId, deckColors)} />
           ))
         )}

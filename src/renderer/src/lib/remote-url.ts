@@ -7,6 +7,9 @@
 /** Query string key the remote server's URL carries the access token under. */
 const TOKEN_PARAM = 'token'
 
+/** Query string key for focusing a single deck full-screen. */
+const DECK_PARAM = 'deck'
+
 /**
  * The host and port the remote server listens on, from the page's own
  * location.
@@ -51,4 +54,17 @@ export function remoteResourceUrl(location: Location, path: string): string {
   const token = remoteToken(location)
   const query = token ? `?${TOKEN_PARAM}=${encodeURIComponent(token)}` : ''
   return `${protocol}//${remoteAuthority(location)}${path}${query}`
+}
+
+/**
+ * The deck to show full-screen, from `?deck=N` in the page's own query
+ * string — for a phone propped next to a lighting desk, where the whole
+ * grid is more than is needed. `null` means show every connected deck, the
+ * normal behaviour.
+ */
+export function remoteFocusedDeck(location: Location): number | null {
+  const raw = new URLSearchParams(location.search).get(DECK_PARAM)
+  if (raw === null) return null
+  const deckId = Number(raw)
+  return Number.isInteger(deckId) && deckId > 0 ? deckId : null
 }
