@@ -1699,7 +1699,12 @@ html[data-transparent='on'] .panel-chrome-bar {
 .header-block-settings {
   position: absolute;
   top: 0;
-  right: -20px;
+  /* Unlike `.pop-out-button` above (used only in the main app header, where
+     `.header-center` is a narrow, centered block with real gutter space
+     outside it), this button lives inside a panel window, where
+     `.header-center` fills the full width — an outside offset here would
+     land past the window's edge and get clipped by `overflow: hidden`. */
+  right: 0;
 }
 
 .header-block-settings-button {
