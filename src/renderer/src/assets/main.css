@@ -1352,3 +1352,30 @@ body {
   user-select: text;
   cursor: text;
 }
+
+/* ---------- Panel windows ---------- */
+
+/* Every panel window is created `transparent: true` — on Windows that flag
+   cannot be changed after the window exists, so an opaque background here
+   is what makes transparency a per-window *toggle* instead of a fixed trait.
+   `html[data-transparent='on']` (set by `applyPanelWindowOptions`, task 3.2)
+   drops it for keying the window over a video feed. */
+.panel-window {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+html[data-transparent='on'] .panel-window {
+  background: transparent;
+}
+
+.panel-deck-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted);
+  font-size: 13px;
+}
