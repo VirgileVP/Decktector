@@ -393,6 +393,39 @@ struct TokenQuery {
     token: Option<String>,
 }
 
+/// Cookie the token is mirrored into after the first request that carries
+/// it in the query string — the query string is how the shared link and
+/// the QR code carry it, but a browser has no way to repeat a page's own
+/// query string onto the `<script src>`/`<link href>` requests that page
+/// goes on to make. Without this, the very first asset request for the
+/// bundle's JS would 401, and the page would stay blank.
+const TOKEN_COOKIE: &str = "decktective_remote_token";
+
+/// The token from the query string if present, otherwise from
+/// [`TOKEN_COOKIE`] — the fallback that lets a browser's own follow-up
+/// requests (assets, the WebSocket handshake) authenticate without the
+/// query string.
+fn resolve_token(query: &TokenQuery, headers: &axum::http::HeaderMap) -> Option<String> {
+    query.token.clone().or_else(|| cookie_token(headers))
+}
+
+fn cookie_token(headers: &axum::http::HeaderMap) -> Option<String> {
+    let cookie_header = headers.get(header::COOKIE)?.to_str().ok()?;
+    cookie_header.split(';').find_map(|pair| {
+        let (name, value) = pair.trim().split_once('=')?;
+        (name == TOKEN_COOKIE).then(|| value.to_string())
+    })
+}
+
+/// `Set-Cookie` header mirroring a query-string token, so the browser's own
+/// follow-up requests carry it automatically. `SameSite=Lax` rather than
+/// `Strict`: the QR code and shared link both land here as a top-level
+/// navigation from outside the site, which `Strict` would refuse to attach
+/// the cookie to.
+fn token_cookie_header(token: &str) -> Option<axum::http::HeaderValue> {
+    axum::http::HeaderValue::from_str(&format!("{TOKEN_COOKIE}={token}; Path=/; SameSite=Lax")).ok()
+}
+
 /// Gates the asset routes behind the same token every other remote route
 /// requires, so there is one gate for the whole surface rather than assets
 /// being an unauthenticated side door into the app.
@@ -402,18 +435,27 @@ async fn require_token(
     request: Request,
     next: Next,
 ) -> Response {
-    if !service.token_matches(query.token.as_deref()) {
+    let token = resolve_token(&query, request.headers());
+    if !service.token_matches(token.as_deref()) {
         return (axum::http::StatusCode::UNAUTHORIZED, "invalid or missing token").into_response();
     }
-    next.run(request).await
+    let mut response = next.run(request).await;
+    if let Some(token) = query.token.as_deref() {
+        if let Some(value) = token_cookie_header(token) {
+            response.headers_mut().insert(header::SET_COOKIE, value);
+        }
+    }
+    response
 }
 
 async fn ws_handler(
     State(service): State<Arc<RemoteService>>,
     Query(query): Query<TokenQuery>,
+    headers: axum::http::HeaderMap,
     upgrade: WebSocketUpgrade,
 ) -> Response {
-    if !service.token_matches(query.token.as_deref()) {
+    let token = resolve_token(&query, &headers);
+    if !service.token_matches(token.as_deref()) {
         return (axum::http::StatusCode::UNAUTHORIZED, "invalid or missing token").into_response();
     }
     upgrade.on_upgrade(move |socket| handle_socket(socket, service))
@@ -495,5 +537,66 @@ mod tests {
         assert!(!status.listening);
         assert_eq!(status.port, DEFAULT_REMOTE_PORT);
         assert!(status.token.is_none());
+    }
+
+    /// A browser has no way to repeat a page's own query string onto the
+    /// `<script src>`/`<link href>` requests that page goes on to make, so
+    /// a token carried only in the query string leaves every asset request
+    /// unauthenticated — the bundle 401s and the page stays blank. The
+    /// cookie `require_token` sets on a successful query-string request is
+    /// what makes those follow-up requests authenticate at all.
+    #[tokio::test]
+    async fn an_asset_request_authenticates_via_the_token_cookie_set_by_the_page_load() {
+        use axum::body::Body;
+        use axum::http::{header, Request as HttpRequest, StatusCode};
+        use tower::ServiceExt;
+
+        let directory = tempfile::tempdir().expect("temp dir creates");
+        std::fs::write(directory.path().join("index.html"), "<html>hi</html>")
+            .expect("index.html writes");
+
+        let engine: Arc<dyn Engine> = Arc::new(SimEngine::new(2));
+        let service = RemoteService::new(engine, AssetSource::Directory(directory.path().to_path_buf()));
+        service
+            .clone()
+            .set_config(RemoteConfig {
+                enabled: true,
+                port: 0,
+                interface: String::new(),
+            })
+            .await
+            .expect("bind succeeds");
+        let token = service.status().token.expect("a listening service has a token");
+
+        let page_load = build_router(service.clone())
+            .oneshot(
+                HttpRequest::builder()
+                    .uri(format!("/?token={token}"))
+                    .body(Body::empty())
+                    .expect("request builds"),
+            )
+            .await
+            .expect("router does not error");
+        assert_eq!(page_load.status(), StatusCode::OK);
+        let set_cookie = page_load
+            .headers()
+            .get(header::SET_COOKIE)
+            .expect("the page load sets the token cookie")
+            .to_str()
+            .expect("header is valid utf-8")
+            .to_string();
+        let cookie_value = set_cookie.split(';').next().expect("cookie has a value");
+
+        let asset_request = build_router(service)
+            .oneshot(
+                HttpRequest::builder()
+                    .uri("/")
+                    .header(header::COOKIE, cookie_value)
+                    .body(Body::empty())
+                    .expect("request builds"),
+            )
+            .await
+            .expect("router does not error");
+        assert_eq!(asset_request.status(), StatusCode::OK);
     }
 }
