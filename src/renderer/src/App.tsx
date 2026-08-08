@@ -10,6 +10,7 @@ import { TimecodeClock } from './components/TimecodeClock'
 import { TimecodeSourceButtons } from './components/TimecodeSourceButtons'
 import { deckColor } from './lib/deck-colors'
 import { connectDevicesToEngine } from './state/devices'
+import { connectRemoteToEngine } from './state/remote'
 import { useSettings } from './state/settings'
 import { connectSettingsToApp } from './state/settings-sync'
 import { connectStoreToEngine, useDecktectiveStore } from './state/store'
@@ -38,6 +39,7 @@ function App(): React.JSX.Element {
   useEffect(() => connectSettingsToApp(), [])
   useEffect(() => connectTimecodeToEngine(), [])
   useEffect(() => connectDevicesToEngine(), [])
+  useEffect(() => connectRemoteToEngine(), [])
 
   const [view, setView] = useState<DeckView>(loadView)
   const selectView = (next: DeckView): void => {

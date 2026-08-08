@@ -35,6 +35,9 @@ export const TIMECODE_FRAME_RATE_OPTIONS = [
 /** Port every Art-Net node listens on by convention. */
 export const ART_NET_DEFAULT_PORT = 6454
 
+/** Port the remote view listens on unless the settings panel picks another — matches `DEFAULT_REMOTE_PORT` on the Rust side. */
+export const REMOTE_DEFAULT_PORT = 7420
+
 /** Placeholder interface name meaning "nothing picked yet". */
 export const NO_NETWORK_INTERFACE = ''
 
@@ -74,6 +77,13 @@ export interface Settings {
   /** Name of the audio output device to send LTC to — picked from
    *  `list_ltc_output_devices`, not typed in. */
   timecodeLtcDevice: string
+  /** Whether the remote web view server is turned on. */
+  remoteEnabled: boolean
+  /** Port the remote server listens on. */
+  remotePort: number
+  /** Name of the network adapter the remote server binds to — picked from
+   *  `list_network_interfaces`, not typed in. Empty means every interface. */
+  remoteInterface: string
   /** Whether the deck bar shows the key/genre tags. */
   showDeckTrackTags: boolean
   /** Whether the deck bar shows the ON AIR / MASTER / SYNC badges. */
@@ -107,6 +117,9 @@ export const DEFAULT_SETTINGS: Settings = {
   timecodeArtNetPort: ART_NET_DEFAULT_PORT,
   timecodeMtcPort: NO_MIDI_PORT,
   timecodeLtcDevice: NO_LTC_DEVICE,
+  remoteEnabled: false,
+  remotePort: REMOTE_DEFAULT_PORT,
+  remoteInterface: NO_NETWORK_INTERFACE,
   showDeckTrackTags: true,
   showDeckSyncBadges: true,
   showDeckPitch: true,
@@ -164,6 +177,9 @@ function pickSettings(state: Settings): Settings {
     timecodeArtNetPort,
     timecodeMtcPort,
     timecodeLtcDevice,
+    remoteEnabled,
+    remotePort,
+    remoteInterface,
     showDeckTrackTags,
     showDeckSyncBadges,
     showDeckPitch,
@@ -188,6 +204,9 @@ function pickSettings(state: Settings): Settings {
     timecodeArtNetPort,
     timecodeMtcPort,
     timecodeLtcDevice,
+    remoteEnabled,
+    remotePort,
+    remoteInterface,
     showDeckTrackTags,
     showDeckSyncBadges,
     showDeckPitch,

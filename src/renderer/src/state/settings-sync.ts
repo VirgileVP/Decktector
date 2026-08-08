@@ -2,7 +2,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core'
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
 
 import { applyTheme } from '../lib/theme'
-import type { TimecodeConfig } from '../model'
+import type { RemoteConfig, TimecodeConfig } from '../model'
 import { useSettings, type Settings } from './settings'
 
 /**
@@ -51,6 +51,17 @@ function pushTimecodeConfig(settings: Settings): void {
   )
 }
 
+/** Builds the config the Rust side expects from the flat settings fields. */
+function toRemoteConfig(settings: Settings): RemoteConfig {
+  return { enabled: settings.remoteEnabled, port: settings.remotePort }
+}
+
+function pushRemoteConfig(settings: Settings): void {
+  invoke('set_remote_config', { config: toRemoteConfig(settings) }).catch((error) =>
+    console.error('Failed to apply the remote view config:', error)
+  )
+}
+
 /**
  * Applies whatever changed. `previous` is absent on the initial pass, where
  * everything has to be pushed regardless of its value.
@@ -86,6 +97,13 @@ function apply(settings: Settings, previous?: Settings): void {
     previous?.timecodeLtcDevice !== settings.timecodeLtcDevice
   ) {
     pushTimecodeConfig(settings)
+  }
+  if (
+    previous?.remoteEnabled !== settings.remoteEnabled ||
+    previous?.remotePort !== settings.remotePort ||
+    previous?.remoteInterface !== settings.remoteInterface
+  ) {
+    pushRemoteConfig(settings)
   }
 }
 

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { DECK_NUMBERS, DEFAULT_DECK_COLORS, deckColor } from '../lib/deck-colors'
 import { THEMES } from '../lib/theme'
 import type { NetworkInterfaceInfo } from '../model'
+import { useRemoteStore } from '../state/remote'
 import {
   TIMECODE_FRAME_RATE_OPTIONS,
   TIMECODE_PROTOCOL_OPTIONS,
@@ -18,12 +19,23 @@ import { ChoiceRow, SliderRow, TextRow, ToggleRow } from './SettingControls'
 
 const asPercent = (value: number): string => `${Math.round(value * 100)} %`
 
-const SETTINGS_TABS = ['Interface', 'Deck view', 'Line up', 'Timecode', 'Devices'] as const
+const SETTINGS_TABS = [
+  'Interface',
+  'Deck view',
+  'Line up',
+  'Timecode',
+  'Remote view',
+  'Devices'
+] as const
 type SettingsTab = (typeof SETTINGS_TABS)[number]
 
-/** The Timecode tab drives desktop-only gear — a remote browser has nothing to send it to. */
+/** Tabs desktop-only gear needs — a remote browser has nothing to send timecode to,
+ *  and must not be able to control the very server that is showing it this screen. */
 const IS_TAURI = isTauri()
-const VISIBLE_SETTINGS_TABS = SETTINGS_TABS.filter((tab) => IS_TAURI || tab !== 'Timecode')
+const SHELL_ONLY_TABS: readonly SettingsTab[] = ['Timecode', 'Remote view']
+const VISIBLE_SETTINGS_TABS = SETTINGS_TABS.filter(
+  (tab) => IS_TAURI || !SHELL_ONLY_TABS.includes(tab)
+)
 
 interface SettingsDialogProps {
   onClose: () => void
@@ -33,6 +45,7 @@ interface SettingsDialogProps {
 export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Element {
   const panelRef = useRef<HTMLDivElement>(null)
   const settings = useSettings()
+  const remoteStatus = useRemoteStore()
   const [activeTab, setActiveTab] = useState<SettingsTab>('Interface')
   const update = <K extends keyof Settings>(key: K) => {
     return (value: Settings[K]): void => settings.update(key, value)
@@ -72,6 +85,16 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Elem
     panelRef.current?.focus()
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onClose])
+
+  // Best-effort display address: the first broadcastable adapter, same list
+  // the Art-Net picker uses. Task 2.4 lets the remote server bind to a
+  // specific one; until then this is a hint, not a guarantee the URL works
+  // from every network this machine happens to be on.
+  const remoteHost = networkInterfaces[0]?.ip ?? 'localhost'
+  const remoteUrl =
+    remoteStatus.listening && remoteStatus.token
+      ? `http://${remoteHost}:${remoteStatus.port}/?token=${remoteStatus.token}`
+      : null
 
   return (
     <div className="settings-backdrop" onClick={onClose}>
@@ -340,6 +363,36 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Elem
                     No audio output device found — connect one and reopen settings.
                   </p>
                 ))}
+            </section>
+          )}
+
+          {IS_TAURI && activeTab === 'Remote view' && (
+            <section className="settings-section">
+              <h3>Remote view</h3>
+              <ToggleRow
+                label="Enable"
+                hint="Serves a read-only copy of this screen to browsers on the local network"
+                checked={settings.remoteEnabled}
+                onChange={update('remoteEnabled')}
+              />
+              <TextRow
+                label="Port"
+                hint="Change only if this port is already used by something else"
+                type="number"
+                value={String(settings.remotePort)}
+                onChange={(value) => settings.update('remotePort', Number(value) || settings.remotePort)}
+              />
+              {remoteStatus.error && <p className="setting-hint">Could not start: {remoteStatus.error}</p>}
+              {remoteUrl && (
+                <>
+                  <p className="setting-hint">Open this on another device on the same network:</p>
+                  <p className="setting-hint">{remoteUrl}</p>
+                  <p className="setting-hint">
+                    {remoteStatus.clientCount}{' '}
+                    {remoteStatus.clientCount === 1 ? 'browser' : 'browsers'} connected
+                  </p>
+                </>
+              )}
             </section>
           )}
 
