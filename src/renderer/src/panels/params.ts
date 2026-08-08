@@ -19,9 +19,10 @@ const INSTANCE_PARAM = 'instance'
 /** The fixed set of panels that can be popped into their own window. */
 export type PanelId = 'clock' | 'timecode' | 'header-block' | 'deck'
 
-const PANEL_IDS: readonly PanelId[] = ['clock', 'timecode', 'header-block', 'deck']
+/** Every panel id, for validating input and iterating the registry. */
+export const PANEL_IDS: readonly PanelId[] = ['clock', 'timecode', 'header-block', 'deck']
 
-function isPanelId(value: string): value is PanelId {
+export function isPanelId(value: string): value is PanelId {
   return (PANEL_IDS as readonly string[]).includes(value)
 }
 
