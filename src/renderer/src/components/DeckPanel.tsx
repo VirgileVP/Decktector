@@ -23,9 +23,15 @@ const TRANSPORT_GLYPHS: Record<PlayState, string> = {
 interface DeckPanelProps {
   deckId: DeckId
   accentColor: string
+  /** `'compact'` is for a small panel window — see `PanelChrome`'s compact toggle. */
+  variant?: 'full' | 'compact'
 }
 
-export function DeckPanel({ deckId, accentColor }: DeckPanelProps): React.JSX.Element {
+export function DeckPanel({
+  deckId,
+  accentColor,
+  variant = 'full'
+}: DeckPanelProps): React.JSX.Element {
   const deck = useDecktectiveStore((s) => s.decks[deckId])
   const track = useDecktectiveStore((s) => s.tracks[deckId] ?? null)
   const isTimecodeSource = useTimecodeStore((s) => s.sourceDeckId === deckId)
@@ -51,6 +57,35 @@ export function DeckPanel({ deckId, accentColor }: DeckPanelProps): React.JSX.El
   const playhead = deck?.playheadMs ?? null
   const remaining = track && playhead !== null ? track.durationMs - playhead : null
   const isOnAir = deck?.isOnAir ?? false
+
+  // No waveforms, no cue rail, no event rail, and the `showDeck*` settings
+  // do not apply — a compact window is sized for artwork, title, artist,
+  // BPM, play state and time remaining only.
+  if (variant === 'compact') {
+    return (
+      <section
+        className={`deck deck-compact ${isOnAir ? 'deck-onair' : 'deck-idle'}`}
+        style={{ ['--deck-color' as string]: accentColor }}
+      >
+        <div className="deck-compact-art">
+          {artworkUrl ? <img src={artworkUrl} alt="" /> : <span>♪</span>}
+        </div>
+        <div className="deck-compact-info">
+          <div className="deck-compact-title">{track?.title ?? 'No track loaded'}</div>
+          <div className="deck-compact-sub">{track?.artist ?? '—'}</div>
+          <div className="deck-compact-meta">
+            <span className={`deck-transport state-${playState}`}>{TRANSPORT_GLYPHS[playState]}</span>
+            <span className="deck-compact-bpm">
+              {deck?.effectiveBpm ? `${deck.effectiveBpm.toFixed(1)} BPM` : '--.- BPM'}
+            </span>
+            <span className="deck-compact-remain">
+              {remaining !== null ? `-${formatTimeMs(remaining)}` : '--:--'}
+            </span>
+          </div>
+        </div>
+      </section>
+    )
+  }
 
   return (
     <section

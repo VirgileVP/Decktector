@@ -19,7 +19,7 @@ import { reportPanelWindow } from './panel-window-report'
 import type { PanelParams } from './params'
 import { readWindowGeometry } from './read-window-geometry'
 import { UI_SCALE_RANGE } from '../state/settings'
-import { usePanelWindowsStore } from '../state/panel-windows'
+import { panelWindowRecordFor } from '../state/panel-windows'
 
 /** Shared with `main.css` through `--panel-chrome-height` — not duplicated there. */
 const CHROME_HEIGHT_PX = 28
@@ -61,6 +61,10 @@ const RESIZE_ZONES: readonly ResizeZone[] = [
 interface PanelChromeProps {
   title: string
   params: PanelParams
+  /** Whether `PANELS[params.panelId].hasCompactVariant` — shows the compact toggle when true. */
+  hasCompactVariant: boolean
+  compact: boolean
+  onToggleCompact: () => void
   children: React.ReactNode
 }
 
@@ -68,22 +72,21 @@ function startResize(direction: ResizeDirection): void {
   void getCurrentWindow().startResizeDragging(direction)
 }
 
-/**
- * Seeds a restored window's options from its own record in the panel
- * windows store — the persisted state a fresh pop-out has no record for
- * yet, and a restored window (task 5.3) does, since the main window wrote
- * it to the same `localStorage` before recreating this window.
- */
-function initialOptionsFor(label: string): PanelWindowOptions {
-  return usePanelWindowsStore.getState().windows[label]?.options ?? DEFAULT_PANEL_WINDOW_OPTIONS
-}
-
-export function PanelChrome({ title, params, children }: PanelChromeProps): React.JSX.Element {
-  const [options, setOptions] = useState<PanelWindowOptions>(() =>
-    initialOptionsFor(getCurrentWindow().label)
+export function PanelChrome({
+  title,
+  params,
+  hasCompactVariant,
+  compact,
+  onToggleCompact,
+  children
+}: PanelChromeProps): React.JSX.Element {
+  // Seeded from this window's own record — the persisted state a fresh
+  // pop-out has no record for yet, and a restored window (task 5.3) does,
+  // since the main window wrote it to the same `localStorage` before
+  // recreating this window.
+  const [options, setOptions] = useState<PanelWindowOptions>(
+    () => panelWindowRecordFor(getCurrentWindow().label)?.options ?? DEFAULT_PANEL_WINDOW_OPTIONS
   )
-  // Hardcoded until task 6.1 adds the compact deck layout and its toggle.
-  const compact = false
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
@@ -236,6 +239,20 @@ export function PanelChrome({ title, params, children }: PanelChromeProps): Reac
           >
             +
           </button>
+          {hasCompactVariant && (
+            <button
+              type="button"
+              className={`panel-chrome-toggle${compact ? ' active' : ''}`}
+              title="Compact layout"
+              aria-label="Compact layout"
+              aria-pressed={compact}
+              onClick={onToggleCompact}
+            >
+              <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
+                <path d="M1.5 4.5h9M1.5 7.5h9" />
+              </svg>
+            </button>
+          )}
           <button
             type="button"
             className="panel-chrome-close"

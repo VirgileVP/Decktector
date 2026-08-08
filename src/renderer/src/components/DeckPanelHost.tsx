@@ -5,6 +5,7 @@ import { DeckPanel } from './DeckPanel'
 
 interface DeckPanelHostProps {
   deckId: number
+  variant?: 'full' | 'compact'
 }
 
 /**
@@ -16,7 +17,7 @@ interface DeckPanelHostProps {
  * Also covers the disconnected case: a window pinned to a deck that unplugs
  * must say so rather than render an empty panel.
  */
-export function DeckPanelHost({ deckId }: DeckPanelHostProps): React.JSX.Element {
+export function DeckPanelHost({ deckId, variant }: DeckPanelHostProps): React.JSX.Element {
   const deckColors = useSettings((s) => s.deckColors)
   const isConnected = useDecktectiveStore((s) => deckId in s.decks)
 
@@ -24,5 +25,5 @@ export function DeckPanelHost({ deckId }: DeckPanelHostProps): React.JSX.Element
     return <div className="panel-deck-placeholder">Deck {deckId} is not connected</div>
   }
 
-  return <DeckPanel deckId={deckId} accentColor={deckColor(deckId, deckColors)} />
+  return <DeckPanel deckId={deckId} accentColor={deckColor(deckId, deckColors)} variant={variant} />
 }

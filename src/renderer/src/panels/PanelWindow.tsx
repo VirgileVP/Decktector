@@ -1,6 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 
 import { connectDevicesToEngine } from '../state/devices'
+import { panelWindowRecordFor } from '../state/panel-windows'
 import { connectSettingsBroadcast } from '../state/settings-broadcast'
 import { connectSettingsToApp } from '../state/settings-sync'
 import { connectStoreToEngine } from '../state/store'
@@ -26,13 +28,23 @@ export function PanelWindow({ params }: PanelWindowProps): React.JSX.Element {
   useEffect(() => connectTimecodeToEngine(), [])
   useEffect(() => connectDevicesToEngine(), [])
 
-  // Hardcoded until task 6.1 adds the compact deck layout and its toggle.
-  const compact = false
+  // Seeded from this window's own record — see `PanelChrome`'s matching
+  // seed for its display options.
+  const [compact, setCompact] = useState<boolean>(
+    () => panelWindowRecordFor(getCurrentWindow().label)?.compact ?? false
+  )
+
   const definition = PANELS[params.panelId]
 
   return (
     <div className="panel-window">
-      <PanelChrome title={definition.title(params)} params={params}>
+      <PanelChrome
+        title={definition.title(params)}
+        params={params}
+        hasCompactVariant={definition.hasCompactVariant}
+        compact={compact}
+        onToggleCompact={() => setCompact((current) => !current)}
+      >
         {definition.render(params, compact)}
       </PanelChrome>
     </div>

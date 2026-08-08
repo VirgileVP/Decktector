@@ -60,6 +60,18 @@ export const usePanelWindowsStore = create<PanelWindowsState & PanelWindowsActio
 )
 
 /**
+ * A window's own record from the store, keyed by its own label — the seed
+ * a panel window uses for whatever it has to know about itself before its
+ * first mount-time report goes out (its display options, whether it is in
+ * its compact layout). Backed by the same persisted `localStorage` the
+ * main window wrote it to, since that storage — unlike JS state — is
+ * shared by every webview on the origin.
+ */
+export function panelWindowRecordFor(label: string): PanelWindowRecord | undefined {
+  return usePanelWindowsStore.getState().windows[label]
+}
+
+/**
  * Set for the duration of `restorePanelWindows` (see `restore-panel-windows.ts`),
  * so the flurry of "on mount" reports from every window it recreates does not
  * get written back to the store as if the user had just opened them fresh.

@@ -70,11 +70,11 @@ export const PANELS: Record<PanelId, PanelDefinition> = {
     defaultSize: DECK_DEFAULT_SIZE,
     minSize: DECK_MIN_SIZE,
     hasCompactVariant: true,
-    render: (params) =>
+    render: (params, compact) =>
       params.deckId === null ? (
         <div className="panel-deck-placeholder">No deck selected</div>
       ) : (
-        <DeckPanelHost deckId={params.deckId} />
+        <DeckPanelHost deckId={params.deckId} variant={compact ? 'compact' : 'full'} />
       )
   }
 }
