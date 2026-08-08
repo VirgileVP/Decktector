@@ -1473,6 +1473,30 @@ html[data-transparent='on'] .panel-window {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+}
+
+/* A deck or the lineup header is meant to fill the window it was popped
+   into, not float centered in the middle of it like the clock's small
+   readout does by default. */
+.panel-chrome-content > .header-center,
+.panel-chrome-content > .deck {
+  width: 100%;
+  height: 100%;
+}
+
+/* `.header-center`'s own centering rule above only makes sense between the
+   app header's left/right groups — inside a panel window there are no such
+   groups, and `--header-gutter` (296px on each side) would otherwise
+   collapse this to a sliver in anything narrower than ~600px. */
+.panel-chrome-content > .header-center {
+  position: static;
+  transform: none;
+  max-width: none;
+  justify-content: center;
 }
 
 /* Eight invisible strips overlaid on `.panel-chrome`'s own edges, each
@@ -1645,33 +1669,31 @@ html[data-transparent='on'] .panel-window {
   opacity: 1;
 }
 
-/* Only a plain element (a span, `.deck-bar`) needs `position: relative` to
-   become the pop-out button's positioning context — `.header-center` is
-   already one, via its own centering rule, so it is deliberately absent
-   from this selector. */
-.header-clocks .poppable {
-  position: relative;
-}
-
-.header-clocks .poppable .pop-out-button {
-  position: absolute;
-  top: -2px;
-  right: -18px;
-}
-
+/* `.header-center` is already a positioning context via its own centering
+   rule above, so this only needs to place the button. */
 .header-center.poppable > .pop-out-button {
   position: absolute;
   top: 0;
   right: -20px;
 }
 
-.deck-bar.poppable {
+/* The deck bar is packed edge to edge (see `.deck-time`, `.deck-props`) —
+   any spot inside it is already occupied, which is why the button used to
+   render invisibly behind other content. The deck's own top-right corner,
+   straddling its border into the gap the deck grid already leaves between
+   panels, is the one truly empty spot. */
+.deck.poppable {
   position: relative;
 }
 
-.deck-bar.poppable > .pop-out-button {
+.deck.poppable > .pop-out-button {
   position: absolute;
-  top: 50%;
-  right: 4px;
-  transform: translateY(-50%);
+  top: -7px;
+  right: -7px;
+  z-index: 2;
+  width: 16px;
+  height: 16px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
 }

@@ -89,12 +89,12 @@ export function DeckPanel({
 
   return (
     <section
-      className={`deck ${isOnAir ? 'deck-onair' : 'deck-idle'}`}
+      className={`deck poppable ${isOnAir ? 'deck-onair' : 'deck-idle'}`}
       style={{ ['--deck-color' as string]: accentColor }}
     >
-      <div className="deck-bar poppable">
+      <PopOutButton panelId="deck" deckId={deckId} title={`Open deck ${deckId} in its own window`} />
+      <div className="deck-bar">
         <div className="deck-no">{deckId}</div>
-        <PopOutButton panelId="deck" deckId={deckId} title={`Open deck ${deckId} in its own window`} />
 
         {showArtwork && (
           <div className="deck-art">
