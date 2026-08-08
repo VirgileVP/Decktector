@@ -1309,3 +1309,22 @@ body {
     min-height: 0;
   }
 }
+
+/* ---------- Responsive: narrow viewports (a phone on the remote view) ---------- */
+
+/* The deck panel is laid out for a booth screen. Below this width there is
+   no room for a side rail next to the waveform, so it drops to the same
+   "not shown" state the settings toggle already produces — not a second,
+   viewport-specific layout. */
+@media (max-width: 640px) {
+  .deck-grid.view-quad {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cue-list,
+  .event-list,
+  .panel-resize-handle {
+    display: none;
+  }
+}
