@@ -21,9 +21,25 @@ const VITE_DEV_PORT: u16 = 1420;
 
 /// Where the remote server should get the UI it hands to browsers: the
 /// packaged app's bundled `web` resource (see `tauri.conf.json`'s
-/// `bundle.resources`) if it exists, otherwise a redirect to the Vite dev
-/// server that owns the assets during `tauri dev`.
+/// `bundle.resources`), or a redirect to the Vite dev server that owns the
+/// assets during `tauri dev`.
+///
+/// Dev mode always takes the dev server, without even looking for a bundled
+/// copy. In dev the resource directory *is* `target/debug`, so any earlier
+/// `tauri build --debug` leaves a `web` directory sitting right where this
+/// lookup would find it — and serving that frozen copy would mean the
+/// remote view silently shows a stale build, with no HMR, until someone
+/// deletes it by hand. The webview itself already loads `devUrl` in dev;
+/// this keeps the remote view on the same source of truth.
 pub fn resolve_asset_source(app: &AppHandle) -> AssetSource {
+    if tauri::is_dev() {
+        tracing::info!(
+            port = VITE_DEV_PORT,
+            "development build; redirecting the remote view to the Vite dev server"
+        );
+        return AssetSource::DevServer(VITE_DEV_PORT);
+    }
+
     match app.path().resource_dir() {
         Ok(resource_dir) => {
             let web_dir = resource_dir.join("web");
@@ -34,15 +50,15 @@ pub fn resolve_asset_source(app: &AppHandle) -> AssetSource {
                 );
                 return AssetSource::Directory(web_dir);
             }
+            tracing::warn!(
+                path = %web_dir.display(),
+                "no bundled web resource found in a release build; the remote view will not load"
+            );
         }
         Err(error) => {
             tracing::warn!(%error, "failed to resolve the app's resource directory");
         }
     }
-    tracing::info!(
-        port = VITE_DEV_PORT,
-        "no bundled web resource found; redirecting the remote view to the Vite dev server"
-    );
     AssetSource::DevServer(VITE_DEV_PORT)
 }
 
