@@ -1,5 +1,5 @@
 import { resolve } from 'path'
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
 /** Fixed so Tauri's devUrl in tauri.conf.json can point at it. */
@@ -32,5 +32,12 @@ export default defineConfig({
     host: true
   },
   // Vite hides these from the client by default; Tauri's own vars are safe.
-  envPrefix: ['VITE_', 'TAURI_']
+  envPrefix: ['VITE_', 'TAURI_'],
+  test: {
+    // Every unit under test here is pure logic — no DOM, no jsdom cost.
+    environment: 'node',
+    include: ['src/renderer/src/**/*.test.ts'],
+    // No tests exist yet in a fresh checkout; that is not a failure.
+    passWithNoTests: true
+  }
 })
