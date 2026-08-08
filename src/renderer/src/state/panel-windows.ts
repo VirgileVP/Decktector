@@ -60,6 +60,21 @@ export const usePanelWindowsStore = create<PanelWindowsState & PanelWindowsActio
 )
 
 /**
+ * Set for the duration of `restorePanelWindows` (see `restore-panel-windows.ts`),
+ * so the flurry of "on mount" reports from every window it recreates does not
+ * get written back to the store as if the user had just opened them fresh.
+ */
+let restoringWindows = false
+
+export function beginRestoringWindows(): void {
+  restoringWindows = true
+}
+
+export function endRestoringWindows(): void {
+  restoringWindows = false
+}
+
+/**
  * Applies every panel window report to the store. Main-window-only — see
  * the module doc comment above. Returns the teardown function.
  */
@@ -68,6 +83,8 @@ export function connectPanelWindowRegistry(): () => void {
 
   let unlisten: (() => void) | null = null
   void listen<PanelWindowReport>(PANEL_WINDOW_CHANNEL, (event) => {
+    if (restoringWindows) return
+
     const report = event.payload
     const { upsertWindow, removeWindow } = usePanelWindowsStore.getState()
     if (report.type === 'closed') {

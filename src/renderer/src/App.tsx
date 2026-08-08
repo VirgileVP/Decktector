@@ -8,6 +8,8 @@ import { RemoteLinkBanner } from './components/RemoteLinkBanner'
 import { SettingsDialog } from './components/SettingsDialog'
 import { deckColor } from './lib/deck-colors'
 import { remoteFocusedDeck } from './lib/remote-url'
+import { connectMainWindowCloseCascade } from './panels/close-panel-windows-on-exit'
+import { restorePanelWindows } from './panels/restore-panel-windows'
 import { connectDevicesToEngine } from './state/devices'
 import { connectPanelWindowRegistry } from './state/panel-windows'
 import { connectRemoteToEngine } from './state/remote'
@@ -43,6 +45,10 @@ function App(): React.JSX.Element {
   useEffect(() => connectDevicesToEngine(), [])
   useEffect(() => connectRemoteToEngine(), [])
   useEffect(() => connectPanelWindowRegistry(), [])
+  useEffect(() => connectMainWindowCloseCascade(), [])
+  useEffect(() => {
+    void restorePanelWindows()
+  }, [])
 
   const [focusedDeckId] = useState<number | null>(() => remoteFocusedDeck(window.location))
   const [view, setView] = useState<DeckView>(loadView)

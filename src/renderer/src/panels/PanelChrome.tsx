@@ -19,6 +19,7 @@ import { reportPanelWindow } from './panel-window-report'
 import type { PanelParams } from './params'
 import { readWindowGeometry } from './read-window-geometry'
 import { UI_SCALE_RANGE } from '../state/settings'
+import { usePanelWindowsStore } from '../state/panel-windows'
 
 /** Shared with `main.css` through `--panel-chrome-height` — not duplicated there. */
 const CHROME_HEIGHT_PX = 28
@@ -67,8 +68,20 @@ function startResize(direction: ResizeDirection): void {
   void getCurrentWindow().startResizeDragging(direction)
 }
 
+/**
+ * Seeds a restored window's options from its own record in the panel
+ * windows store — the persisted state a fresh pop-out has no record for
+ * yet, and a restored window (task 5.3) does, since the main window wrote
+ * it to the same `localStorage` before recreating this window.
+ */
+function initialOptionsFor(label: string): PanelWindowOptions {
+  return usePanelWindowsStore.getState().windows[label]?.options ?? DEFAULT_PANEL_WINDOW_OPTIONS
+}
+
 export function PanelChrome({ title, params, children }: PanelChromeProps): React.JSX.Element {
-  const [options, setOptions] = useState<PanelWindowOptions>(DEFAULT_PANEL_WINDOW_OPTIONS)
+  const [options, setOptions] = useState<PanelWindowOptions>(() =>
+    initialOptionsFor(getCurrentWindow().label)
+  )
   // Hardcoded until task 6.1 adds the compact deck layout and its toggle.
   const compact = false
 
