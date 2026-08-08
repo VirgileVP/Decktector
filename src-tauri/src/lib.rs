@@ -94,6 +94,7 @@ pub fn run() {
             timecode::list_ltc_output_devices,
             remote::remote_status,
             remote::set_remote_config,
+            remote::remote_qr_svg,
             devices::list_devices
         ])
         .setup(move |app| {

@@ -90,3 +90,10 @@ pub async fn set_remote_config(
         .await
         .map_err(|error| error.to_string())
 }
+
+/// Renders the remote view URL the settings panel already built as a QR
+/// code, so it drops straight into an `<img>` as a `data:` URL.
+#[tauri::command]
+pub fn remote_qr_svg(url: String) -> Result<String, String> {
+    decktective_remote::qr::qr_svg(&url).map_err(|error| error.to_string())
+}

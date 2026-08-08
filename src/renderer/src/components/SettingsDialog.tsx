@@ -55,6 +55,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Elem
   const [networkInterfaces, setNetworkInterfaces] = useState<NetworkInterfaceInfo[]>([])
   const [midiPorts, setMidiPorts] = useState<string[]>([])
   const [ltcDevices, setLtcDevices] = useState<string[]>([])
+  const [remoteQrSvg, setRemoteQrSvg] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isTauri()) return
@@ -99,6 +100,15 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Elem
     remoteStatus.listening && remoteStatus.token
       ? `http://${remoteHost}:${remoteStatus.port}/?token=${remoteStatus.token}`
       : null
+
+  useEffect(() => {
+    // A stale SVG from a previous URL is never shown: the `<img>` below only
+    // renders while `remoteUrl` is set, so there is nothing to reset here.
+    if (!isTauri() || !remoteUrl) return
+    invoke<string>('remote_qr_svg', { url: remoteUrl })
+      .then(setRemoteQrSvg)
+      .catch((error) => console.error('Failed to render the remote view QR code:', error))
+  }, [remoteUrl])
 
   return (
     <div className="settings-backdrop" onClick={onClose}>
@@ -404,6 +414,12 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Elem
                 <>
                   <p className="setting-hint">Open this on another device on the same network:</p>
                   <p className="setting-hint">{remoteUrl}</p>
+                  {remoteQrSvg && (
+                    <img
+                      alt="QR code for the remote view URL"
+                      src={`data:image/svg+xml;utf8,${encodeURIComponent(remoteQrSvg)}`}
+                    />
+                  )}
                   <p className="setting-hint">
                     {remoteStatus.clientCount}{' '}
                     {remoteStatus.clientCount === 1 ? 'browser' : 'browsers'} connected

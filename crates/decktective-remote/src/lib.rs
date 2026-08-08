@@ -9,6 +9,7 @@
 
 pub mod assets;
 pub mod hub;
+pub mod qr;
 pub mod server;
 pub mod wire;
 
