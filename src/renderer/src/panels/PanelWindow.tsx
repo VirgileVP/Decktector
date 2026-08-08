@@ -32,7 +32,9 @@ export function PanelWindow({ params }: PanelWindowProps): React.JSX.Element {
 
   return (
     <div className="panel-window">
-      <PanelChrome title={definition.title(params)}>{definition.render(params, compact)}</PanelChrome>
+      <PanelChrome title={definition.title(params)} params={params}>
+        {definition.render(params, compact)}
+      </PanelChrome>
     </div>
   )
 }

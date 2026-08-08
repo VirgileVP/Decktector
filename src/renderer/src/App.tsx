@@ -9,6 +9,7 @@ import { SettingsDialog } from './components/SettingsDialog'
 import { deckColor } from './lib/deck-colors'
 import { remoteFocusedDeck } from './lib/remote-url'
 import { connectDevicesToEngine } from './state/devices'
+import { connectPanelWindowRegistry } from './state/panel-windows'
 import { connectRemoteToEngine } from './state/remote'
 import { connectSettingsBroadcast } from './state/settings-broadcast'
 import { useSettings } from './state/settings'
@@ -41,6 +42,7 @@ function App(): React.JSX.Element {
   useEffect(() => connectTimecodeToEngine(), [])
   useEffect(() => connectDevicesToEngine(), [])
   useEffect(() => connectRemoteToEngine(), [])
+  useEffect(() => connectPanelWindowRegistry(), [])
 
   const [focusedDeckId] = useState<number | null>(() => remoteFocusedDeck(window.location))
   const [view, setView] = useState<DeckView>(loadView)

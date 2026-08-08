@@ -6,6 +6,8 @@
 
 import { getAllWebviewWindows, WebviewWindow } from '@tauri-apps/api/webviewWindow'
 
+import { usePanelWindowsStore } from '../state/panel-windows'
+import { DEFAULT_PANEL_WINDOW_OPTIONS } from './panel-window-options'
 import { panelSearch, type PanelParams } from './params'
 import { PANELS } from './registry'
 import { nextInstance, panelWindowLabel } from './window-label'
@@ -48,5 +50,16 @@ export async function openPanelWindow(params: PanelParams): Promise<void> {
 
   void webview.once('tauri://error', (event) => {
     console.error(`Failed to open panel window "${label}":`, event)
+  })
+
+  // The window itself reports its own geometry once mounted (`PanelChrome`);
+  // this just makes it appear in the store immediately, instead of waiting
+  // on that round trip.
+  usePanelWindowsStore.getState().upsertWindow({
+    label,
+    params: resolvedParams,
+    options: DEFAULT_PANEL_WINDOW_OPTIONS,
+    compact: false,
+    geometry: null
   })
 }

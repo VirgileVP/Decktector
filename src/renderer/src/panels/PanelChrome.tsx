@@ -6,7 +6,8 @@
  * in HTML, or the window could not be moved, resized or closed at all.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { isTauri } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 
 import {
@@ -14,6 +15,9 @@ import {
   DEFAULT_PANEL_WINDOW_OPTIONS,
   type PanelWindowOptions
 } from './panel-window-options'
+import { reportPanelWindow } from './panel-window-report'
+import type { PanelParams } from './params'
+import { readWindowGeometry } from './read-window-geometry'
 import { UI_SCALE_RANGE } from '../state/settings'
 
 /** Shared with `main.css` through `--panel-chrome-height` — not duplicated there. */
@@ -21,6 +25,9 @@ const CHROME_HEIGHT_PX = 28
 
 /** Shared with `main.css` through `--panel-resize-edge` — not duplicated there. */
 const RESIZE_EDGE_PX = 6
+
+/** Coalesces a drag or a resize into one report instead of a report per pixel. */
+const GEOMETRY_DEBOUNCE_MS = 300
 
 // Not exported by `@tauri-apps/api/window`; mirrors its internal union so the
 // literals below still type-check against `startResizeDragging`.
@@ -52,6 +59,7 @@ const RESIZE_ZONES: readonly ResizeZone[] = [
 
 interface PanelChromeProps {
   title: string
+  params: PanelParams
   children: React.ReactNode
 }
 
@@ -59,8 +67,10 @@ function startResize(direction: ResizeDirection): void {
   void getCurrentWindow().startResizeDragging(direction)
 }
 
-export function PanelChrome({ title, children }: PanelChromeProps): React.JSX.Element {
+export function PanelChrome({ title, params, children }: PanelChromeProps): React.JSX.Element {
   const [options, setOptions] = useState<PanelWindowOptions>(DEFAULT_PANEL_WINDOW_OPTIONS)
+  // Hardcoded until task 6.1 adds the compact deck layout and its toggle.
+  const compact = false
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
@@ -72,8 +82,77 @@ export function PanelChrome({ title, children }: PanelChromeProps): React.JSX.El
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  // Lost on close in this task — task 5.2 persists it via the panel windows store.
   useEffect(() => applyPanelWindowOptions(options), [options])
+
+  // `reportPanelWindow` needs the latest params/options/compact, but the
+  // move/resize listeners below must only be attached once — a ref sidesteps
+  // re-subscribing them on every option change just to read fresh values.
+  const latestReportInputs = useRef({ params, options, compact })
+  useEffect(() => {
+    latestReportInputs.current = { params, options, compact }
+  }, [params, options, compact])
+
+  const reportCurrentState = (): void => {
+    void readWindowGeometry().then((geometry) => {
+      const { params: currentParams, options: currentOptions, compact: currentCompact } =
+        latestReportInputs.current
+      reportPanelWindow({
+        type: 'update',
+        label: getCurrentWindow().label,
+        params: currentParams,
+        options: currentOptions,
+        compact: currentCompact,
+        geometry
+      })
+    })
+  }
+
+  // Reports on mount and whenever the panel's own state changes.
+  useEffect(() => {
+    if (!isTauri()) return
+    reportCurrentState()
+  }, [params, options, compact])
+
+  // Reports on move/resize (debounced) and once more, synchronously, when the
+  // OS is actually about to close the window — a React unmount is not a
+  // reliable place to do this, since the webview can be torn down before its
+  // cleanup functions run.
+  useEffect(() => {
+    if (!isTauri()) return
+
+    const currentWindow = getCurrentWindow()
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined
+
+    const scheduleReport = (): void => {
+      if (debounceTimer !== undefined) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(reportCurrentState, GEOMETRY_DEBOUNCE_MS)
+    }
+
+    let unlistenMoved: (() => void) | null = null
+    let unlistenResized: (() => void) | null = null
+    let unlistenCloseRequested: (() => void) | null = null
+
+    void currentWindow.onMoved(scheduleReport).then((stop) => {
+      unlistenMoved = stop
+    })
+    void currentWindow.onResized(scheduleReport).then((stop) => {
+      unlistenResized = stop
+    })
+    void currentWindow
+      .onCloseRequested(() => {
+        reportPanelWindow({ type: 'closed', label: currentWindow.label })
+      })
+      .then((stop) => {
+        unlistenCloseRequested = stop
+      })
+
+    return () => {
+      if (debounceTimer !== undefined) clearTimeout(debounceTimer)
+      unlistenMoved?.()
+      unlistenResized?.()
+      unlistenCloseRequested?.()
+    }
+  }, [])
 
   const toggleAlwaysOnTop = (): void =>
     setOptions((current) => ({ ...current, alwaysOnTop: !current.alwaysOnTop }))
