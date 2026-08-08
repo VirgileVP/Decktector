@@ -24,7 +24,12 @@ export default defineConfig({
   server: {
     port: DEV_PORT,
     // Fail loudly instead of silently moving to another port Tauri won't load.
-    strictPort: true
+    strictPort: true,
+    // Vite defaults to binding localhost only. In dev, the remote server
+    // redirects unbundled asset requests here (see `AssetSource::DevServer`
+    // on the Rust side) — a phone on the LAN needs this reachable too, not
+    // just the machine running `npm run dev`.
+    host: true
   },
   // Vite hides these from the client by default; Tauri's own vars are safe.
   envPrefix: ['VITE_', 'TAURI_']
