@@ -5,7 +5,7 @@
 //! stays the single definition of the contract — the same strings the
 //! Tauri bridge emits on.
 
-use decktective_core::model::EngineSnapshot;
+use decktective_core::model::{EngineSnapshot, TrackInfo};
 use decktective_core::EngineEvent;
 use serde::{Deserialize, Serialize};
 
@@ -34,7 +34,11 @@ pub fn from_event(event: &EngineEvent) -> anyhow::Result<RemoteMessage> {
         EngineEvent::DeviceConnected(device) => serde_json::to_value(device)?,
         EngineEvent::DeviceDisconnected(device) => serde_json::to_value(device)?,
         EngineEvent::DeckState(deck) => serde_json::to_value(deck)?,
-        EngineEvent::DeckTrack(track) => serde_json::to_value(track.as_ref())?,
+        EngineEvent::DeckTrack(track) => {
+            let mut track = (**track).clone();
+            track.track = track.track.map(strip_heavy_payload);
+            serde_json::to_value(&track)?
+        }
     };
     Ok(RemoteMessage {
         channel: event.channel().to_string(),
@@ -42,18 +46,42 @@ pub fn from_event(event: &EngineEvent) -> anyhow::Result<RemoteMessage> {
     })
 }
 
-/// Serializes a full snapshot onto [`SNAPSHOT_CHANNEL`].
+/// Serializes a full snapshot onto [`SNAPSHOT_CHANNEL`], with every loaded
+/// track's heavy payload stripped the same way [`from_event`] strips a live
+/// [`EngineEvent::DeckTrack`] — a snapshot is exactly "the current
+/// `DeckTrack` for every deck, all at once", so it carries the same weight
+/// and needs the same treatment. Leaving it in would undo the whole point of
+/// stripping: a fresh browser hydrating from a four-deck snapshot is the
+/// moment this matters most.
 pub fn from_snapshot(snapshot: &EngineSnapshot) -> anyhow::Result<RemoteMessage> {
+    let mut snapshot = snapshot.clone();
+    for deck_track in &mut snapshot.tracks {
+        deck_track.track = deck_track.track.take().map(strip_heavy_payload);
+    }
     Ok(RemoteMessage {
         channel: SNAPSHOT_CHANNEL.to_string(),
-        payload: serde_json::to_value(snapshot)?,
+        payload: serde_json::to_value(&snapshot)?,
     })
+}
+
+/// Drops the artwork and waveform from a track before it goes on the
+/// WebSocket — both are fetched separately over plain HTTP
+/// (`/track/{id}/artwork` and `/track/{id}/waveform`), immutable per
+/// `track_id` and cacheable by the browser, instead of riding along on
+/// every message. A single waveform runs into the megabytes; the desktop
+/// path has no network between engine and view, so this stripping is
+/// remote-only — the Tauri bridge in `events.rs` sends `EngineEvent`
+/// straight through, untouched.
+fn strip_heavy_payload(mut track: TrackInfo) -> TrackInfo {
+    track.artwork = None;
+    track.waveform = None;
+    track
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use decktective_core::model::{DeckState, DeviceInfo, NetworkState, PlayState};
+    use decktective_core::model::{DeckState, DeckTrack, DeviceInfo, NetworkState, PlayState};
 
     fn every_event() -> Vec<EngineEvent> {
         vec![
@@ -116,5 +144,54 @@ mod tests {
             serde_json::from_value(message.payload).expect("payload deserializes");
 
         assert_eq!(round_tripped, deck);
+    }
+
+    fn track_with_heavy_payload() -> TrackInfo {
+        use decktective_core::sim::{build_sim_track, SIM_TRACKS};
+
+        let mut track = build_sim_track(&SIM_TRACKS[0], 1);
+        assert!(track.waveform.is_some(), "fixture needs a waveform to prove it gets stripped");
+        track.artwork = Some("data:image/jpeg;base64,/9k=".to_string());
+        track
+    }
+
+    #[test]
+    fn a_deck_track_event_strips_artwork_and_waveform_before_the_wire() {
+        let event = EngineEvent::DeckTrack(Box::new(DeckTrack {
+            deck_id: 1,
+            track: Some(track_with_heavy_payload()),
+        }));
+
+        let message = from_event(&event).expect("event serializes");
+        let wire_track: DeckTrack =
+            serde_json::from_value(message.payload).expect("payload deserializes");
+
+        let track = wire_track.track.expect("track is still present, just lighter");
+        assert!(track.artwork.is_none());
+        assert!(track.waveform.is_none());
+    }
+
+    #[test]
+    fn a_snapshot_strips_artwork_and_waveform_from_every_loaded_track() {
+        let snapshot = EngineSnapshot {
+            network_state: NetworkState::Connected,
+            devices: Vec::new(),
+            decks: Vec::new(),
+            tracks: vec![DeckTrack {
+                deck_id: 1,
+                track: Some(track_with_heavy_payload()),
+            }],
+        };
+
+        let message = from_snapshot(&snapshot).expect("snapshot serializes");
+        let wire_snapshot: EngineSnapshot =
+            serde_json::from_value(message.payload).expect("payload deserializes");
+
+        let track = wire_snapshot.tracks[0]
+            .track
+            .as_ref()
+            .expect("track is still present, just lighter");
+        assert!(track.artwork.is_none());
+        assert!(track.waveform.is_none());
     }
 }

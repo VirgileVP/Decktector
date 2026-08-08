@@ -11,11 +11,14 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use axum::extract::ws::{Message, WebSocket};
-use axum::extract::{Query, Request, State, WebSocketUpgrade};
+use axum::extract::{Path, Query, Request, State, WebSocketUpgrade};
+use axum::http::header;
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::Router;
+use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine as _;
 use decktective_core::Engine;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -289,27 +292,100 @@ fn generate_token() -> String {
         .collect()
 }
 
-/// `/ws` and `/health` need `State<Arc<RemoteService>>`, so they are closed
-/// out with `.with_state` first; the asset routes need no state of their
-/// own, only the token-gate layer, so the two merge as a single `Router<()>`
-/// ready to hand to `axum::serve`. `/health` sits outside the gate (the
-/// settings panel probes it to prove the server is up, with no token yet to
-/// offer) and `/ws` gates itself inline, so only the asset routes are
-/// wrapped in the shared middleware here.
+/// `/ws`, `/health` and the track routes need `State<Arc<RemoteService>>`,
+/// so each group is closed out with `.with_state` first; the asset routes
+/// need no state of their own, only the token-gate layer. Once every group
+/// is a plain `Router<()>` they merge into one, ready to hand to
+/// `axum::serve`. `/health` sits outside the gate (the settings panel
+/// probes it to prove the server is up, with no token yet to offer) and
+/// `/ws` gates itself inline; the track and asset routes share the one
+/// middleware layer below.
 fn build_router(service: Arc<RemoteService>) -> Router {
     let engine_routes = Router::new()
         .route("/ws", get(ws_handler))
         .route("/health", get(health_handler))
         .with_state(service.clone());
 
-    let gated_assets =
-        asset_router(service.assets.clone()).layer(middleware::from_fn_with_state(service, require_token));
+    let track_routes = Router::new()
+        .route("/track/{track_id}/artwork", get(track_artwork_handler))
+        .route("/track/{track_id}/waveform", get(track_waveform_handler))
+        .with_state(service.clone());
 
-    engine_routes.merge(gated_assets)
+    let gated = track_routes
+        .merge(asset_router(service.assets.clone()))
+        .layer(middleware::from_fn_with_state(service, require_token));
+
+    engine_routes.merge(gated)
 }
 
 async fn health_handler() -> &'static str {
     "ok"
+}
+
+/// How long a browser may cache a track's artwork or waveform: both are
+/// immutable for a given `track_id`, so there is no reason to ever ask
+/// again once fetched.
+const IMMUTABLE_CACHE_CONTROL: &str = "public, max-age=31536000, immutable";
+
+async fn track_artwork_handler(
+    State(service): State<Arc<RemoteService>>,
+    Path(track_id): Path<u32>,
+) -> Response {
+    let Some(artwork) = service.hub.track(track_id).and_then(|track| track.artwork) else {
+        return (axum::http::StatusCode::NOT_FOUND, "no artwork for this track").into_response();
+    };
+    match decode_data_url(&artwork) {
+        Some((content_type, bytes)) => immutable_response(content_type, bytes),
+        None => {
+            tracing::error!(track_id, "a track's artwork was not a well-formed data: URL");
+            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "malformed artwork").into_response()
+        }
+    }
+}
+
+async fn track_waveform_handler(
+    State(service): State<Arc<RemoteService>>,
+    Path(track_id): Path<u32>,
+) -> Response {
+    let Some(waveform) = service.hub.track(track_id).and_then(|track| track.waveform) else {
+        return (axum::http::StatusCode::NOT_FOUND, "no waveform for this track").into_response();
+    };
+    match serde_json::to_vec(&waveform) {
+        Ok(body) => immutable_response("application/json".to_string(), body),
+        Err(error) => {
+            tracing::error!(%error, track_id, "failed to serialize a track's waveform");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to serialize waveform",
+            )
+                .into_response()
+        }
+    }
+}
+
+fn immutable_response(content_type: String, body: Vec<u8>) -> Response {
+    (
+        [
+            (header::CONTENT_TYPE, content_type),
+            (header::CACHE_CONTROL, IMMUTABLE_CACHE_CONTROL.to_string()),
+        ],
+        body,
+    )
+        .into_response()
+}
+
+/// Splits a `data:<mime>;base64,<payload>` URL into its MIME type and
+/// decoded bytes — the shape [`TrackInfo::artwork`] is documented to carry
+/// (see `model.rs`), turned back into a real HTTP response instead of a
+/// JSON string riding along on the WebSocket.
+///
+/// [`TrackInfo::artwork`]: decktective_core::model::TrackInfo::artwork
+fn decode_data_url(data_url: &str) -> Option<(String, Vec<u8>)> {
+    let rest = data_url.strip_prefix("data:")?;
+    let (meta, payload) = rest.split_once(',')?;
+    let mime = meta.strip_suffix(";base64")?;
+    let bytes = BASE64.decode(payload).ok()?;
+    Some((mime.to_string(), bytes))
 }
 
 #[derive(Debug, Deserialize)]

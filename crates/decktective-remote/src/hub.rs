@@ -75,6 +75,19 @@ impl RemoteHub {
         Ok(serde_json::to_string(&message)?.into())
     }
 
+    /// The full, unstripped track info for `track_id`, if some deck
+    /// currently has it loaded — what the `/track/{id}/artwork` and
+    /// `/track/{id}/waveform` HTTP routes read from, since the WebSocket
+    /// stream itself no longer carries either (see [`wire::from_event`]).
+    pub fn track(&self, track_id: u32) -> Option<decktective_core::model::TrackInfo> {
+        self.engine
+            .handle()
+            .snapshot()
+            .tracks
+            .into_iter()
+            .find_map(|deck_track| deck_track.track.filter(|track| track.track_id == track_id))
+    }
+
     fn broadcast(&self, message: &wire::RemoteMessage) {
         let text = match serde_json::to_string(message) {
             Ok(text) => text,

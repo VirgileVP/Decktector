@@ -1,6 +1,7 @@
 import type { DeckState, DeckTrack, DeviceInfo, EngineSnapshot, NetworkState } from '../../model'
 import { remoteSocketUrl } from '../../lib/remote-url'
 import { useRemoteLinkStore } from '../remote-link'
+import { rehydrateSnapshotTracks, rehydrateTrack } from './track-resources'
 import type { EngineHandlers, EngineTransport } from './types'
 
 /** First reconnect wait; doubles on every failed attempt up to the ceiling below. */
@@ -81,9 +82,16 @@ function dispatch(handlers: EngineHandlers, data: string): void {
   }
 
   switch (message.channel) {
-    case SNAPSHOT_CHANNEL:
-      handlers.snapshot(message.payload as EngineSnapshot)
+    case SNAPSHOT_CHANNEL: {
+      const snapshot = message.payload as EngineSnapshot
+      // Every loaded deck's artwork/waveform arrives stripped (see
+      // `wire::from_snapshot`); this rehydrates them all before handing the
+      // snapshot to the store, so it never sees a track missing either.
+      void rehydrateSnapshotTracks(snapshot).then((tracks) =>
+        handlers.snapshot({ ...snapshot, tracks })
+      )
       return
+    }
     case 'engine:network:state':
       handlers.networkState(message.payload as NetworkState)
       return
@@ -96,9 +104,16 @@ function dispatch(handlers: EngineHandlers, data: string): void {
     case 'engine:deck:state':
       handlers.deckState(message.payload as DeckState)
       return
-    case 'engine:deck:track':
-      handlers.deckTrack(message.payload as DeckTrack)
+    case 'engine:deck:track': {
+      const deckTrack = message.payload as DeckTrack
+      // The artwork and waveform arrive stripped (see `wire::from_event`)
+      // and are fetched separately, then merged back in before this reaches
+      // the store — the store never has to know the wire shape differs.
+      void rehydrateTrack(deckTrack.track).then((track) =>
+        handlers.deckTrack({ ...deckTrack, track })
+      )
       return
+    }
     default:
       warnUnknownChannelOnce(message.channel)
   }
