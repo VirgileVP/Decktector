@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 
 import { connectDevicesToEngine } from '../state/devices'
+import { connectSettingsBroadcast } from '../state/settings-broadcast'
 import { connectSettingsToApp } from '../state/settings-sync'
 import { connectStoreToEngine } from '../state/store'
 import { connectTimecodeToEngine } from '../state/timecode'
@@ -21,6 +22,7 @@ interface PanelWindowProps {
 export function PanelWindow({ params }: PanelWindowProps): React.JSX.Element {
   useEffect(() => connectStoreToEngine(), [])
   useEffect(() => connectSettingsToApp('panel'), [])
+  useEffect(() => connectSettingsBroadcast(), [])
   useEffect(() => connectTimecodeToEngine(), [])
   useEffect(() => connectDevicesToEngine(), [])
 

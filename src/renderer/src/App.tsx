@@ -10,6 +10,7 @@ import { deckColor } from './lib/deck-colors'
 import { remoteFocusedDeck } from './lib/remote-url'
 import { connectDevicesToEngine } from './state/devices'
 import { connectRemoteToEngine } from './state/remote'
+import { connectSettingsBroadcast } from './state/settings-broadcast'
 import { useSettings } from './state/settings'
 import { connectSettingsToApp } from './state/settings-sync'
 import { connectStoreToEngine, useDecktectiveStore } from './state/store'
@@ -36,6 +37,7 @@ const NETWORK_LABELS: Record<string, string> = {
 function App(): React.JSX.Element {
   useEffect(() => connectStoreToEngine(), [])
   useEffect(() => connectSettingsToApp('main'), [])
+  useEffect(() => connectSettingsBroadcast(), [])
   useEffect(() => connectTimecodeToEngine(), [])
   useEffect(() => connectDevicesToEngine(), [])
   useEffect(() => connectRemoteToEngine(), [])
