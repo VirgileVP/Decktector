@@ -1,0 +1,13 @@
+[package]
+name = "decktective-net"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Local network interface lookup shared by the timecode and remote services"
+
+[dependencies]
+anyhow = { workspace = true }
+if-addrs = { workspace = true }
+serde = { workspace = true }
+ts-rs = { workspace = true }

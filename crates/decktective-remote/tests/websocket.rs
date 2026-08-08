@@ -21,7 +21,11 @@ async fn start_test_service() -> (Arc<RemoteService>, u16) {
 
     service
         .clone()
-        .set_config(RemoteConfig { enabled: true, port: 0 })
+        .set_config(RemoteConfig {
+            enabled: true,
+            port: 0,
+            interface: String::new(),
+        })
         .await
         .expect("set_config does not fail on a successful bind");
 

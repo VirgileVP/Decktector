@@ -7,7 +7,7 @@
 //! network, not hardened auth: anyone who can sniff the LAN or read the QR
 //! code gets in, same as anyone standing at the booth.
 
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use axum::extract::ws::{Message, WebSocket};
@@ -48,6 +48,12 @@ pub struct RemoteConfig {
     /// Off by default: the server never opens a port the user did not ask for.
     pub enabled: bool,
     pub port: u16,
+    /// Name of the network adapter to bind to, e.g. `"eth0"` — picked from
+    /// `list_network_interfaces`, not typed in. Empty binds every interface
+    /// this machine has, which is also the fallback when the named adapter
+    /// cannot be resolved (unplugged, renamed) — the server stays reachable
+    /// rather than failing over an adapter picked in a previous session.
+    pub interface: String,
 }
 
 /// What the settings panel renders, and what remote browsers are told.
@@ -88,6 +94,7 @@ impl Inner {
             config: RemoteConfig {
                 enabled: false,
                 port: DEFAULT_REMOTE_PORT,
+                interface: String::new(),
             },
             token: None,
             client_count: 0,
@@ -152,7 +159,7 @@ impl RemoteService {
         }
 
         let router = build_router(self.clone());
-        let address = SocketAddr::from(([0, 0, 0, 0], config.port));
+        let address = SocketAddr::from((bind_ipv4(&config.interface), config.port));
         match TcpListener::bind(address).await.and_then(|listener| {
             let bound_port = listener.local_addr()?.port();
             Ok((listener, bound_port))
@@ -255,6 +262,24 @@ impl RemoteService {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
+}
+
+/// The address to bind the listener to: the named adapter's IPv4 address, or
+/// every interface (`0.0.0.0`) when none is picked or the named one cannot
+/// be resolved (unplugged, renamed) — a stale interface choice must not take
+/// the whole remote view down.
+fn bind_ipv4(interface: &str) -> Ipv4Addr {
+    if interface.is_empty() {
+        return Ipv4Addr::UNSPECIFIED;
+    }
+    decktective_net::resolve_ipv4(interface).unwrap_or_else(|error| {
+        tracing::warn!(
+            %error,
+            interface,
+            "failed to resolve the chosen network interface; binding every interface instead"
+        );
+        Ipv4Addr::UNSPECIFIED
+    })
 }
 
 fn generate_token() -> String {

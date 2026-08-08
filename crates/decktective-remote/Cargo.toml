@@ -10,6 +10,7 @@ description = "LAN web server that streams the engine's state to remote browsers
 anyhow = { workspace = true }
 axum = { version = "0.8", features = ["ws"] }
 decktective-core = { workspace = true }
+decktective-net = { workspace = true }
 futures-util = "0.3"
 rand = { workspace = true }
 serde = { workspace = true }

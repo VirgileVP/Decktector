@@ -1037,12 +1037,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "decktective-net"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "if-addrs",
+ "serde",
+ "ts-rs",
+]
+
+[[package]]
 name = "decktective-remote"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
  "decktective-core",
+ "decktective-net",
  "futures-util",
  "rand 0.9.5",
  "serde",
@@ -1063,7 +1074,7 @@ dependencies = [
  "anyhow",
  "cpal",
  "decktective-core",
- "if-addrs",
+ "decktective-net",
  "midir",
  "serde",
  "tokio",

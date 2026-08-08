@@ -53,7 +53,11 @@ function pushTimecodeConfig(settings: Settings): void {
 
 /** Builds the config the Rust side expects from the flat settings fields. */
 function toRemoteConfig(settings: Settings): RemoteConfig {
-  return { enabled: settings.remoteEnabled, port: settings.remotePort }
+  return {
+    enabled: settings.remoteEnabled,
+    port: settings.remotePort,
+    interface: settings.remoteInterface
+  }
 }
 
 function pushRemoteConfig(settings: Settings): void {

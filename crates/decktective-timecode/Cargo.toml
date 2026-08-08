@@ -10,7 +10,7 @@ description = "Timecode generation (Art-Net TC, MTC and LTC) driven by a deck's 
 anyhow = { workspace = true }
 cpal = { workspace = true }
 decktective-core = { workspace = true }
-if-addrs = { workspace = true }
+decktective-net = { workspace = true }
 midir = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }

@@ -1,9 +1,10 @@
 //! Local network interface lookup.
 //!
-//! Art-Net is broadcast on the local subnet, so the setting that matters is
-//! *which* network adapter to send from — a booth machine routinely has more
-//! than one (Ethernet to the lighting network, Wi-Fi for everything else). A
-//! typed IP address cannot express that choice reliably; the adapter can.
+//! Both Art-Net timecode and the remote web view are broadcast or bound on
+//! the local subnet, so the setting that matters for each is *which* network
+//! adapter to use — a booth machine routinely has more than one (Ethernet to
+//! the lighting network, Wi-Fi for everything else). A typed IP address
+//! cannot express that choice reliably; the adapter can.
 
 use std::net::Ipv4Addr;
 
@@ -19,7 +20,7 @@ pub struct NetworkInterfaceInfo {
     pub ip: String,
 }
 
-/// Every non-loopback interface this machine could broadcast Art-Net from.
+/// Every non-loopback interface this machine could broadcast or bind from.
 pub fn list_broadcastable_interfaces() -> anyhow::Result<Vec<NetworkInterfaceInfo>> {
     let interfaces = if_addrs::get_if_addrs()?;
     Ok(interfaces
@@ -35,12 +36,12 @@ pub fn list_broadcastable_interfaces() -> anyhow::Result<Vec<NetworkInterfaceInf
         .collect())
 }
 
-/// The IPv4 address of the named interface, to bind the outgoing socket to.
+/// The IPv4 address of the named interface, to bind a socket or listener to.
 ///
 /// Re-resolved on every config change rather than cached indefinitely: an
 /// adapter can pick up a new address (DHCP) or disappear (unplugged) between
 /// one set and the next.
-pub(crate) fn resolve_ipv4(interface_name: &str) -> anyhow::Result<Ipv4Addr> {
+pub fn resolve_ipv4(interface_name: &str) -> anyhow::Result<Ipv4Addr> {
     // `get_if_addrs` yields one entry per (adapter, address) pair, so a dual
     // IPv4/IPv6 adapter shows up as two entries sharing the same name. A
     // plain `find` on the name alone can land on the IPv6 entry and miss the

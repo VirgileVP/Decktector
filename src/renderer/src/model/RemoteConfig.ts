@@ -7,4 +7,12 @@ export type RemoteConfig = {
 /**
  * Off by default: the server never opens a port the user did not ask for.
  */
-enabled: boolean, port: number, };
+enabled: boolean, port: number, 
+/**
+ * Name of the network adapter to bind to, e.g. `"eth0"` — picked from
+ * `list_network_interfaces`, not typed in. Empty binds every interface
+ * this machine has, which is also the fallback when the named adapter
+ * cannot be resolved (unplugged, renamed) — the server stays reachable
+ * rather than failing over an adapter picked in a previous session.
+ */
+interface: string, };

@@ -6,6 +6,7 @@ import { THEMES } from '../lib/theme'
 import type { NetworkInterfaceInfo } from '../model'
 import { useRemoteStore } from '../state/remote'
 import {
+  NO_NETWORK_INTERFACE,
   TIMECODE_FRAME_RATE_OPTIONS,
   TIMECODE_PROTOCOL_OPTIONS,
   UI_SCALE_RANGE,
@@ -86,11 +87,14 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Elem
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
-  // Best-effort display address: the first broadcastable adapter, same list
-  // the Art-Net picker uses. Task 2.4 lets the remote server bind to a
-  // specific one; until then this is a hint, not a guarantee the URL works
-  // from every network this machine happens to be on.
-  const remoteHost = networkInterfaces[0]?.ip ?? 'localhost'
+  // The URL to hand out: the chosen interface's address once one is picked,
+  // otherwise the first broadcastable adapter as a best-effort guess — the
+  // server itself is bound to every interface in that case, so any of this
+  // machine's addresses would work, not just the one shown here.
+  const selectedInterface = networkInterfaces.find(
+    (networkInterface) => networkInterface.name === settings.remoteInterface
+  )
+  const remoteHost = selectedInterface?.ip ?? networkInterfaces[0]?.ip ?? 'localhost'
   const remoteUrl =
     remoteStatus.listening && remoteStatus.token
       ? `http://${remoteHost}:${remoteStatus.port}/?token=${remoteStatus.token}`
@@ -381,6 +385,19 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Elem
                 type="number"
                 value={String(settings.remotePort)}
                 onChange={(value) => settings.update('remotePort', Number(value) || settings.remotePort)}
+              />
+              <ChoiceRow
+                label="Network interface"
+                hint="Adapter to bind to. Every interface means reachable from every network this machine is on."
+                value={settings.remoteInterface}
+                options={[
+                  { value: NO_NETWORK_INTERFACE, label: 'Every interface' },
+                  ...networkInterfaces.map((networkInterface) => ({
+                    value: networkInterface.name,
+                    label: `${networkInterface.name} (${networkInterface.ip})`
+                  }))
+                ]}
+                onChange={update('remoteInterface')}
               />
               {remoteStatus.error && <p className="setting-hint">Could not start: {remoteStatus.error}</p>}
               {remoteUrl && (

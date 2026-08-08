@@ -14,7 +14,10 @@
 pub mod artnet;
 pub mod ltc;
 pub mod mtc;
-pub mod network;
+
+/// Re-exported so existing callers keep writing `decktective_timecode::network::*` —
+/// the lookup itself now lives in `decktective-net`, shared with the remote service.
+pub use decktective_net as network;
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
