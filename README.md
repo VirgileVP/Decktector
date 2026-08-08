@@ -77,6 +77,33 @@ npm run build
 Produces an NSIS installer on Windows, a `.dmg` on macOS and `.AppImage`/`.deb` on
 Linux — each must be built on its own platform.
 
+## Remote view
+
+A second screen — a phone by the lighting desk, a laptop out front — can watch the
+same decks the desktop app shows, in any browser on the local network. It is
+**off by default**: turn it on from Settings → Remote view, which also shows the
+URL and a QR code once it is listening.
+
+It is **read-only**. A remote browser watches; it never controls the app — there is
+no write path from a remote client back into the engine, and shell-only controls
+(window behaviour, timecode output) are hidden there since they would not do
+anything.
+
+The link is gated by a token embedded in the URL, **regenerated every time the
+server starts** — closing and reopening the remote view drops anyone using the old
+link. This is a guard against someone on the same network stumbling onto the feed,
+not hardened authentication: **a venue network is not a trusted network**, and
+nothing sensitive should be exposed through this beyond what is already on screen.
+
+During `npm run dev`, the renderer (Vite) and the remote server run on different
+ports; set `VITE_REMOTE_WS_PORT` so the remote WebSocket connects to the server's
+port instead of Vite's own. Not needed for a packaged build, where both are served
+from the same port.
+
+```sh
+VITE_REMOTE_WS_PORT=7420 npm run dev:sim
+```
+
 ## Architecture
 
 ```
@@ -93,8 +120,8 @@ src/renderer/           # React UI: deck panels + canvas waveforms
 
 The UI only ever consumes the normalized model, and the model itself is generated
 from the Rust definitions — a divergence between engine and renderer fails the
-build rather than surfacing mid-set. The same engine layer can later feed a web
-server for remote viewing, or a native front-end, without touching the protocol.
+build rather than surfacing mid-set. The same engine layer also feeds the
+[remote view](#remote-view) over a WebSocket, without touching the protocol.
 
 ### Porting status
 
