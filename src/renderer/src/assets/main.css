@@ -1379,3 +1379,68 @@ html[data-transparent='on'] .panel-window {
   color: var(--text-muted);
   font-size: 13px;
 }
+
+/* ---------- Pop-out buttons ---------- */
+
+.pop-out-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  /* Space is always reserved (never `display: none`) so the button stays
+     reachable by keyboard even while invisible. */
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.pop-out-button svg {
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.2;
+}
+
+.pop-out-button:hover {
+  color: var(--text);
+}
+
+.poppable:hover .pop-out-button,
+.pop-out-button:focus-visible {
+  opacity: 1;
+}
+
+/* Only a plain element (a span, `.deck-bar`) needs `position: relative` to
+   become the pop-out button's positioning context — `.header-center` is
+   already one, via its own centering rule, so it is deliberately absent
+   from this selector. */
+.header-clocks .poppable {
+  position: relative;
+}
+
+.header-clocks .poppable .pop-out-button {
+  position: absolute;
+  top: -2px;
+  right: -18px;
+}
+
+.header-center.poppable > .pop-out-button {
+  position: absolute;
+  top: 0;
+  right: -20px;
+}
+
+.deck-bar.poppable {
+  position: relative;
+}
+
+.deck-bar.poppable > .pop-out-button {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+}

@@ -1,9 +1,12 @@
 import type { DeckId, PlayState } from '../model'
 import { formatTimeMs } from '../lib/playhead'
-import { useSettings } from '../state/settings'
+import { DECK_RAIL_WIDTH_RANGE, useSettings } from '../state/settings'
 import { useDecktectiveStore } from '../state/store'
 import { selectTimecodeSource, useTimecodeStore } from '../state/timecode'
 import { CueList } from './CueList'
+import { PanelResizeHandle } from './PanelResizeHandle'
+import { PopOutButton } from './PopOutButton'
+import { TrackEventList } from './TrackEventList'
 import { WaveformDetail } from './WaveformDetail'
 import { WaveformOverview } from './WaveformOverview'
 
@@ -31,9 +34,14 @@ export function DeckPanel({ deckId, accentColor }: DeckPanelProps): React.JSX.El
   const showPitch = useSettings((s) => s.showDeckPitch)
   const showTimeRemaining = useSettings((s) => s.showDeckTimeRemaining)
   const showCueList = useSettings((s) => s.showDeckCueList)
+  const showEventList = useSettings((s) => s.showDeckEventList)
   const showArtwork = useSettings((s) => s.showDeckArtwork)
   const showWaveformOverview = useSettings((s) => s.showDeckWaveformOverview)
   const showWaveformDetail = useSettings((s) => s.showDeckWaveformDetail)
+  const cueListWidth = useSettings((s) => s.deckCueListWidth)
+  const eventListWidth = useSettings((s) => s.deckEventListWidth)
+  const updateSetting = useSettings((s) => s.update)
+  const showTimeline = showWaveformOverview || showWaveformDetail
 
   // The engine resolves artwork to a data: URL, so it drops straight into
   // an <img> with nothing to allocate or revoke.
@@ -49,8 +57,9 @@ export function DeckPanel({ deckId, accentColor }: DeckPanelProps): React.JSX.El
       className={`deck ${isOnAir ? 'deck-onair' : 'deck-idle'}`}
       style={{ ['--deck-color' as string]: accentColor }}
     >
-      <div className="deck-bar">
+      <div className="deck-bar poppable">
         <div className="deck-no">{deckId}</div>
+        <PopOutButton panelId="deck" deckId={deckId} title={`Open deck ${deckId} in its own window`} />
 
         {showArtwork && (
           <div className="deck-art">
@@ -76,7 +85,11 @@ export function DeckPanel({ deckId, accentColor }: DeckPanelProps): React.JSX.El
         <button
           type="button"
           className={`deck-tc-button${isTimecodeSource ? ' active' : ''}`}
-          title={isTimecodeSource ? 'Stop sending timecode from this deck' : 'Send timecode from this deck'}
+          title={
+            isTimecodeSource
+              ? 'Stop sending timecode from this deck'
+              : 'Send timecode from this deck'
+          }
           aria-pressed={isTimecodeSource}
           onClick={() => selectTimecodeSource(isTimecodeSource ? null : deckId)}
         >
@@ -118,8 +131,33 @@ export function DeckPanel({ deckId, accentColor }: DeckPanelProps): React.JSX.El
       </div>
 
       <div className="deck-body">
-        {showCueList && <CueList deckId={deckId} track={track} />}
-        {(showWaveformOverview || showWaveformDetail) && (
+        {showCueList && (
+          <>
+            <CueList deckId={deckId} track={track} width={cueListWidth} />
+            {(showEventList || showTimeline) && (
+              <PanelResizeHandle
+                width={cueListWidth}
+                min={DECK_RAIL_WIDTH_RANGE.min}
+                max={DECK_RAIL_WIDTH_RANGE.max}
+                onResize={(width) => updateSetting('deckCueListWidth', width)}
+              />
+            )}
+          </>
+        )}
+        {showEventList && (
+          <>
+            <TrackEventList deckId={deckId} track={track} width={eventListWidth} />
+            {showTimeline && (
+              <PanelResizeHandle
+                width={eventListWidth}
+                min={DECK_RAIL_WIDTH_RANGE.min}
+                max={DECK_RAIL_WIDTH_RANGE.max}
+                onResize={(width) => updateSetting('deckEventListWidth', width)}
+              />
+            )}
+          </>
+        )}
+        {showTimeline && (
           <div
             className={`deck-waves${
               showWaveformOverview && !showWaveformDetail ? ' deck-waves-overview-only' : ''
