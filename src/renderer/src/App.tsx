@@ -5,6 +5,7 @@ import neonLogo from './assets/neon-logo.png'
 import { DeckPanel } from './components/DeckPanel'
 import { HeaderClock } from './components/HeaderClock'
 import { LineupNow } from './components/LineupNow'
+import { RemoteLinkBanner } from './components/RemoteLinkBanner'
 import { SettingsDialog } from './components/SettingsDialog'
 import { TimecodeClock } from './components/TimecodeClock'
 import { TimecodeSourceButtons } from './components/TimecodeSourceButtons'
@@ -61,6 +62,7 @@ function App(): React.JSX.Element {
 
   return (
     <div className="app">
+      <RemoteLinkBanner />
       <header className="app-header">
         <img className="neon-logo" src={neonLogo} alt="NEON" />
         <div className="header-center">

@@ -1328,3 +1328,20 @@ body {
     display: none;
   }
 }
+
+/* ---------- Remote link banner ---------- */
+
+.remote-link-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  padding: 6px 12px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--onair);
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+}
