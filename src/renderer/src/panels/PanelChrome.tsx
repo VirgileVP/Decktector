@@ -65,6 +65,8 @@ interface PanelChromeProps {
   hasCompactVariant: boolean
   compact: boolean
   onToggleCompact: () => void
+  /** A panel-specific control rendered alongside the built-in ones (e.g. the "Time" panel's show/hide toggle). */
+  toolbarExtra?: React.ReactNode
   children: React.ReactNode
 }
 
@@ -78,6 +80,7 @@ export function PanelChrome({
   hasCompactVariant,
   compact,
   onToggleCompact,
+  toolbarExtra,
   children
 }: PanelChromeProps): React.JSX.Element {
   // Seeded from this window's own record — the persisted state a fresh
@@ -259,6 +262,7 @@ export function PanelChrome({
               </svg>
             </button>
           )}
+          {toolbarExtra}
           <button
             type="button"
             className="panel-chrome-close"

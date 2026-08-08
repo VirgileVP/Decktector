@@ -1514,6 +1514,33 @@ html[data-transparent='on'] .panel-chrome-bar {
   justify-content: center;
 }
 
+/* A panel window is its own top-level document, so `vw`/`vh` already track
+   its actual size — no container query needed. `min()` of the two keeps a
+   window that is short-but-wide or narrow-but-tall from scaling past what
+   actually fits, the way a plain `vw` value alone would. */
+.panel-chrome-content .header-clock,
+.panel-chrome-content .timecode-clock {
+  font-size: clamp(14px, min(5vw, 12vh), 40px);
+  line-height: 1.2;
+}
+
+.panel-chrome-content .lineup-now {
+  gap: clamp(4px, 1vw, 12px);
+}
+
+.panel-chrome-content .lineup-set {
+  gap: clamp(3px, 0.6vw, 8px);
+}
+
+.panel-chrome-content .lineup-set-time,
+.panel-chrome-content .lineup-set-artist {
+  font-size: clamp(10px, min(2.2vw, 5vh), 22px);
+}
+
+.panel-chrome-content .lineup-current .lineup-set-artist {
+  font-size: clamp(11px, min(2.4vw, 5.5vh), 24px);
+}
+
 /* Eight invisible strips overlaid on `.panel-chrome`'s own edges, each
    forwarding its `mousedown` to `startResizeDragging` — the resize border
    an undecorated window does not otherwise have. */
@@ -1692,48 +1719,17 @@ html[data-transparent='on'] .panel-chrome-bar {
   right: -20px;
 }
 
-/* Only rendered inside a panel window (see `HeaderBlockVisibilitySettings`),
-   where `.pop-out-button` above renders nothing — so this reuses the same
-   corner without colliding with it. Always visible, not hover-revealed:
-   it is the only way to control what that window shows. */
-.header-block-settings {
-  position: absolute;
-  top: 0;
-  /* Unlike `.pop-out-button` above (used only in the main app header, where
-     `.header-center` is a narrow, centered block with real gutter space
-     outside it), this button lives inside a panel window, where
-     `.header-center` fills the full width — an outside offset here would
-     land past the window's edge and get clipped by `overflow: hidden`. */
-  right: 0;
-}
-
-.header-block-settings-button {
+/* The "Time" panel's show/hide button lives in the toolbar, styled exactly
+   like its `.panel-chrome-toggle` siblings (see `HeaderBlockVisibilityToggle`)
+   — this wrapper only exists to anchor its popover. */
+.panel-chrome-toggle-wrap {
+  position: relative;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  background: none;
-  border: none;
-  color: var(--text-faint);
-  cursor: pointer;
-}
-
-.header-block-settings-button svg {
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 1;
-}
-
-.header-block-settings-button:hover,
-.header-block-settings-button[aria-expanded='true'] {
-  color: var(--text);
 }
 
 .header-block-settings-popover {
   position: absolute;
-  top: 20px;
+  top: calc(100% + 6px);
   right: 0;
   z-index: 10;
   display: flex;

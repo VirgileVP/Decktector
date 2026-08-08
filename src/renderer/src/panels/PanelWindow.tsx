@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
 
+import { HeaderBlock } from '../components/HeaderBlock'
+import { HeaderBlockVisibilityToggle } from '../components/HeaderBlockVisibilityToggle'
+import { DEFAULT_HEADER_BLOCK_VISIBILITY } from '../components/HeaderBlockVisibility'
 import { connectDevicesToEngine } from '../state/devices'
 import { currentPanelWindowRecord } from '../state/panel-windows'
 import { connectSettingsBroadcast } from '../state/settings-broadcast'
@@ -31,7 +34,24 @@ export function PanelWindow({ params }: PanelWindowProps): React.JSX.Element {
   // seed for its display options.
   const [compact, setCompact] = useState<boolean>(() => currentPanelWindowRecord()?.compact ?? false)
 
+  // Only meaningful for `header-block` (`hasVisibilityToggle`), but a hook
+  // cannot be called conditionally — it is simply unused for every other panel.
+  const [headerBlockVisibility, setHeaderBlockVisibility] = useState(DEFAULT_HEADER_BLOCK_VISIBILITY)
+
   const definition = PANELS[params.panelId]
+
+  // `header-block` bypasses the registry's default render: its content and
+  // its toolbar control share one piece of state, which only this
+  // component — the common parent of `PanelChrome` and the content it
+  // wraps — can hold.
+  const content = definition.hasVisibilityToggle ? (
+    <HeaderBlock visibility={headerBlockVisibility} />
+  ) : (
+    definition.render(params, compact)
+  )
+  const toolbarExtra = definition.hasVisibilityToggle ? (
+    <HeaderBlockVisibilityToggle visibility={headerBlockVisibility} onChange={setHeaderBlockVisibility} />
+  ) : undefined
 
   return (
     <div className="panel-window">
@@ -41,8 +61,9 @@ export function PanelWindow({ params }: PanelWindowProps): React.JSX.Element {
         hasCompactVariant={definition.hasCompactVariant}
         compact={compact}
         onToggleCompact={() => setCompact((current) => !current)}
+        toolbarExtra={toolbarExtra}
       >
-        {definition.render(params, compact)}
+        {content}
       </PanelChrome>
     </div>
   )

@@ -1,9 +1,8 @@
 import { useState } from 'react'
 
-import { isPanelWindow } from '../panels/params'
 import type { HeaderBlockVisibility } from './HeaderBlockVisibility'
 
-interface HeaderBlockVisibilitySettingsProps {
+interface HeaderBlockVisibilityToggleProps {
   visibility: HeaderBlockVisibility
   onChange: (next: HeaderBlockVisibility) => void
 }
@@ -15,27 +14,25 @@ const VISIBILITY_ROWS: { key: keyof HeaderBlockVisibility; label: string }[] = [
 ]
 
 /**
- * Settings button + popover that shows or hides each piece of the header
- * block — clock, timecode, lineup — independently of the others. Only
- * useful once the block is popped into its own window: the main header
- * always shows all three, so this renders nothing there.
+ * The "Time" panel window's show/hide control for its three pieces (clock,
+ * timecode, lineup) — a button styled like every other chrome control
+ * (`PanelChrome`'s always-on-top/transparency/zoom), living in the same
+ * toolbar rather than floating over the content it controls.
  */
-export function HeaderBlockVisibilitySettings({
+export function HeaderBlockVisibilityToggle({
   visibility,
   onChange
-}: HeaderBlockVisibilitySettingsProps): React.JSX.Element | null {
+}: HeaderBlockVisibilityToggleProps): React.JSX.Element {
   const [open, setOpen] = useState(false)
-
-  if (!isPanelWindow(window.location)) return null
 
   const toggle = (key: keyof HeaderBlockVisibility): void =>
     onChange({ ...visibility, [key]: !visibility[key] })
 
   return (
-    <div className="header-block-settings">
+    <div className="panel-chrome-toggle-wrap">
       <button
         type="button"
-        className="header-block-settings-button"
+        className={`panel-chrome-toggle${open ? ' active' : ''}`}
         title="Show or hide"
         aria-label="Show or hide"
         aria-expanded={open}

@@ -1,4 +1,4 @@
-/** Which pieces of `HeaderBlock` are shown — toggled per-window from `HeaderBlockVisibilitySettings`. */
+/** Which pieces of `HeaderBlock` are shown — toggled per-window from `HeaderBlockVisibilityToggle`. */
 export interface HeaderBlockVisibility {
   clock: boolean
   timecode: boolean

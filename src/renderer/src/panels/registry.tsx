@@ -35,6 +35,8 @@ export interface PanelDefinition {
   minSize: PanelSize
   /** Whether the panel offers the compact variant in its chrome. */
   hasCompactVariant: boolean
+  /** Whether `PanelWindow` supplies a show/hide toggle for this panel's chrome — only `header-block` does. */
+  hasVisibilityToggle: boolean
   render: (params: PanelParams, compact: boolean) => React.JSX.Element
 }
 
@@ -44,6 +46,7 @@ export const PANELS: Record<PanelId, PanelDefinition> = {
     defaultSize: CLOCK_DEFAULT_SIZE,
     minSize: CLOCK_MIN_SIZE,
     hasCompactVariant: false,
+    hasVisibilityToggle: false,
     render: () => <HeaderClock />
   },
   timecode: {
@@ -51,6 +54,7 @@ export const PANELS: Record<PanelId, PanelDefinition> = {
     defaultSize: TIMECODE_DEFAULT_SIZE,
     minSize: TIMECODE_MIN_SIZE,
     hasCompactVariant: false,
+    hasVisibilityToggle: false,
     render: () => (
       <>
         <TimecodeClock />
@@ -59,10 +63,13 @@ export const PANELS: Record<PanelId, PanelDefinition> = {
     )
   },
   'header-block': {
-    title: () => 'Lineup',
+    title: () => 'Time',
     defaultSize: HEADER_BLOCK_DEFAULT_SIZE,
     minSize: HEADER_BLOCK_MIN_SIZE,
     hasCompactVariant: false,
+    hasVisibilityToggle: true,
+    // PanelWindow overrides this with the visibility-controlled version —
+    // this default (show everything) only runs if that ever changes.
     render: () => <HeaderBlock />
   },
   deck: {
@@ -70,6 +77,7 @@ export const PANELS: Record<PanelId, PanelDefinition> = {
     defaultSize: DECK_DEFAULT_SIZE,
     minSize: DECK_MIN_SIZE,
     hasCompactVariant: true,
+    hasVisibilityToggle: false,
     render: (params, compact) =>
       params.deckId === null ? (
         <div className="panel-deck-placeholder">No deck selected</div>
