@@ -35,7 +35,7 @@ const NETWORK_LABELS: Record<string, string> = {
 
 function App(): React.JSX.Element {
   useEffect(() => connectStoreToEngine(), [])
-  useEffect(() => connectSettingsToApp(), [])
+  useEffect(() => connectSettingsToApp('main'), [])
   useEffect(() => connectTimecodeToEngine(), [])
   useEffect(() => connectDevicesToEngine(), [])
   useEffect(() => connectRemoteToEngine(), [])

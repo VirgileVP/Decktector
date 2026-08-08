@@ -1,5 +1,4 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
-import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
 
 import { applyTheme } from '../lib/theme'
 import type { RemoteConfig, TimecodeConfig } from '../model'
@@ -19,13 +18,14 @@ function pushWindowPrefs(settings: Settings): void {
 }
 
 /**
- * Applies the UI scale through the webview's own zoom rather than a CSS
- * transform: it reflows the layout instead of scaling a fixed-size picture.
+ * Publishes the UI scale to the stylesheet, which zooms the app shell with it.
+ *
+ * The webview's own `setZoom` would do the same job, but only inside the app
+ * shell and only as far as the platform honours it; a custom property applies
+ * everywhere the renderer runs and can be checked in the DOM.
  */
 function pushUiScale(uiScale: number): void {
-  getCurrentWebviewWindow()
-    .setZoom(uiScale)
-    .catch((error) => console.error('Failed to apply the UI scale:', error))
+  document.documentElement.style.setProperty('--ui-scale', String(uiScale))
 }
 
 /** Builds the tagged config the Rust side expects from the flat settings fields. */
@@ -67,10 +67,21 @@ function pushRemoteConfig(settings: Settings): void {
 }
 
 /**
+ * Which window `connectSettingsToApp` is running in. A panel window mirrors
+ * one piece of the UI and must not re-apply — or fight the main window
+ * over — configuration that is process-wide (the timecode generator, the
+ * remote server) or owned per-window instead (`uiScale`, the window prefs;
+ * see `panel-window-options.ts`). `'panel'` therefore applies only the
+ * theme and `dimIdleDecks`, the two settings that are simple DOM state with
+ * no ownership conflict.
+ */
+export type SettingsScope = 'main' | 'panel'
+
+/**
  * Applies whatever changed. `previous` is absent on the initial pass, where
  * everything has to be pushed regardless of its value.
  */
-function apply(settings: Settings, previous?: Settings): void {
+function apply(scope: SettingsScope, settings: Settings, previous?: Settings): void {
   if (previous?.theme !== settings.theme) {
     applyTheme(settings.theme)
   }
@@ -78,14 +89,17 @@ function apply(settings: Settings, previous?: Settings): void {
     document.documentElement.dataset.dimIdle = settings.dimIdleDecks ? 'on' : 'off'
   }
 
-  // Everything below needs the app shell, which reaching for throws outright
-  // when the renderer is served on its own. The theme and the idle dimming
-  // are pure DOM and still apply there.
-  if (!isTauri()) return
+  if (scope === 'panel') return
 
   if (previous?.uiScale !== settings.uiScale) {
     pushUiScale(settings.uiScale)
   }
+
+  // Everything below needs the app shell, which reaching for throws outright
+  // when the renderer is served on its own. The theme, the idle dimming and
+  // the UI scale are pure DOM and still apply there.
+  if (!isTauri()) return
+
   if (
     previous?.alwaysOnTop !== settings.alwaysOnTop ||
     previous?.preventSleep !== settings.preventSleep
@@ -114,8 +128,12 @@ function apply(settings: Settings, previous?: Settings): void {
 /**
  * Applies the stored settings and keeps them applied as they change.
  * Returns the teardown function.
+ *
+ * `scope` distinguishes the main window, which owns every process-wide
+ * side effect, from a panel window, which must only mirror the theme and
+ * `dimIdleDecks` — see `SettingsScope`.
  */
-export function connectSettingsToApp(): () => void {
-  apply(useSettings.getState())
-  return useSettings.subscribe(apply)
+export function connectSettingsToApp(scope: SettingsScope): () => void {
+  apply(scope, useSettings.getState())
+  return useSettings.subscribe((settings, previous) => apply(scope, settings, previous))
 }
