@@ -1526,6 +1526,13 @@ html[data-transparent='on'] .panel-chrome-bar {
 
 .panel-chrome-content .lineup-now {
   gap: clamp(4px, 1vw, 12px);
+  /* The base rule's `line-height: 14px` is a fixed pixel value tuned for the
+     main header's small, fixed 10-11px lineup text. It inherits into
+     .lineup-set-time / .lineup-set-artist below, which does not itself set
+     a line-height — so at their scaled-up size here it clipped them at a
+     14px-tall box. A unitless value is recomputed per element from its own
+     font-size instead of inheriting one fixed pixel number. */
+  line-height: 1.3;
 }
 
 .panel-chrome-content .lineup-set {
