@@ -19,7 +19,7 @@ import { reportPanelWindow } from './panel-window-report'
 import type { PanelParams } from './params'
 import { readWindowGeometry } from './read-window-geometry'
 import { UI_SCALE_RANGE } from '../state/settings'
-import { panelWindowRecordFor } from '../state/panel-windows'
+import { currentPanelWindowRecord } from '../state/panel-windows'
 
 /** Shared with `main.css` through `--panel-chrome-height` — not duplicated there. */
 const CHROME_HEIGHT_PX = 28
@@ -85,7 +85,7 @@ export function PanelChrome({
   // since the main window wrote it to the same `localStorage` before
   // recreating this window.
   const [options, setOptions] = useState<PanelWindowOptions>(
-    () => panelWindowRecordFor(getCurrentWindow().label)?.options ?? DEFAULT_PANEL_WINDOW_OPTIONS
+    () => currentPanelWindowRecord()?.options ?? DEFAULT_PANEL_WINDOW_OPTIONS
   )
 
   useEffect(() => {
@@ -190,12 +190,18 @@ export function PanelChrome({
         ['--panel-resize-edge' as string]: `${RESIZE_EDGE_PX}px`
       }}
     >
-      <div
-        className="panel-chrome-bar"
-        data-tauri-drag-region
-        onDoubleClick={() => void getCurrentWindow().toggleMaximize()}
-      >
-        <span className="panel-chrome-title">{title}</span>
+      <div className="panel-chrome-bar">
+        {/* Buttons must be siblings of the drag region, not descendants —
+            Tauri v2 does not reliably deliver click events to interactive
+            elements nested inside `data-tauri-drag-region` (upstream bug,
+            tauri-apps/tauri#9901). */}
+        <div
+          className="panel-chrome-drag"
+          data-tauri-drag-region
+          onDoubleClick={() => void getCurrentWindow().toggleMaximize()}
+        >
+          <span className="panel-chrome-title">{title}</span>
+        </div>
         <div className="panel-chrome-controls">
           <button
             type="button"

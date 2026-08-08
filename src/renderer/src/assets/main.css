@@ -1367,7 +1367,12 @@ body {
   background: var(--bg);
 }
 
-html[data-transparent='on'] .panel-window {
+/* `body` sits behind `.panel-window` and paints its own opaque background
+   (see the base `body` rule) — without this, `.panel-window` going
+   transparent would still show solid `--bg` through it from underneath. */
+html[data-transparent='on'] body,
+html[data-transparent='on'] .panel-window,
+html[data-transparent='on'] .panel-chrome-bar {
   background: transparent;
 }
 
@@ -1412,6 +1417,16 @@ html[data-transparent='on'] .panel-window {
   opacity: 1;
 }
 
+/* Everything draggable, and nothing else — the button group next to it is a
+   sibling, not a child, of the actual `data-tauri-drag-region` element. */
+.panel-chrome-drag {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
 .panel-chrome-title {
   font-size: 11px;
   font-weight: 600;
@@ -1419,8 +1434,8 @@ html[data-transparent='on'] .panel-window {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  /* The drag region covers the whole bar; the label itself must not swallow
-     the mousedown that starts the drag. */
+  /* The drag region already covers the whole title area; the text itself
+     must not swallow the mousedown that starts the drag. */
   pointer-events: none;
 }
 
@@ -1675,6 +1690,65 @@ html[data-transparent='on'] .panel-window {
   position: absolute;
   top: 0;
   right: -20px;
+}
+
+/* Only rendered inside a panel window (see `HeaderBlockVisibilitySettings`),
+   where `.pop-out-button` above renders nothing — so this reuses the same
+   corner without colliding with it. Always visible, not hover-revealed:
+   it is the only way to control what that window shows. */
+.header-block-settings {
+  position: absolute;
+  top: 0;
+  right: -20px;
+}
+
+.header-block-settings-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.header-block-settings-button svg {
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1;
+}
+
+.header-block-settings-button:hover,
+.header-block-settings-button[aria-expanded='true'] {
+  color: var(--text);
+}
+
+.header-block-settings-popover {
+  position: absolute;
+  top: 20px;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.25);
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.header-block-settings-popover label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
 }
 
 /* The deck bar is packed edge to edge (see `.deck-time`, `.deck-props`) —

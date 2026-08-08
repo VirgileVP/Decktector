@@ -11,6 +11,7 @@
 
 import { isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
@@ -69,6 +70,18 @@ export const usePanelWindowsStore = create<PanelWindowsState & PanelWindowsActio
  */
 export function panelWindowRecordFor(label: string): PanelWindowRecord | undefined {
   return usePanelWindowsStore.getState().windows[label]
+}
+
+/**
+ * `panelWindowRecordFor(getCurrentWindow().label)`, safely: `getCurrentWindow()`
+ * reads `window.__TAURI_INTERNALS__.metadata`, which throws outside a real
+ * Tauri webview (a panel window rendered in a plain browser tab during
+ * development) — exactly the case a `useState` initializer runs into, since
+ * it fires on every mount regardless of `isTauri()`. `undefined` outside
+ * Tauri means "no record", which is also the correct answer there.
+ */
+export function currentPanelWindowRecord(): PanelWindowRecord | undefined {
+  return isTauri() ? panelWindowRecordFor(getCurrentWindow().label) : undefined
 }
 
 /**
