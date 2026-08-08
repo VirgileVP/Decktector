@@ -4,6 +4,7 @@ import { connectDevicesToEngine } from '../state/devices'
 import { connectSettingsToApp } from '../state/settings-sync'
 import { connectStoreToEngine } from '../state/store'
 import { connectTimecodeToEngine } from '../state/timecode'
+import { PanelChrome } from './PanelChrome'
 import { PANELS } from './registry'
 import type { PanelParams } from './params'
 
@@ -25,6 +26,11 @@ export function PanelWindow({ params }: PanelWindowProps): React.JSX.Element {
 
   // Hardcoded until task 6.1 adds the compact deck layout and its toggle.
   const compact = false
+  const definition = PANELS[params.panelId]
 
-  return <div className="panel-window">{PANELS[params.panelId].render(params, compact)}</div>
+  return (
+    <div className="panel-window">
+      <PanelChrome title={definition.title(params)}>{definition.render(params, compact)}</PanelChrome>
+    </div>
+  )
 }

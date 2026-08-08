@@ -1380,6 +1380,155 @@ html[data-transparent='on'] .panel-window {
   font-size: 13px;
 }
 
+/* ---------- Panel window chrome ---------- */
+
+/* `--panel-chrome-height` and `--panel-resize-edge` are set inline by
+   `PanelChrome`, from the same constants it uses for its own layout math —
+   the pixel values live in exactly one place. */
+.panel-chrome {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.panel-chrome-bar {
+  flex-shrink: 0;
+  height: var(--panel-chrome-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 6px 0 10px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  opacity: 0;
+  transition: opacity 150ms ease;
+  cursor: default;
+}
+
+.panel-window:hover .panel-chrome-bar,
+.panel-chrome-bar:focus-within {
+  opacity: 1;
+}
+
+.panel-chrome-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* The drag region covers the whole bar; the label itself must not swallow
+     the mousedown that starts the drag. */
+  pointer-events: none;
+}
+
+.panel-chrome-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.panel-chrome-close svg {
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.3;
+}
+
+.panel-chrome-close:hover {
+  color: var(--text);
+  background: var(--bg-inset);
+}
+
+.panel-chrome-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Eight invisible strips overlaid on `.panel-chrome`'s own edges, each
+   forwarding its `mousedown` to `startResizeDragging` — the resize border
+   an undecorated window does not otherwise have. */
+.panel-resize-edge {
+  position: absolute;
+  z-index: 1;
+}
+
+.panel-resize-n,
+.panel-resize-s {
+  left: var(--panel-resize-edge);
+  right: var(--panel-resize-edge);
+  height: var(--panel-resize-edge);
+  cursor: ns-resize;
+}
+
+.panel-resize-n {
+  top: 0;
+}
+
+.panel-resize-s {
+  bottom: 0;
+}
+
+.panel-resize-e,
+.panel-resize-w {
+  top: var(--panel-resize-edge);
+  bottom: var(--panel-resize-edge);
+  width: var(--panel-resize-edge);
+  cursor: ew-resize;
+}
+
+.panel-resize-e {
+  right: 0;
+}
+
+.panel-resize-w {
+  left: 0;
+}
+
+.panel-resize-ne,
+.panel-resize-sw {
+  width: var(--panel-resize-edge);
+  height: var(--panel-resize-edge);
+  cursor: nesw-resize;
+}
+
+.panel-resize-ne {
+  top: 0;
+  right: 0;
+}
+
+.panel-resize-sw {
+  bottom: 0;
+  left: 0;
+}
+
+.panel-resize-nw,
+.panel-resize-se {
+  width: var(--panel-resize-edge);
+  height: var(--panel-resize-edge);
+  cursor: nwse-resize;
+}
+
+.panel-resize-nw {
+  top: 0;
+  left: 0;
+}
+
+.panel-resize-se {
+  bottom: 0;
+  right: 0;
+}
+
 /* ---------- Pop-out buttons ---------- */
 
 .pop-out-button {
