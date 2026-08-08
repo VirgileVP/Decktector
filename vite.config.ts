@@ -36,7 +36,8 @@ export default defineConfig({
   test: {
     // Every unit under test here is pure logic — no DOM, no jsdom cost.
     environment: 'node',
-    include: ['src/renderer/src/**/*.test.ts'],
+    // Relative to `root` above (`src/renderer`), i.e. `src/renderer/src/**`.
+    include: ['src/**/*.test.ts'],
     // No tests exist yet in a fresh checkout; that is not a failure.
     passWithNoTests: true
   }
