@@ -413,7 +413,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Elem
               {remoteUrl && (
                 <>
                   <p className="setting-hint">Open this on another device on the same network:</p>
-                  <p className="setting-hint">{remoteUrl}</p>
+                  <p className="setting-hint setting-value-selectable">{remoteUrl}</p>
                   {remoteQrSvg && (
                     <img
                       alt="QR code for the remote view URL"

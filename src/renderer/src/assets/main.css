@@ -1345,3 +1345,10 @@ body {
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
 }
+
+/* Text selection is off globally (see `body`); the remote view URL is one
+   of the few things in this app someone actually needs to copy. */
+.setting-value-selectable {
+  user-select: text;
+  cursor: text;
+}
