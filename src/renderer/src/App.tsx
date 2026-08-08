@@ -3,12 +3,9 @@ import { useShallow } from 'zustand/react/shallow'
 
 import neonLogo from './assets/neon-logo.png'
 import { DeckPanel } from './components/DeckPanel'
-import { HeaderClock } from './components/HeaderClock'
-import { LineupNow } from './components/LineupNow'
+import { HeaderBlock } from './components/HeaderBlock'
 import { RemoteLinkBanner } from './components/RemoteLinkBanner'
 import { SettingsDialog } from './components/SettingsDialog'
-import { TimecodeClock } from './components/TimecodeClock'
-import { TimecodeSourceButtons } from './components/TimecodeSourceButtons'
 import { deckColor } from './lib/deck-colors'
 import { remoteFocusedDeck } from './lib/remote-url'
 import { connectDevicesToEngine } from './state/devices'
@@ -73,14 +70,7 @@ function App(): React.JSX.Element {
       <RemoteLinkBanner />
       <header className="app-header">
         <img className="neon-logo" src={neonLogo} alt="NEON" />
-        <div className="header-center">
-          <div className="header-clocks">
-            <HeaderClock />
-            <TimecodeClock />
-            <TimecodeSourceButtons />
-          </div>
-          <LineupNow />
-        </div>
+        <HeaderBlock />
         <div className="header-right">
           <div className={`network-status network-${networkState}`}>
             <span className="network-dot" />
