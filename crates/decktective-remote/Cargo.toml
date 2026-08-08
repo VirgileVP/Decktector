@@ -13,6 +13,10 @@ base64 = "0.22"
 decktective-core = { workspace = true }
 decktective-net = { workspace = true }
 futures-util = "0.3"
+http-body-util = "0.1"
+# Only used to proxy asset requests to the Vite dev server in development
+# (see `assets::AssetSource::DevServer`); a packaged build serves files.
+hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 rand = { workspace = true }
 serde = { workspace = true }

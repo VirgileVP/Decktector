@@ -95,14 +95,15 @@ link. This is a guard against someone on the same network stumbling onto the fee
 not hardened authentication: **a venue network is not a trusted network**, and
 nothing sensitive should be exposed through this beyond what is already on screen.
 
-During `npm run dev`, the renderer (Vite) and the remote server run on different
-ports; set `VITE_REMOTE_WS_PORT` so the remote WebSocket connects to the server's
-port instead of Vite's own. Not needed for a packaged build, where both are served
-from the same port.
+This works the same in development, with no extra setup: `npm run dev` has no
+bundle to serve, so the remote server proxies asset requests through to Vite.
+Everything stays on the remote server's own port, exactly as in a packaged
+build. Vite must be reachable for that, which is why its dev server binds every
+interface (`server.host` in `vite.config.ts`).
 
-```sh
-VITE_REMOTE_WS_PORT=7420 npm run dev:sim
-```
+`VITE_REMOTE_WS_PORT` overrides the port the remote WebSocket connects to. It is
+not needed for the flow above; it exists for the case where the page is opened
+on Vite's own port rather than the remote server's.
 
 ## Architecture
 
