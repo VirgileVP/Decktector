@@ -105,6 +105,26 @@ interface (`server.host` in `vite.config.ts`).
 not needed for the flow above; it exists for the case where the page is opened
 on Vite's own port rather than the remote server's.
 
+## Detachable panels
+
+The clock, the timecode readout, the whole header block (clock + timecode +
+lineup), and any deck can be popped into its own OS window — useful for putting
+the clock on a second monitor, or feeding a deck to a video mixer. Hover a panel
+to reveal a small pop-out button; each click opens another window, and several
+windows of the same panel are allowed.
+
+These windows **mirror** the main window rather than moving content out of it —
+the main window's layout never changes, whatever is popped out stays visible
+there too. Each panel window has its own chrome (a title bar and a close button
+appear on hover; drag the bar to move it, drag an edge to resize), and its own
+always-on-top, transparency and zoom controls, independent of the main window's
+settings. Transparency is meant for keying the window over a video feed — pin a
+deck or the clock on top, drop its background, and key out the rest. Open panel
+windows are remembered across restarts, in their last position.
+
+This is desktop-only. The [remote view](#remote-view)'s `?deck=N` focus mode is
+unrelated and unaffected.
+
 ## Architecture
 
 ```
