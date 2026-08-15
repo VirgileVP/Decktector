@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 
-import { minutesOfDay } from '../lib/lineup'
+import { minutesOfDay } from '../lib/lineup-axis'
 
 const MS_PER_SECOND = 1000
 
@@ -14,6 +14,7 @@ const listeners = new Set<() => void>()
 let timer: ReturnType<typeof setTimeout> | null = null
 let secondsLabel = ''
 let dayMinutes = 0
+let nowMs = Date.now()
 
 function pad2(value: number): string {
   return String(value).padStart(2, '0')
@@ -25,6 +26,7 @@ function refresh(): void {
   const now = new Date()
   secondsLabel = `${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`
   dayMinutes = minutesOfDay(now)
+  nowMs = now.getTime()
 }
 
 refresh()
@@ -60,4 +62,11 @@ export function useClockSeconds(): string {
 /** Minutes since midnight, re-rendering the caller only when the minute turns. */
 export function useClockMinutes(): number {
   return useSyncExternalStore(subscribe, () => dayMinutes)
+}
+
+/** Epoch ms as of the last second boundary — for callers computing an elapsed
+ *  duration (e.g. "last seen Xs ago"), so that impure `Date.now()` read lives
+ *  in this one external store instead of in a component's render body. */
+export function useClockNow(): number {
+  return useSyncExternalStore(subscribe, () => nowMs)
 }
