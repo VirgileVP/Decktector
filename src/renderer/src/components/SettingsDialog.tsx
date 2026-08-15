@@ -6,12 +6,15 @@ import { THEMES } from '../lib/theme'
 import type { NetworkInterfaceInfo } from '../model'
 import { useRemoteStore } from '../state/remote'
 import {
+  DECK_VIEW_PRESETS,
+  matchingDeckViewPreset,
   NO_NETWORK_INTERFACE,
   TIMECODE_FRAME_RATE_OPTIONS,
   TIMECODE_PROTOCOL_OPTIONS,
   UI_SCALE_RANGE,
   WAVEFORM_DESATURATION_RANGE,
   useSettings,
+  type DeckViewPreset,
   type Settings
 } from '../state/settings'
 import { DevicesPanel } from './DevicesPanel'
@@ -28,29 +31,41 @@ const SETTINGS_TABS = [
   'Remote view',
   'Devices'
 ] as const
-type SettingsTab = (typeof SETTINGS_TABS)[number]
+export type SettingsTab = (typeof SETTINGS_TABS)[number]
+
+/** Tabs whose content needs more room than a settings list — the rail chief among them. */
+const WIDE_TABS: readonly SettingsTab[] = ['Line up']
 
 /** Tabs desktop-only gear needs — a remote browser has nothing to send timecode to,
- *  and must not be able to control the very server that is showing it this screen. */
+ *  must not be able to control the very server that is showing it this screen, and
+ *  must not see raw network identifiers (IP/MAC) for gear on a venue LAN that the
+ *  remote link itself treats as untrusted. */
 const IS_TAURI = isTauri()
-const SHELL_ONLY_TABS: readonly SettingsTab[] = ['Timecode', 'Remote view']
+const SHELL_ONLY_TABS: readonly SettingsTab[] = ['Timecode', 'Remote view', 'Devices']
 const VISIBLE_SETTINGS_TABS = SETTINGS_TABS.filter(
   (tab) => IS_TAURI || !SHELL_ONLY_TABS.includes(tab)
 )
 
 interface SettingsDialogProps {
   onClose: () => void
+  /** Tab to open on, e.g. jumping straight to Devices from the header's
+   *  network-failed indicator. Defaults to the first tab. */
+  initialTab?: SettingsTab
 }
 
 /** App settings, as a modal over the deck grid. Closes on Escape or backdrop click. */
-export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Element {
+export function SettingsDialog({
+  onClose,
+  initialTab = 'Interface'
+}: SettingsDialogProps): React.JSX.Element {
   const panelRef = useRef<HTMLDivElement>(null)
   const settings = useSettings()
   const remoteStatus = useRemoteStore()
-  const [activeTab, setActiveTab] = useState<SettingsTab>('Interface')
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab)
   const update = <K extends keyof Settings>(key: K) => {
     return (value: Settings[K]): void => settings.update(key, value)
   }
+  const activePreset = matchingDeckViewPreset(settings)
 
   const [networkInterfaces, setNetworkInterfaces] = useState<NetworkInterfaceInfo[]>([])
   const [midiPorts, setMidiPorts] = useState<string[]>([])
@@ -114,7 +129,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Elem
     <div className="settings-backdrop" onClick={onClose}>
       <div
         ref={panelRef}
-        className="settings-panel"
+        className={`settings-panel${WIDE_TABS.includes(activeTab) ? ' settings-panel-wide' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-label="Settings"
@@ -248,57 +263,91 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Elem
 
           {activeTab === 'Deck view' && (
             <section className="settings-section">
-              <h3>Deck bar</h3>
-              <ToggleRow
-                label="Artwork"
-                hint="Album art thumbnail next to the deck number"
-                checked={settings.showDeckArtwork}
-                onChange={update('showDeckArtwork')}
-              />
-              <ToggleRow
-                label="Track tags"
-                hint="Key and genre badges next to the track title"
-                checked={settings.showDeckTrackTags}
-                onChange={update('showDeckTrackTags')}
-              />
-              <ToggleRow
-                label="Sync badges"
-                hint="ON AIR, MASTER and SYNC indicators"
-                checked={settings.showDeckSyncBadges}
-                onChange={update('showDeckSyncBadges')}
-              />
-              <ToggleRow
-                label="Pitch"
-                hint="Pitch percentage next to the BPM"
-                checked={settings.showDeckPitch}
-                onChange={update('showDeckPitch')}
-              />
-              <ToggleRow
-                label="Time remaining"
-                hint="Countdown next to the BPM and pitch"
-                checked={settings.showDeckTimeRemaining}
-                onChange={update('showDeckTimeRemaining')}
-              />
+              <h3>Preset</h3>
+              <div className="setting-row">
+                <span className="setting-text">
+                  <span className="setting-label">What this deck view is for</span>
+                  <span className="setting-hint">
+                    A starting point for the nine toggles below — pick one, then fine-tune.
+                  </span>
+                </span>
+                <div className="setting-choice" role="group" aria-label="Deck view preset">
+                  {(Object.keys(DECK_VIEW_PRESETS) as DeckViewPreset[]).map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      title={DECK_VIEW_PRESETS[preset].hint}
+                      className={activePreset === preset ? 'active' : ''}
+                      aria-pressed={activePreset === preset}
+                      onClick={() => settings.applyDeckViewPreset(preset)}
+                    >
+                      {DECK_VIEW_PRESETS[preset].label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-              <h3>Deck body</h3>
-              <ToggleRow
-                label="Cue list"
-                hint="Cue points below the track info"
-                checked={settings.showDeckCueList}
-                onChange={update('showDeckCueList')}
-              />
-              <ToggleRow
-                label="Waveform overview"
-                hint="Full-track waveform strip"
-                checked={settings.showDeckWaveformOverview}
-                onChange={update('showDeckWaveformOverview')}
-              />
-              <ToggleRow
-                label="Waveform detail"
-                hint="Zoomed-in waveform around the playhead"
-                checked={settings.showDeckWaveformDetail}
-                onChange={update('showDeckWaveformDetail')}
-              />
+              <details className="settings-advanced">
+                <summary>Individual toggles{activePreset === null ? ' (customized)' : ''}</summary>
+
+                <h3>Deck bar</h3>
+                <ToggleRow
+                  label="Artwork"
+                  hint="Album art thumbnail next to the deck number"
+                  checked={settings.showDeckArtwork}
+                  onChange={update('showDeckArtwork')}
+                />
+                <ToggleRow
+                  label="Track tags"
+                  hint="Key and genre badges next to the track title"
+                  checked={settings.showDeckTrackTags}
+                  onChange={update('showDeckTrackTags')}
+                />
+                <ToggleRow
+                  label="Sync badges"
+                  hint="ON AIR, MASTER and SYNC indicators"
+                  checked={settings.showDeckSyncBadges}
+                  onChange={update('showDeckSyncBadges')}
+                />
+                <ToggleRow
+                  label="Pitch"
+                  hint="Pitch percentage next to the BPM"
+                  checked={settings.showDeckPitch}
+                  onChange={update('showDeckPitch')}
+                />
+                <ToggleRow
+                  label="Time remaining"
+                  hint="Countdown next to the BPM and pitch"
+                  checked={settings.showDeckTimeRemaining}
+                  onChange={update('showDeckTimeRemaining')}
+                />
+
+                <h3>Deck body</h3>
+                <ToggleRow
+                  label="Cue list"
+                  hint="Cue points below the track info"
+                  checked={settings.showDeckCueList}
+                  onChange={update('showDeckCueList')}
+                />
+                <ToggleRow
+                  label="Track structure"
+                  hint="Intro, builds, drops and breaks as they come up"
+                  checked={settings.showDeckEventList}
+                  onChange={update('showDeckEventList')}
+                />
+                <ToggleRow
+                  label="Waveform overview"
+                  hint="Full-track waveform strip"
+                  checked={settings.showDeckWaveformOverview}
+                  onChange={update('showDeckWaveformOverview')}
+                />
+                <ToggleRow
+                  label="Waveform detail"
+                  hint="Zoomed-in waveform around the playhead"
+                  checked={settings.showDeckWaveformDetail}
+                  onChange={update('showDeckWaveformDetail')}
+                />
+              </details>
             </section>
           )}
 
@@ -394,7 +443,9 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Elem
                 hint="Change only if this port is already used by something else"
                 type="number"
                 value={String(settings.remotePort)}
-                onChange={(value) => settings.update('remotePort', Number(value) || settings.remotePort)}
+                onChange={(value) =>
+                  settings.update('remotePort', Number(value) || settings.remotePort)
+                }
               />
               <ChoiceRow
                 label="Network interface"
@@ -409,7 +460,9 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Elem
                 ]}
                 onChange={update('remoteInterface')}
               />
-              {remoteStatus.error && <p className="setting-hint">Could not start: {remoteStatus.error}</p>}
+              {remoteStatus.error && (
+                <p className="setting-hint">Could not start: {remoteStatus.error}</p>
+              )}
               {remoteUrl && (
                 <>
                   <p className="setting-hint">Open this on another device on the same network:</p>
@@ -429,7 +482,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps): React.JSX.Elem
             </section>
           )}
 
-          {activeTab === 'Devices' && <DevicesPanel />}
+          {IS_TAURI && activeTab === 'Devices' && <DevicesPanel />}
         </div>
       </div>
     </div>

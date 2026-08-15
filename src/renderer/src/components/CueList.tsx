@@ -26,18 +26,23 @@ function cueStatus(cue: TrackCue, index: number, cues: TrackCue[], playhead: num
 interface CueListProps {
   deckId: DeckId
   track: TrackInfo | null
+  width: number
 }
 
 /** Left-hand rail listing the track's cues with passed/current/upcoming states. */
-export function CueList({ deckId, track }: CueListProps): React.JSX.Element {
+export function CueList({ deckId, track, width }: CueListProps): React.JSX.Element {
   const playhead = useDecktectiveStore((s) => s.decks[deckId]?.playheadMs ?? null)
 
   if (!track || track.cues.length === 0) {
-    return <aside className="cue-list cue-list-empty">NO CUES</aside>
+    return (
+      <aside className="cue-list cue-list-empty" style={{ width }}>
+        NO CUES
+      </aside>
+    )
   }
 
   return (
-    <aside className="cue-list">
+    <aside className="cue-list" style={{ width }}>
       {track.cues.map((cue, index) => {
         const status = playhead !== null ? cueStatus(cue, index, track.cues, playhead) : 'upcoming'
         return (

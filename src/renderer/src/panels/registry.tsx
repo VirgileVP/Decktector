@@ -70,7 +70,7 @@ export const PANELS: Record<PanelId, PanelDefinition> = {
     hasVisibilityToggle: true,
     // PanelWindow overrides this with the visibility-controlled version —
     // this default (show everything) only runs if that ever changes.
-    render: () => <HeaderBlock />
+    render: () => <HeaderBlock fitToWindow />
   },
   deck: {
     title: (params) => `Deck ${params.deckId ?? '?'}`,

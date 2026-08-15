@@ -8,6 +8,9 @@ import type { FrameRate } from '../model'
 export const WAVEFORM_DESATURATION_RANGE = { min: 0, max: 1, step: 0.05 } as const
 export const UI_SCALE_RANGE = { min: 0.8, max: 1.6, step: 0.05 } as const
 
+/** Drag bounds for the cue list / track structure rails in the deck body. */
+export const DECK_RAIL_WIDTH_RANGE = { min: 96, max: 360 } as const
+
 /** How much of the running order the header shows. */
 export type LineupView = 'full' | 'around'
 
@@ -46,6 +49,85 @@ export const NO_MIDI_PORT = ''
 
 /** Placeholder LTC output device name meaning "nothing picked yet". */
 export const NO_LTC_DEVICE = ''
+
+/** The Deck view tab's nine visibility toggles, grouped as one preset-able unit. */
+export type DeckViewToggles = Pick<
+  Settings,
+  | 'showDeckArtwork'
+  | 'showDeckTrackTags'
+  | 'showDeckSyncBadges'
+  | 'showDeckPitch'
+  | 'showDeckTimeRemaining'
+  | 'showDeckCueList'
+  | 'showDeckEventList'
+  | 'showDeckWaveformOverview'
+  | 'showDeckWaveformDetail'
+>
+
+const DECK_VIEW_TOGGLE_KEYS = [
+  'showDeckArtwork',
+  'showDeckTrackTags',
+  'showDeckSyncBadges',
+  'showDeckPitch',
+  'showDeckTimeRemaining',
+  'showDeckCueList',
+  'showDeckEventList',
+  'showDeckWaveformOverview',
+  'showDeckWaveformDetail'
+] as const satisfies readonly (keyof DeckViewToggles)[]
+
+export type DeckViewPreset = 'keying' | 'full'
+
+/** Named starting points for the Deck view tab's nine independent toggles —
+ *  still fully overridable below, this is a fast path, not a new mode. */
+export const DECK_VIEW_PRESETS: Record<
+  DeckViewPreset,
+  { label: string; hint: string; values: DeckViewToggles }
+> = {
+  keying: {
+    label: 'Keying',
+    hint: 'Clean composite for a transparent panel window — art, on-air state, waveform shape',
+    values: {
+      showDeckArtwork: true,
+      showDeckTrackTags: false,
+      showDeckSyncBadges: true,
+      showDeckPitch: false,
+      showDeckTimeRemaining: true,
+      showDeckCueList: false,
+      showDeckEventList: false,
+      showDeckWaveformOverview: true,
+      showDeckWaveformDetail: false
+    }
+  },
+  full: {
+    label: 'Full',
+    hint: 'Everything a booth screen shows',
+    values: {
+      showDeckArtwork: true,
+      showDeckTrackTags: true,
+      showDeckSyncBadges: true,
+      showDeckPitch: true,
+      showDeckTimeRemaining: true,
+      showDeckCueList: true,
+      showDeckEventList: true,
+      showDeckWaveformOverview: true,
+      showDeckWaveformDetail: true
+    }
+  }
+}
+
+/** Which preset (if any) the current Deck view toggles exactly match — `null`
+ *  once the operator has hand-tweaked something, which is a valid state, not
+ *  an error. */
+export function matchingDeckViewPreset(settings: DeckViewToggles): DeckViewPreset | null {
+  for (const [preset, { values }] of Object.entries(DECK_VIEW_PRESETS) as [
+    DeckViewPreset,
+    (typeof DECK_VIEW_PRESETS)[DeckViewPreset]
+  ][]) {
+    if (DECK_VIEW_TOGGLE_KEYS.every((key) => settings[key] === values[key])) return preset
+  }
+  return null
+}
 
 export interface Settings {
   theme: ThemeId
@@ -94,12 +176,18 @@ export interface Settings {
   showDeckTimeRemaining: boolean
   /** Whether each deck shows its cue list. */
   showDeckCueList: boolean
+  /** Whether each deck shows the analysed structure of its track. */
+  showDeckEventList: boolean
   /** Whether the deck bar shows the track artwork. */
   showDeckArtwork: boolean
   /** Whether each deck shows the full-track waveform overview. */
   showDeckWaveformOverview: boolean
   /** Whether each deck shows the zoomed-in waveform detail. */
   showDeckWaveformDetail: boolean
+  /** Width in px of the cue list rail, user-dragged via its resize handle. */
+  deckCueListWidth: number
+  /** Width in px of the track structure rail, user-dragged via its resize handle. */
+  deckEventListWidth: number
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -125,9 +213,12 @@ export const DEFAULT_SETTINGS: Settings = {
   showDeckPitch: true,
   showDeckTimeRemaining: true,
   showDeckCueList: true,
+  showDeckEventList: true,
   showDeckArtwork: true,
   showDeckWaveformOverview: true,
-  showDeckWaveformDetail: true
+  showDeckWaveformDetail: true,
+  deckCueListWidth: 168,
+  deckEventListWidth: 152
 }
 
 interface SettingsActions {
@@ -135,6 +226,7 @@ interface SettingsActions {
   setDeckColor(deckId: number, color: string): void
   resetDeckColors(): void
   resetAll(): void
+  applyDeckViewPreset(preset: DeckViewPreset): void
 }
 
 const SETTINGS_STORAGE_KEY = 'decktective.settings'
@@ -151,7 +243,8 @@ export const useSettings = create<Settings & SettingsActions>()(
       setDeckColor: (deckId, color) =>
         set((state) => ({ deckColors: { ...state.deckColors, [deckId]: color } })),
       resetDeckColors: () => set({ deckColors: {} }),
-      resetAll: () => set({ ...DEFAULT_SETTINGS })
+      resetAll: () => set({ ...DEFAULT_SETTINGS }),
+      applyDeckViewPreset: (preset) => set({ ...DECK_VIEW_PRESETS[preset].values })
     }),
     {
       name: SETTINGS_STORAGE_KEY,
@@ -185,9 +278,12 @@ function pickSettings(state: Settings): Settings {
     showDeckPitch,
     showDeckTimeRemaining,
     showDeckCueList,
+    showDeckEventList,
     showDeckArtwork,
     showDeckWaveformOverview,
-    showDeckWaveformDetail
+    showDeckWaveformDetail,
+    deckCueListWidth,
+    deckEventListWidth
   } = state
   return {
     theme,
@@ -212,8 +308,11 @@ function pickSettings(state: Settings): Settings {
     showDeckPitch,
     showDeckTimeRemaining,
     showDeckCueList,
+    showDeckEventList,
     showDeckArtwork,
     showDeckWaveformOverview,
-    showDeckWaveformDetail
+    showDeckWaveformDetail,
+    deckCueListWidth,
+    deckEventListWidth
   }
 }

@@ -45,7 +45,7 @@ export function PanelWindow({ params }: PanelWindowProps): React.JSX.Element {
   // component — the common parent of `PanelChrome` and the content it
   // wraps — can hold.
   const content = definition.hasVisibilityToggle ? (
-    <HeaderBlock visibility={headerBlockVisibility} />
+    <HeaderBlock visibility={headerBlockVisibility} fitToWindow />
   ) : (
     definition.render(params, compact)
   )

@@ -33,14 +33,7 @@ const GEOMETRY_DEBOUNCE_MS = 300
 // Not exported by `@tauri-apps/api/window`; mirrors its internal union so the
 // literals below still type-check against `startResizeDragging`.
 type ResizeDirection =
-  | 'North'
-  | 'NorthEast'
-  | 'East'
-  | 'SouthEast'
-  | 'South'
-  | 'SouthWest'
-  | 'West'
-  | 'NorthWest'
+  'North' | 'NorthEast' | 'East' | 'SouthEast' | 'South' | 'SouthWest' | 'West' | 'NorthWest'
 
 interface ResizeZone {
   direction: ResizeDirection
@@ -91,6 +84,27 @@ export function PanelChrome({
     () => currentPanelWindowRecord()?.options ?? DEFAULT_PANEL_WINDOW_OPTIONS
   )
 
+  // The chrome bar only reveals on `:hover` (see `main.css`) so a transparent,
+  // keyed window stays visually clean while untouched — but hover alone
+  // leaves no way to find the controls without a mouse already on the 28px
+  // bar. Window focus covers touch (a tap focuses the window) and keyboard,
+  // and only fires on an actual interaction, so a keyed window sitting idle
+  // during a live set still composites with zero incidental chrome.
+  const [windowFocused, setWindowFocused] = useState(true)
+
+  useEffect(() => {
+    if (!isTauri()) return
+    const currentWindow = getCurrentWindow()
+    let unlistenFocus: (() => void) | null = null
+    void currentWindow.isFocused().then(setWindowFocused)
+    void currentWindow
+      .onFocusChanged(({ payload }) => setWindowFocused(payload))
+      .then((stop) => {
+        unlistenFocus = stop
+      })
+    return () => unlistenFocus?.()
+  }, [])
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
@@ -113,8 +127,11 @@ export function PanelChrome({
 
   const reportCurrentState = (): void => {
     void readWindowGeometry().then((geometry) => {
-      const { params: currentParams, options: currentOptions, compact: currentCompact } =
-        latestReportInputs.current
+      const {
+        params: currentParams,
+        options: currentOptions,
+        compact: currentCompact
+      } = latestReportInputs.current
       reportPanelWindow({
         type: 'update',
         label: getCurrentWindow().label,
@@ -188,6 +205,7 @@ export function PanelChrome({
   return (
     <div
       className="panel-chrome"
+      data-window-focused={windowFocused}
       style={{
         ['--panel-chrome-height' as string]: `${CHROME_HEIGHT_PX}px`,
         ['--panel-resize-edge' as string]: `${RESIZE_EDGE_PX}px`
