@@ -12,10 +12,17 @@ for every deck:
 Primary targets: **XDJ-XZ** and **XDJ-1000MK2** (works with 2 to 4 CDJ-2000-era players).
 
 > **Status — Rust rewrite in progress.** The app is being moved off Electron onto a
-> Rust backend with Tauri, keeping the same UI. The shell, the domain model and the
-> simulation engine are in place; **the Pro DJ Link backend is not ported yet**, so
-> only `npm run dev:sim` does anything useful right now. The Electron implementation
-> remains on the `master` branch. See [Architecture](#architecture) for the plan.
+> Rust backend with Tauri, keeping the same UI. The shell, domain model, simulation
+> engine, the Pro DJ Link UDP layer, and both metadata routes (NFS and dbserver —
+> title/artist/album/genre/key/label/bpm, beat grid, HD waveform, cues, artwork) are
+> in place — `npm run dev` connects to real players and fetches real track info with
+> no virtual-player-number workaround needed. **None of this has been run against
+> real hardware yet** (see [Porting status](#porting-status) for exactly which parts
+> carry how much confidence — the NFS transport and metadata query protocol are
+> cross-checked against hardware-validated reference implementations; the PDB
+> database parser is this codebase's own reconstruction and is the shakiest part).
+> The Electron implementation remains on the `master` branch. See
+> [Architecture](#architecture) for the plan.
 
 ## Requirements
 
@@ -32,13 +39,16 @@ Primary targets: **XDJ-XZ** and **XDJ-1000MK2** (works with 2 to 4 CDJ-2000-era 
 
 ## Metadata on a full four-player network
 
-Players only answer media-slot queries and metadata requests coming from a virtual
-CDJ numbered 1-4. With four players on the network all four numbers are taken, ours
-is 5, and both of those doors are closed — the track database is then read straight
-off the player over NFS instead, which needs no player number.
+Decktective tries NFS first, which needs no virtual player number at all — this
+should just work on any network size, including four CDJs with all of 1-4 taken.
+dbserver is the fallback if NFS doesn't answer (e.g. an unsupported media slot),
+and *that* route only answers a virtual CDJ numbered 1-4 — Decktective defaults to
+5 to stay clear of numbers real hardware self-assigns, so on a full four-player
+network the dbserver fallback alone wouldn't get metadata either.
 
-A CDJ-3000 can be renumbered to player 5 or 6, which frees a number in range. Set
-one player that way, then claim the freed number:
+A CDJ-3000 can be renumbered to player 5 or 6, which frees a number in range, for
+the dbserver fallback specifically. Set one player that way, then claim the freed
+number:
 
 ```sh
 DECKTECTIVE_VCDJ_ID=4 npm run dev
@@ -48,7 +58,7 @@ Never point it at a number a device already uses — two devices sharing one bre
 network.
 
 This behaviour is documented here because it is a hard-won constraint the port has
-to preserve; it lands with phase 3.
+to preserve.
 
 ## Getting started
 
@@ -146,12 +156,61 @@ build rather than surfacing mid-set. The same engine layer also feeds the
 
 ### Porting status
 
-| Phase | Scope                                                          | State |
-| ----- | -------------------------------------------------------------- | ----- |
-| 1     | App shell, domain model, simulation engine                     | done  |
-| 2     | UDP layer: announce, discovery, status, beat, precise position | to do |
-| 3     | Metadata over NFS, PDB/ANLZ parsing via `rekordcrate`          | to do |
-| 4     | Remote database (dbserver) fallback                            | to do |
+| Phase | Scope                                                                    | State |
+| ----- | ------------------------------------------------------------------------- | ----- |
+| 1     | App shell, domain model, simulation engine                                | done  |
+| 2     | UDP layer: announce, discovery, status, beat, precise position            | done  |
+| 3     | Metadata over dbserver: title/artist/album/genre/key/label/comment/bpm, beat grid, HD waveform | done (cues and artwork not implemented — see below) |
+| 4     | Metadata over NFS: `export.pdb` + `.EXT` analysis files, needs no virtual player number — the primary route, dbserver is the fallback | done — **untested against real hardware, see below** |
+
+Phase 2 listens for real player traffic passively rather than running the full
+virtual-CDJ channel-claim handshake Deep Symmetry documents: the handshake's exact
+byte layout isn't pinned down precisely enough to transmit safely onto a live
+network yet, and passive listening is enough for status/beat traffic (see
+`crates/prolink/src/presence.rs`'s module doc). Decktective still shows up as a
+peer on the network — it picks a free virtual player number and broadcasts the
+same settled-state keep-alive a real player does — it just never contests a number
+another device claims first.
+
+Phase 3's two gaps stay open — dbserver's cue-list wire format
+(`crates/prolink/src/dbserver/cues.rs`) is variable-length and still unconfirmed
+(a wrong offset would desync every cue after it, not just misread one field), and
+dbserver has no artwork route wired up. Both are moot for a deck reading real media
+now that phase 4 gets cues and artwork through NFS instead, which is why dbserver
+was demoted to the fallback route — see phase 4 below.
+
+**Phase 4 carries real, explicit confidence differences worth reading before
+trusting it at a gig.** Cross-checked against Deep Symmetry's `crate-digger` (the
+hardware-validated Java reference for exactly this NFS-based read):
+
+- **High confidence**: the transport itself. What was assumed to be a
+  "non-standard NFSv2" server turned out to be standard ONC-RPC/portmapper/NFSv2
+  (RFC 1057/1094) almost everywhere — only filenames/paths are encoded UTF-16LE
+  instead of ASCII, confirmed straight from `crate-digger`'s own hand-written
+  protocol spec. `crates/prolink/src/nfs/{xdr,rpc,portmap,mount,procedures,client}.rs`
+  implement this, tested against an in-process fake UDP server
+  (`crates/prolink/tests/nfs_fake_server.rs`, not `#[ignore]`-gated) covering the
+  full portmap → mount → lookup-chain → multi-chunk read flow and the
+  give-up-cleanly-on-no-response path.
+- **High confidence**: parsing the fetched `.EXT` analysis file (beat grid, HD
+  color waveform, cues) — done with the `rekordcrate` crate
+  (`crates/prolink-engine/src/metadata/nfs.rs`), whose `anlz` module has a clean,
+  documented public API and whose hot-cue color table
+  (`crates/prolink-engine/src/metadata/colors.rs`) is copied verbatim from its own
+  doc comments.
+- **Low confidence, flagged in code**: the hand-rolled `export.pdb` database
+  parser (`crates/prolink/src/nfs/pdb.rs`) — `rekordcrate`'s own `pdb` module
+  parses this exact format but its row fields (title, artist id, ...) are private
+  in the published crate version, so this codebase reconstructs a minimal parser
+  from `rekordcrate`'s source as a *layout reference* rather than depending on it.
+  That reference reading was itself only partially certain (page-type numeric
+  codes, `Track`'s exact field order) — this is genuinely the shakiest code in the
+  whole Rust port, more so than any UDP/TCP protocol work, and the one most likely
+  to need fixing once it meets a real `export.pdb`.
+- **Unconfirmed, needs a real network to check**: the MOUNT path per media slot
+  (`"/B/"`/`"/C/"` for SD/USB, `crates/prolink/src/nfs/client.rs`'s `slot_path`) —
+  a wrong mapping fails at the very first NFS call, which at least makes it an
+  obvious failure rather than a subtle one.
 
 ### Protocol notes
 
@@ -171,4 +230,13 @@ build rather than surfacing mid-set. The same engine layer also feeds the
   TypeScript implementation this project ran on until the Rust port, and the
   reference the port follows.
 - [rekordcrate](https://github.com/Holzhaus/rekordcrate) — Rust parser for
-  Rekordbox device exports (PDB and analysis files).
+  Rekordbox analysis files (`.DAT`/`.EXT`, beat grid/waveform/cues), used as-is.
+  Its own `export.pdb` parser's row fields are private in the published version,
+  so `crates/prolink/src/nfs/pdb.rs` is a from-scratch minimal parser instead,
+  using `rekordcrate`'s source as a layout reference — see
+  [Porting status](#porting-status) for the confidence caveat that comes with
+  that.
+- [crate-digger](https://github.com/Deep-Symmetry/crate-digger) — Deep
+  Symmetry's Java reference implementation for reading a player's database over
+  NFS, the source this port's `prolink::nfs` transport layer was cross-checked
+  against.
