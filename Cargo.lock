@@ -3492,6 +3492,7 @@ name = "prolink"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "if-addrs",
  "serde",
  "serde_json",
  "socket2 0.6.5",
@@ -4807,6 +4808,7 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2 0.6.5",
  "tokio-macros",
  "windows-sys 0.61.2",

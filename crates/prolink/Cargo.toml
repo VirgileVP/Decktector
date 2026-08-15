@@ -8,13 +8,18 @@ description = "Pro DJ Link protocol client: virtual CDJ, device discovery, playe
 
 [dependencies]
 anyhow = { workspace = true }
+# Only the `prolink-capture` binary resolves `--bind`'s default this way
+# (already a workspace dependency — see `HARDWARE-CAPTURE-PLAN.md`).
+if-addrs = { workspace = true }
 serde = { workspace = true }
 # Needed for the hardware capture tool's JSONL session logs
 # (`crates/prolink/src/capture.rs`) — see `HARDWARE-CAPTURE-PLAN.md`.
 serde_json = { workspace = true }
 socket2 = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+# `signal` on top of the workspace's tokio features is only needed by the
+# `prolink-capture` binary, to wait for Ctrl+C at the end of a session.
+tokio = { workspace = true, features = ["signal"] }
 tracing = { workspace = true }
 # Only the `prolink-capture` binary installs a subscriber (see its own doc
 # comment) — the library itself just emits `tracing` events as before.
