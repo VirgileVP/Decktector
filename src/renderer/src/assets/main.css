@@ -11,6 +11,24 @@
      centred on the window rather than between two unequal groups. */
   --header-gutter: 296px;
   --idle-bar-opacity: 0.6;
+  /* Interface scale, driven by the settings panel. */
+  --ui-scale: 1;
+  /* For the wall clock and TC readout only. `tabular-nums` on the body font
+     just equalises each digit's advance width — the glyphs themselves stay
+     proportionally drawn, so a slim `1` next to a wide `8` still visibly
+     changes the ink on screen every time the digit changes. A monospace face
+     draws every digit to fill the same cell, which is what actually stops
+     the readout wobbling, especially once the fit-to-window panel scales it
+     up several times over. */
+  --clock-font-family:
+    ui-monospace,
+    'Cascadia Mono',
+    'Segoe UI Mono',
+    Consolas,
+    Menlo,
+    'SFMono-Regular',
+    'DejaVu Sans Mono',
+    monospace;
   font-family:
     Inter,
     'Segoe UI',
@@ -46,7 +64,27 @@ body {
 .app {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  /* `zoom` rather than a transform: it reflows the layout instead of scaling a
+     fixed-size picture. Viewport units are not divided by the zoom, so the
+     height has to be pre-divided or the app would overflow the window by
+     exactly the scale factor. */
+  zoom: var(--ui-scale);
+  height: calc(100vh / var(--ui-scale));
+}
+
+/* ---------- Focus ---------- */
+
+/* One focus-visible treatment for every button in the app — `sync` is the
+   system's one focus/selection color (see DESIGN.md), and `inset` keeps the
+   ring inside the element's own box so it is never clipped by an ancestor's
+   `overflow: hidden` (e.g. `.view-toggle`), unlike an `outline` with offset
+   would be. Declared once here instead of per-component, so a new button
+   gets a correct focus ring by construction instead of the browser default,
+   which reads poorly against several of this app's dark themes. */
+button:focus-visible,
+input[type='checkbox']:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--sync);
 }
 
 /* ---------- Header ---------- */
@@ -75,15 +113,24 @@ body {
   /* A percentage cannot work here: the right-hand group is content-sized, so it
      would be overlapped on a narrow window and under-used on a wide one. */
   max-width: calc(100% - 2 * var(--header-gutter));
+  /* Without this, the flex item's automatic min-width falls back to its
+     content's un-truncated size, which can exceed `max-width` and spill the
+     block past its container instead of letting `.lineup-now` ellipsize. */
+  min-width: 0;
 }
 
 .header-clocks {
   display: flex;
-  align-items: baseline;
+  /* Not `baseline`: the source buttons are fixed-size boxes with no text
+     baseline of their own, so they'd hang off the clock's baseline by their
+     bottom edge and read as floating above center — worse the larger the
+     clock face gets relative to them. */
+  align-items: center;
   gap: 10px;
 }
 
 .header-clock {
+  font-family: var(--clock-font-family);
   font-size: 15px;
   /* Pinned rather than `normal`: the two lines have to fit the header's content
      box whatever font the machine actually resolves. */
@@ -91,17 +138,23 @@ body {
   font-weight: 500;
   letter-spacing: 0.08em;
   font-variant-numeric: tabular-nums;
+  /* Belt and suspenders on top of the monospace face: kerning is off by
+     default in most monospace fonts, but not guaranteed in every fallback. */
+  font-kerning: none;
   color: var(--text-muted);
 }
 
 /* Fixed, theme-independent: the standard fluorescent green of a hardware TC
    readout, not a color the app's palette gets to touch. */
 .timecode-clock {
+  font-family: var(--clock-font-family);
   font-size: 15px;
   line-height: 18px;
   font-weight: 600;
   letter-spacing: 0.08em;
   font-variant-numeric: tabular-nums;
+  /* See `.header-clock` — same monospace face, same kerning belt-and-suspenders. */
+  font-kerning: none;
   color: #39ff14;
   text-shadow: 0 0 6px rgba(57, 255, 20, 0.55);
 }
@@ -255,6 +308,22 @@ body {
   background: var(--onair);
 }
 
+/* Only the `failed` state is ever interactive (a shortcut into Devices) —
+   reset the button chrome back to the plain `.network-status` look, then add
+   back just enough affordance to read as clickable. */
+.network-status-action {
+  background: none;
+  border: none;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.network-status-action:hover {
+  color: var(--text);
+}
+
 @keyframes pulse {
   50% {
     opacity: 0.25;
@@ -302,6 +371,10 @@ body {
   text-overflow: ellipsis;
   font-size: 10px;
   color: var(--text-muted);
+  /* The flex item's own text would otherwise floor its shrink at full
+     content width, defeating the ellipsis and pushing the row wider than
+     `.lineup-now`'s max-width. */
+  min-width: 0;
 }
 
 .lineup-passed {
@@ -349,7 +422,22 @@ body {
   border: 1px solid var(--border-strong);
   border-radius: 8px;
   padding: 16px 18px 18px;
-  outline: none;
+  /* No width transition: an animated resize would carry the rail through the
+     wrong width mid-flight instead of just snapping to it. */
+}
+
+/* The panel takes programmatic focus on open (see `SettingsDialog.tsx`) so
+   Escape works without clicking inside first — this keeps that focus move
+   visible on the rare heuristic/browser that would otherwise show it,
+   instead of unconditionally suppressing the one cue that it happened. */
+.settings-panel:focus-visible {
+  outline: 2px solid var(--sync);
+  outline-offset: -2px;
+}
+
+/* The rail needs room the settings lists never asked for. */
+.settings-panel-wide {
+  width: min(880px, 100%);
 }
 
 .settings-head {
@@ -395,6 +483,9 @@ body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* Paired with .rail-viewport's own overflow: hidden — otherwise a rail wider
+     than the panel would silently open a horizontal scrollbar here instead. */
+  overflow-x: hidden;
 }
 
 .settings-tab {
@@ -423,6 +514,46 @@ body {
 
 .settings-section + .settings-section {
   margin-top: 18px;
+}
+
+/* Collapsed by default so a first-time VJ sees "pick a preset," not nine
+   independent decisions — Alex the power user still reaches every toggle,
+   one click away. */
+.settings-advanced {
+  margin-top: 14px;
+}
+
+.settings-advanced summary {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  cursor: pointer;
+  list-style: none;
+  transition: color 0.15s ease;
+}
+
+.settings-advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-advanced summary::before {
+  content: '▸';
+  display: inline-block;
+  width: 1em;
+  transition: transform 0.15s ease;
+}
+
+.settings-advanced[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.settings-advanced summary:hover {
+  color: var(--text);
+}
+
+.settings-advanced h3 {
+  margin-top: 14px;
 }
 
 .settings-section h3 {
@@ -642,8 +773,197 @@ body {
   color: var(--text-muted);
 }
 
+/* Only ever shown on a row that landed on the show's second day. */
+.lineup-day-badge {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  font-size: 9px;
+  font-weight: 700;
+  background: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.lineup-day-badge:hover {
+  color: var(--text);
+  border-color: var(--sync);
+}
+
 .lineup-warning {
   color: var(--warn);
+}
+
+/* ---------- Lineup rail ---------- */
+
+.rail {
+  margin-bottom: 10px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-panel);
+  padding-bottom: 6px;
+}
+
+.rail-empty {
+  padding: 10px 0;
+}
+
+.rail-hint {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.rail-ruler {
+  position: relative;
+  height: 16px;
+  cursor: default;
+}
+
+.rail-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--border);
+}
+
+.rail-tick-day {
+  border-left-color: var(--border-strong);
+}
+
+.rail-tick-label {
+  position: absolute;
+  top: 0;
+  left: 3px;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.rail-viewport {
+  position: relative;
+  width: 100%;
+  height: 44px;
+  overflow: hidden;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  touch-action: none;
+  cursor: grab;
+}
+
+.rail-block {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  min-width: 2px;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  background: var(--row-highlight);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  /* The body moves the block; only the 6px edges (below) resize it. */
+  cursor: grab;
+  transition: border-color 0.15s ease;
+}
+
+.rail-block:hover {
+  border-color: var(--sync);
+}
+
+.rail-block-dragging {
+  cursor: grabbing;
+  border-color: var(--sync);
+}
+
+/* Thin hit zones at each edge switch the cursor to resize, without adding
+   separate elements — hit-testing still resolves to the block itself. */
+.rail-block::before,
+.rail-block::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: ew-resize;
+}
+
+.rail-block::before {
+  left: 0;
+}
+
+.rail-block::after {
+  right: 0;
+}
+
+.rail-block-doors {
+  background: none;
+  border-style: dashed;
+}
+
+.rail-block-unnamed {
+  opacity: 0.5;
+}
+
+.rail-block-open {
+  border-right-style: dashed;
+}
+
+.rail-block-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.rail-marker-end {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  background: var(--border-strong);
+  cursor: default;
+}
+
+.rail-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  margin-left: -3px;
+  padding: 0 3px;
+  background: transparent;
+  background-clip: content-box;
+  border: none;
+  outline: none;
+  pointer-events: none;
+  cursor: ew-resize;
+}
+
+.rail-handle:focus-visible {
+  background-color: var(--sync);
+  pointer-events: auto;
+}
+
+.rail-handle-dragging {
+  background-color: var(--sync);
+}
+
+.rail-now {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgb(var(--onair-rgb) / 0.9);
+  pointer-events: none;
 }
 
 .setting-toggle {
@@ -861,11 +1181,8 @@ body {
   grid-auto-rows: 1fr;
 }
 
-/* Quad cells are narrower: tighten the cue rail and hide secondary info */
-.view-quad .cue-list {
-  width: 128px;
-}
-
+/* Quad cells hide secondary info; the side rails keep whatever width the
+   user dragged them to (see .panel-resize-handle) rather than a fixed one. */
 .view-quad .deck-props {
   display: none;
 }
@@ -1179,8 +1496,33 @@ body {
   container-name: waves;
 }
 
+/* Drag handle between cue list / track structure / timeline. Sits in the
+   deck-body gap and grabs a few extra px either side for an easier hit. */
+.panel-resize-handle {
+  flex-shrink: 0;
+  width: 1px;
+  margin: 0 3px;
+  position: relative;
+  background: var(--border);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.panel-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  right: -4px;
+}
+
+.panel-resize-handle:hover,
+.panel-resize-handle:active {
+  background: var(--border-strong);
+}
+
 .cue-list {
-  width: 168px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -1261,6 +1603,146 @@ body {
   color: var(--text-muted);
 }
 
+/* ---------- Track structure ---------- */
+
+/* Fixed hues rather than theme variables: like the cue colors, a drop has to
+   read as the same thing on every theme and next to any deck accent. */
+.event-list {
+  --event-intro: #6c7a92;
+  --event-build: #12d17e;
+  --event-drop: #ff9f2e;
+  --event-break: #0a84ff;
+  --event-groove: #7d8596;
+  --event-outro: #b0b7c5;
+
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow-y: auto;
+}
+
+.event-list-empty {
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--text-faint);
+}
+
+.event-kind-intro {
+  --event-color: var(--event-intro);
+}
+.event-kind-build {
+  --event-color: var(--event-build);
+}
+.event-kind-drop {
+  --event-color: var(--event-drop);
+}
+.event-kind-break {
+  --event-color: var(--event-break);
+}
+.event-kind-groove {
+  --event-color: var(--event-groove);
+}
+.event-kind-outro {
+  --event-color: var(--event-outro);
+}
+
+/* The section playing now: name, seconds left, and a gauge behind both. */
+.event-active {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  /* A short deck panel would otherwise squash every row to a few pixels: the
+     rail scrolls instead, so a row stays readable at any panel height. */
+  flex-shrink: 0;
+  padding: 8px;
+  border-radius: 3px;
+  border: 1px solid var(--event-color);
+  background: color-mix(in srgb, var(--event-color) 12%, transparent);
+  overflow: hidden;
+}
+
+.event-gauge {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--event-color) 30%, transparent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  /* Driven per frame from the animation loop: any transition here would fight
+     the loop and lag the playhead. */
+  will-change: transform;
+}
+
+/* Above the gauge, which is absolutely positioned behind them. */
+.event-active .event-name,
+.event-countdown {
+  position: relative;
+}
+
+.event-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  flex-shrink: 0;
+  padding: 5px 6px;
+  border-radius: 3px;
+}
+
+.event-chip {
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--event-color);
+  flex-shrink: 0;
+}
+
+.event-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+}
+
+.event-active .event-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* An inferred label the DJ's cues do not vouch for. */
+.event-guess {
+  margin-left: 3px;
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+.event-countdown {
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.event-length {
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
 /* ---------- Waveforms ---------- */
 
 .waveform-overview {
@@ -1326,6 +1808,49 @@ body {
   .event-list,
   .panel-resize-handle {
     display: none;
+  }
+
+  /* Wall clock over the timecode readout instead of side by side — on a
+     narrow screen the pair was squeezed down to nothing next to each other. */
+  .header-clocks {
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  /* One set per line instead of a single nowrap row — the row's artist
+     names were being pushed clean off the window on a phone-width screen. */
+  .lineup-now {
+    flex-direction: column;
+    align-items: stretch;
+    white-space: normal;
+    gap: 2px;
+  }
+
+  .lineup-set {
+    width: 100%;
+  }
+
+  /* Same fixed-width time column as the panel window's stacked header block
+     (see `.header-block-fit[data-layout='stacked'] .lineup-set-time`) and
+     for the same reason: one set per line means a bare "18:05" and the
+     current set's "11:55–18:05" range would otherwise claim different
+     widths, and every artist name would start at a different x. */
+  .lineup-set-time {
+    min-width: 11ch;
+    text-align: right;
+  }
+
+  /* Lets the artist name grow to fill the row now that time and artist are
+     stacked one set per line instead of sharing a nowrap row (min-width: 0
+     for its ellipsis is set globally on `.lineup-set-artist`). */
+  .lineup-set-artist {
+    flex: 1 1 auto;
+  }
+
+  /* The "·" separator only made sense inline; stacked, each row is its own line. */
+  .lineup-set + .lineup-set::before {
+    content: none;
   }
 }
 
@@ -1413,7 +1938,10 @@ html[data-transparent='on'] .panel-chrome-bar {
 }
 
 .panel-window:hover .panel-chrome-bar,
-.panel-chrome-bar:focus-within {
+.panel-chrome-bar:focus-within,
+/* Covers touch (a tap focuses the window) and keyboard, without keeping the
+   bar visible on an idle, untouched keyed window — see `PanelChrome.tsx`. */
+.panel-chrome[data-window-focused='true'] .panel-chrome-bar {
   opacity: 1;
 }
 
@@ -1494,6 +2022,18 @@ html[data-transparent='on'] .panel-chrome-bar {
   padding: 10px;
 }
 
+/* The chrome's zoom buttons scale the panel's content and only its content —
+   applying this to `.panel-window` would drag the chrome bar along with it.
+   `zoom` rather than a transform, for the same reason as `.app`: it reflows
+   the layout instead of scaling a fixed-size picture.
+
+   `.header-center` is the one exception. The header block already folds
+   `--ui-scale` into `.header-block-fit`'s transform, on top of the automatic
+   fit it multiplies, so zooming it here as well would square the factor. */
+.panel-chrome-content > *:not(.header-center) {
+  zoom: var(--ui-scale);
+}
+
 /* A deck or the lineup header is meant to fill the window it was popped
    into, not float centered in the middle of it like the clock's small
    readout does by default. */
@@ -1506,46 +2046,113 @@ html[data-transparent='on'] .panel-chrome-bar {
 /* `.header-center`'s own centering rule above only makes sense between the
    app header's left/right groups — inside a panel window there are no such
    groups, and `--header-gutter` (296px on each side) would otherwise
-   collapse this to a sliver in anything narrower than ~600px. */
+   collapse this to a sliver in anything narrower than ~600px. This is the box
+   `useFitToBox` measures; the content inside it is scaled to fill it, and
+   clipped only if the chrome's manual zoom is pushed past a natural fit. */
 .panel-chrome-content > .header-center {
   position: static;
   transform: none;
   max-width: none;
   justify-content: center;
+  overflow: hidden;
 }
 
-/* A panel window is its own top-level document, so `vw`/`vh` already track
-   its actual size — no container query needed. `min()` of the two keeps a
-   window that is short-but-wide or narrow-but-tall from scaling past what
-   actually fits, the way a plain `vw` value alone would. */
-.panel-chrome-content .header-clock,
-.panel-chrome-content .timecode-clock {
-  font-size: clamp(14px, min(5vw, 12vh), 40px);
+/* In the app header this wrapper is not a box at all, so the header's layout
+   is exactly what it was before the element existed. */
+.header-block-content {
+  display: contents;
+}
+
+/* Sizes here are proportions, not final sizes: `--fit-scale` (from
+   `useFitToBox`) turns them into whatever fills the window, so this base is
+   the one place the block's internal balance is set. */
+.header-block-fit {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35em;
+  font-size: 16px;
+  /* Natural size — nothing inside may shrink to the box, or the scale would be
+     computed from an already-squeezed layout. */
+  width: max-content;
+  max-width: none;
+  /* The panel chrome's zoom buttons multiply the automatic fit rather than
+     replacing it, so they stay a manual override on top of it. */
+  transform: scale(calc(var(--fit-scale, 1) * var(--ui-scale, 1)));
+}
+
+.header-block-fit .header-clock,
+.header-block-fit .timecode-clock {
+  font-size: 2em;
   line-height: 1.2;
 }
 
-.panel-chrome-content .lineup-now {
-  gap: clamp(4px, 1vw, 12px);
+.header-block-fit .lineup-now {
   /* The base rule's `line-height: 14px` is a fixed pixel value tuned for the
-     main header's small, fixed 10-11px lineup text. It inherits into
-     .lineup-set-time / .lineup-set-artist below, which does not itself set
-     a line-height — so at their scaled-up size here it clipped them at a
-     14px-tall box. A unitless value is recomputed per element from its own
-     font-size instead of inheriting one fixed pixel number. */
+     app header's small 10-11px lineup text, and would clip these larger sizes. */
   line-height: 1.3;
+  max-width: none;
 }
 
-.panel-chrome-content .lineup-set {
-  gap: clamp(3px, 0.6vw, 8px);
+.header-block-fit .lineup-set-time,
+.header-block-fit .lineup-set-artist {
+  font-size: 0.8em;
 }
 
-.panel-chrome-content .lineup-set-time,
-.panel-chrome-content .lineup-set-artist {
-  font-size: clamp(10px, min(2.2vw, 5vh), 22px);
+.header-block-fit .lineup-current .lineup-set-artist {
+  font-size: 0.88em;
 }
 
-.panel-chrome-content .lineup-current .lineup-set-artist {
-  font-size: clamp(11px, min(2.4vw, 5.5vh), 24px);
+/* One very long name would otherwise widen the content enough to shrink the
+   whole block; past this it elides instead. */
+.header-block-fit .lineup-set-artist {
+  max-width: 20ch;
+}
+
+/* Both layouts are stated in full, so a panel window narrower than 640px still
+   takes its arrangement from the box's shape rather than from the viewport
+   media query further up. */
+.header-block-fit[data-layout='row'] .header-clocks {
+  flex-direction: row;
+  /* See the base `.header-clocks` rule — same reason, more visible here since
+     the clock face is scaled up several times over the buttons. */
+  align-items: center;
+  gap: 0.4em;
+}
+
+.header-block-fit[data-layout='row'] .lineup-now {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 0.45em;
+}
+
+.header-block-fit[data-layout='stacked'] .header-clocks {
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15em;
+}
+
+.header-block-fit[data-layout='stacked'] .lineup-now {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.2em;
+}
+
+/* Stacked, each set is its own line, so the time column needs a fixed slot —
+   otherwise a bare "18:05" and the current set's "11:55–18:05" range claim
+   different widths and every artist name starts at a different x. Sized to
+   the range (the widest case, "HH:MM–HH:MM" = 11 characters) and
+   right-aligned within it; tabular-nums keeps the digits themselves uniform. */
+.header-block-fit[data-layout='stacked'] .lineup-set-time {
+  min-width: 11ch;
+  text-align: right;
+}
+
+/* The "·" separator only reads as a separator inline; stacked, each set is
+   already its own line. */
+.header-block-fit[data-layout='stacked'] .lineup-set + .lineup-set::before {
+  content: none;
 }
 
 /* Eight invisible strips overlaid on `.panel-chrome`'s own edges, each
@@ -1697,9 +2304,13 @@ html[data-transparent='on'] .panel-chrome-bar {
   border: none;
   color: var(--text-faint);
   cursor: pointer;
-  /* Space is always reserved (never `display: none`) so the button stays
-     reachable by keyboard even while invisible. */
-  opacity: 0;
+  /* Faint rather than `opacity: 0`: this sits on the main window, never on a
+     keyed transparent output, so there is no compositing reason to hide it
+     completely — and a fully invisible affordance is undiscoverable to
+     anyone not currently moving a mouse over it (touch, or a VJ who has not
+     yet learned it is there). Space is always reserved (never `display:
+     none`) so the button also stays reachable by keyboard. */
+  opacity: 0.32;
   transition: opacity 120ms ease;
 }
 
