@@ -1,0 +1,21 @@
+[package]
+name = "prolink-engine"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Real Pro DJ Link engine: maps live network state onto decktective's domain model"
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+base64 = "0.22"
+# Only needed for the `BinRead` trait itself (`ANLZ::read(...)` is a trait
+# method) — pinned to match whatever rekordcrate currently builds against.
+binrw = "0.14"
+decktective-core = { workspace = true }
+decktective-net = { workspace = true }
+prolink = { workspace = true }
+rekordcrate = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }

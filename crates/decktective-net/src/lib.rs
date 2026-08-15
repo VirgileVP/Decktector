@@ -12,12 +12,20 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 /// One IPv4-capable network adapter, as offered to the settings panel.
+///
+/// `netmask` is carried alongside `ip` (rather than the two being combined
+/// into a single CIDR string) so a consumer that only cares about the
+/// address, like the settings panel, doesn't have to parse one back out —
+/// [`prolink_engine`](../prolink_engine/index.html)'s interface auto-pick is
+/// the one consumer that needs it, to match a discovered peer's subnet
+/// exactly rather than guess at it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "NetworkInterfaceInfo.ts")]
 pub struct NetworkInterfaceInfo {
     pub name: String,
     pub ip: String,
+    pub netmask: String,
 }
 
 /// Every non-loopback interface this machine could broadcast or bind from.
@@ -30,6 +38,7 @@ pub fn list_broadcastable_interfaces() -> anyhow::Result<Vec<NetworkInterfaceInf
             if_addrs::IfAddr::V4(v4) => Some(NetworkInterfaceInfo {
                 name: interface.name,
                 ip: v4.ip.to_string(),
+                netmask: v4.netmask.to_string(),
             }),
             if_addrs::IfAddr::V6(_) => None,
         })

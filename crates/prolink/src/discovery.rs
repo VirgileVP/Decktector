@@ -13,17 +13,15 @@
 //! `DeviceAnnouncement` class, which parses the same packet in production.
 
 use std::collections::HashMap;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
-use socket2::{Domain, Socket, Type};
-use tokio::net::UdpSocket;
 use tokio::sync::watch;
 use ts_rs::TS;
 
-use crate::{ANNOUNCE_PORT, PROLINK_HEADER};
+use crate::{bind_udp_socket, ANNOUNCE_PORT, PROLINK_HEADER};
 
 /// Keep-alives arrive roughly every 1.5s; three missed beats is a safe
 /// margin before a device is considered gone, matching the ~10s a real
@@ -54,7 +52,11 @@ pub enum DeviceKind {
 }
 
 impl DeviceKind {
-    fn from_device_number(device_number: u8) -> Self {
+    /// Public so other packet types on the same network (status, beat —
+    /// which share the same device-number convention but aren't
+    /// keep-alives) can classify a device number without duplicating this
+    /// match.
+    pub fn from_device_number(device_number: u8) -> Self {
         match device_number {
             1..=6 => Self::Player,
             33 => Self::Mixer,
@@ -144,7 +146,7 @@ impl DeviceWatcher {
     /// leaves the device list permanently empty rather than crashing the
     /// app shell over a diagnostics panel.
     pub async fn run(self: Arc<Self>) {
-        let socket = match bind_announce_socket() {
+        let socket = match bind_udp_socket(ANNOUNCE_PORT) {
             Ok(socket) => socket,
             Err(error) => {
                 tracing::error!(%error, "failed to bind the Pro DJ Link discovery socket");
@@ -192,37 +194,31 @@ impl DeviceWatcher {
     }
 }
 
-/// Binds with `SO_REUSEADDR` (and, on Unix, `SO_REUSEPORT`) so this
-/// diagnostics listener can coexist with rekordbox or another Pro DJ Link
-/// tool already bound to the same announce port on this machine.
-fn bind_announce_socket() -> anyhow::Result<UdpSocket> {
-    let socket = Socket::new(Domain::IPV4, Type::DGRAM, None)?;
-    socket.set_reuse_address(true)?;
-    #[cfg(unix)]
-    socket.set_reuse_port(true)?;
-    socket.set_broadcast(true)?;
-    socket.set_nonblocking(true)?;
-    socket.bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, ANNOUNCE_PORT)).into())?;
-    Ok(UdpSocket::from_std(socket.into())?)
+/// Builds a well-formed 54-byte keep-alive payload for a player or mixer
+/// with the given number, name, MAC and peer count — the IP travels
+/// separately, as it does over the wire (the sender's socket address, not a
+/// payload field). Encoding lives next to [`parse_keepalive`] so the wire
+/// format is defined once; used by the crate's tests and by the `cdj-sim`
+/// dev tool that simulates fake devices on the network.
+pub fn build_keepalive(device_number: u8, name: &str, mac: [u8; 6], peer_count: u8) -> Vec<u8> {
+    let mut packet = vec![0u8; KEEPALIVE_PACKET_LEN];
+    packet[..PROLINK_HEADER.len()].copy_from_slice(&PROLINK_HEADER);
+    packet[PROLINK_HEADER.len()] = KEEPALIVE_PACKET_TYPE;
+    let name_bytes = name.as_bytes();
+    let name_len = name_bytes.len().min(NAME_LEN);
+    packet[NAME_OFFSET..NAME_OFFSET + name_len].copy_from_slice(&name_bytes[..name_len]);
+    packet[DEVICE_NUMBER_OFFSET] = device_number;
+    packet[MAC_OFFSET..MAC_OFFSET + MAC_LEN].copy_from_slice(&mac);
+    packet[PEER_COUNT_OFFSET] = peer_count;
+    packet
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// Builds a well-formed 54-byte keep-alive payload for a player with the
-    /// given number, name and MAC — the IP travels separately, as it does
-    /// over the wire (the sender's socket address, not a payload field).
     fn keepalive_bytes(device_number: u8, name: &str, mac: [u8; 6]) -> Vec<u8> {
-        let mut packet = vec![0u8; KEEPALIVE_PACKET_LEN];
-        packet[..PROLINK_HEADER.len()].copy_from_slice(&PROLINK_HEADER);
-        packet[PROLINK_HEADER.len()] = KEEPALIVE_PACKET_TYPE;
-        let name_bytes = name.as_bytes();
-        packet[NAME_OFFSET..NAME_OFFSET + name_bytes.len()].copy_from_slice(name_bytes);
-        packet[DEVICE_NUMBER_OFFSET] = device_number;
-        packet[MAC_OFFSET..MAC_OFFSET + MAC_LEN].copy_from_slice(&mac);
-        packet[PEER_COUNT_OFFSET] = 1;
-        packet
+        build_keepalive(device_number, name, mac, 1)
     }
 
     #[test]

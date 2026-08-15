@@ -19,6 +19,7 @@ use decktective_core::Engine;
 use decktective_remote::RemoteService;
 use decktective_timecode::TimecodeService;
 use prolink::discovery::DeviceWatcher;
+use prolink_engine::ProlinkEngine;
 use tauri::{Manager, State, Window};
 
 use window_prefs::{SleepBlocker, WindowPrefs};
@@ -47,23 +48,21 @@ fn set_window_prefs(
         .map_err(|error| error.to_string())
 }
 
-/// Picks the engine backing this run.
-///
-/// Only the simulation is available so far — the Pro DJ Link backend lands
-/// with the `prolink` crate in a later phase. Saying so out loud beats
-/// letting someone plug into a booth and wonder why every deck is fictional.
-fn create_engine() -> Arc<dyn Engine> {
-    let deck_count = std::env::var("DECKTECTIVE_SIM_DECKS")
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(DEFAULT_SIM_DECKS);
-
-    if std::env::var("DECKTECTIVE_SIM").as_deref() != Ok("1") {
-        tracing::warn!(
-            "the Pro DJ Link backend is not implemented yet; running the simulation instead"
-        );
+/// Picks the engine backing this run: the real Pro DJ Link backend by
+/// default, or the scripted simulation when `DECKTECTIVE_SIM=1` — set by
+/// `npm run dev:sim`/`dev:sim4`, or by hand when developing the UI without
+/// hardware nearby. `device_watcher` is shared with the real engine rather
+/// than each owning its own — both just want the same "who's on the
+/// network" read (see `prolink_engine::ProlinkEngine`'s doc comment).
+fn create_engine(device_watcher: Arc<DeviceWatcher>) -> Arc<dyn Engine> {
+    if std::env::var("DECKTECTIVE_SIM").as_deref() == Ok("1") {
+        let deck_count = std::env::var("DECKTECTIVE_SIM_DECKS")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(DEFAULT_SIM_DECKS);
+        return Arc::new(SimEngine::new(deck_count));
     }
-    Arc::new(SimEngine::new(deck_count))
+    Arc::new(ProlinkEngine::new(device_watcher))
 }
 
 pub fn run() {
@@ -74,9 +73,9 @@ pub fn run() {
         )
         .init();
 
-    let engine = create_engine();
-    let timecode = TimecodeService::new(Arc::clone(&engine));
     let device_watcher = DeviceWatcher::new();
+    let engine = create_engine(Arc::clone(&device_watcher));
+    let timecode = TimecodeService::new(Arc::clone(&engine));
 
     tauri::Builder::default()
         .manage(Arc::clone(&engine))

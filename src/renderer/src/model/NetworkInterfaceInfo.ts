@@ -2,5 +2,12 @@
 
 /**
  * One IPv4-capable network adapter, as offered to the settings panel.
+ *
+ * `netmask` is carried alongside `ip` (rather than the two being combined
+ * into a single CIDR string) so a consumer that only cares about the
+ * address, like the settings panel, doesn't have to parse one back out —
+ * [`prolink_engine`](../prolink_engine/index.html)'s interface auto-pick is
+ * the one consumer that needs it, to match a discovered peer's subnet
+ * exactly rather than guess at it.
  */
-export type NetworkInterfaceInfo = { name: string, ip: string, };
+export type NetworkInterfaceInfo = { name: string, ip: string, netmask: string, };
