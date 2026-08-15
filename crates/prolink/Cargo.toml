@@ -19,7 +19,9 @@ socket2 = { workspace = true }
 thiserror = { workspace = true }
 # `signal` on top of the workspace's tokio features is only needed by the
 # `prolink-capture` binary, to wait for Ctrl+C at the end of a session.
-tokio = { workspace = true, features = ["signal"] }
+# `process` is only needed by `tests/capture_tool_e2e.rs`, to drive
+# `prolink-capture`/`cdj-sim` as real child processes.
+tokio = { workspace = true, features = ["signal", "process"] }
 tracing = { workspace = true }
 # Only the `prolink-capture` binary installs a subscriber (see its own doc
 # comment) — the library itself just emits `tracing` events as before.
