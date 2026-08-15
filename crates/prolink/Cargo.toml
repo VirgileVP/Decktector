@@ -27,4 +27,12 @@ tracing-subscriber = "0.3"
 ts-rs = { workspace = true }
 
 [dev-dependencies]
+# Only `tests/hardware_capture_replay.rs`'s `.EXT` replay needs these — same
+# versions `prolink-engine` already builds against, reused here rather than
+# re-pinned (see that crate's `Cargo.toml` for why `binrw` is needed
+# alongside `rekordcrate`). `prolink-engine` itself can't be a dev
+# -dependency here: it already depends on `prolink`, and Cargo rejects that
+# cycle even for dev-only edges.
+binrw = "0.14"
+rekordcrate = { workspace = true }
 tempfile = "3"

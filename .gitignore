@@ -14,3 +14,8 @@ agent
 .claude/settings.local.json
 skills-lock.json
 *.tsbuildinfo
+
+# Real Pro DJ Link hardware captures may hold a DJ's library metadata —
+# never committed. See HARDWARE-CAPTURE-PLAN.md and
+# crates/prolink/tests/hardware_capture_replay.rs.
+fixtures/hardware-capture/
