@@ -11,7 +11,12 @@ target
 src-tauri/gen/schemas
 .agents
 agent
-.claude/settings.local.json
+.claude/
+.codex/
+.github/agents/
+.github/hooks/
+.github/skills/
+.impeccable/
 skills-lock.json
 *.tsbuildinfo
 
