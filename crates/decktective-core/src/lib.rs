@@ -7,6 +7,7 @@
 pub mod engine;
 pub mod model;
 pub mod sim;
+pub mod structure;
 pub mod waveform;
 
 pub use engine::{Engine, EngineEvent, EngineHandle};

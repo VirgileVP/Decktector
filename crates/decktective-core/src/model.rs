@@ -135,6 +135,37 @@ pub struct TrackCue {
     pub color: String,
 }
 
+/// A structural section of a track, as DJs name them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "TrackEventKind.ts")]
+pub enum TrackEventKind {
+    Intro,
+    /// Energy climbing toward the next section.
+    Build,
+    /// Full-energy section entered from a build or a break.
+    Drop,
+    /// The kick drops out; the track breathes.
+    Break,
+    /// Steady full-energy section — the default when nothing else fits.
+    Groove,
+    Outro,
+}
+
+/// One section of the track, inferred from its waveform and beat grid rather
+/// than read from the player.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "TrackEvent.ts")]
+pub struct TrackEvent {
+    pub kind: TrackEventKind,
+    pub start_ms: f64,
+    pub end_ms: f64,
+    /// 0-1 — how much the label can be trusted. A section a DJ cue confirms
+    /// scores 1.0; a purely inferred one stays lower, so the UI can hedge.
+    pub confidence: f32,
+}
+
 /// Static description of a loaded track, fetched once per track change.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -161,6 +192,9 @@ pub struct TrackInfo {
     pub beat_grid: Option<Vec<BeatGridBeat>>,
     pub waveform: Option<WaveformData>,
     pub cues: Vec<TrackCue>,
+    /// Sections found by `structure::analyze`; empty when the track carries
+    /// too little to analyse (no waveform, no beat grid).
+    pub events: Vec<TrackEvent>,
 }
 
 /// A deck and whatever track it currently holds.
