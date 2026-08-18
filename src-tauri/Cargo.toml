@@ -22,7 +22,7 @@ chrono = { workspace = true }
 decktective-core = { workspace = true }
 decktective-remote = { workspace = true }
 decktective-timecode = { workspace = true }
-keepawake = "0.5"
+keepawake = "0.6"
 prolink = { workspace = true }
 prolink-engine = { workspace = true }
 serde = { workspace = true }
