@@ -8,6 +8,10 @@ description = "Pro DJ Link protocol client: virtual CDJ, device discovery, playe
 
 [dependencies]
 anyhow = { workspace = true }
+# Wall-clock stamps for `capture::append_note` — a session's notes are read
+# back against a human's memory and a Wireshark timeline, both of which are
+# in local time, which `std::time` alone can't produce.
+chrono = { workspace = true }
 # Only the `prolink-capture` binary resolves `--bind`'s default this way
 # (already a workspace dependency — see `HARDWARE-CAPTURE-PLAN.md`).
 if-addrs = { workspace = true }
@@ -19,9 +23,11 @@ socket2 = { workspace = true }
 thiserror = { workspace = true }
 # `signal` on top of the workspace's tokio features is only needed by the
 # `prolink-capture` binary, to wait for Ctrl+C at the end of a session.
-# `process` is only needed by `tests/capture_tool_e2e.rs`, to drive
-# `prolink-capture`/`cdj-sim` as real child processes.
-tokio = { workspace = true, features = ["signal", "process"] }
+# `process` is needed by `tests/capture_tool_e2e.rs` and by the
+# `prolink-session` binary, both of which drive `prolink-capture`/`cdj-sim`
+# as real child processes. `io-std` is what lets `prolink-capture` also stop
+# on stdin EOF and `prolink-session` read the booth operator's ENTER.
+tokio = { workspace = true, features = ["signal", "process", "io-std"] }
 tracing = { workspace = true }
 # Only the `prolink-capture` binary installs a subscriber (see its own doc
 # comment) — the library itself just emits `tracing` events as before.

@@ -30,6 +30,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use chrono::Local;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -52,6 +53,24 @@ scenarios worth exercising while recording.
 
 - HH:MM:SS —
 ";
+
+/// Appends one wall-clock-stamped line to a session's `notes.md`.
+///
+/// Correlating the capture against what physically happened on the gear is
+/// what makes the bytes interpretable afterwards, and the runbook's manual
+/// version of this ("write the time and the action as you go") is the step
+/// most likely to be skipped under booth pressure or reconstructed wrong
+/// from memory. `prolink-session` calls this as each guided step is
+/// confirmed; `notes.md` stays plain Markdown that anyone can also edit by
+/// hand mid-session.
+///
+/// Takes the session directory rather than hanging off [`CaptureWriter`]:
+/// the guided driver annotates a session owned by a separate
+/// `prolink-capture` process, so it has the path but not the writer.
+pub fn append_note(session_dir: &Path, text: &str) -> io::Result<()> {
+    let mut file = fs::OpenOptions::new().create(true).append(true).open(session_dir.join(NOTES_FILE))?;
+    writeln!(file, "- {} — {}", Local::now().format("%H:%M:%S"), text)
+}
 
 /// One received UDP datagram, as recorded to `udp.jsonl`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
