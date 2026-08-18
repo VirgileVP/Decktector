@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -121,12 +121,14 @@ fn parse_keepalive(data: &[u8], source_ip: Ipv4Addr) -> Option<DiscoveredDevice>
 /// `decktective_timecode::TimecodeService`.
 pub struct DeviceWatcher {
     devices_tx: watch::Sender<Vec<DiscoveredDevice>>,
+    seen: Mutex<HashMap<u8, (DiscoveredDevice, Instant)>>,
 }
 
 impl DeviceWatcher {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
             devices_tx: watch::channel(Vec::new()).0,
+            seen: Mutex::new(HashMap::new()),
         })
     }
 
@@ -141,10 +143,61 @@ impl DeviceWatcher {
         self.devices_tx.borrow().clone()
     }
 
-    /// Runs until the socket errors out or the process exits. A bind failure
-    /// (port already exclusively held, no permission, ...) is logged and
-    /// leaves the device list permanently empty rather than crashing the
-    /// app shell over a diagnostics panel.
+    /// Feeds one received datagram to the watcher, publishing an updated
+    /// device list if it turned out to be a keep-alive. Returns whether it
+    /// was one.
+    ///
+    /// Public so a caller that already has its own listener on
+    /// [`ANNOUNCE_PORT`] can drive discovery from it instead of having this
+    /// watcher open a second socket on the same port — which does not work
+    /// on Windows, where only `SO_REUSEADDR` is available and a datagram is
+    /// delivered to just one of the bound sockets (`SO_REUSEPORT`, which
+    /// would fan it out to all of them, is Unix-only — see
+    /// [`crate::bind_udp_socket`]). `prolink-capture` relies on this.
+    ///
+    /// Pair with [`Self::sweep`]: a watcher driven this way still needs
+    /// something to expire devices that stopped broadcasting.
+    pub fn ingest(&self, data: &[u8], source_ip: Ipv4Addr) -> bool {
+        let Some(device) = parse_keepalive(data, source_ip) else {
+            return false;
+        };
+        let mut seen = self.seen();
+        seen.insert(device.device_number, (device, Instant::now()));
+        let snapshot = Self::snapshot(&seen);
+        drop(seen);
+        self.publish(snapshot);
+        true
+    }
+
+    /// Drops devices whose last keep-alive is older than [`DEVICE_TIMEOUT`],
+    /// publishing only if that changed the list. Call every
+    /// [`Self::SWEEP_INTERVAL`] when driving the watcher through
+    /// [`Self::ingest`]; [`Self::run`] does it internally.
+    pub fn sweep(&self) {
+        let mut seen = self.seen();
+        let before = seen.len();
+        seen.retain(|_, (_, last_seen)| last_seen.elapsed() < DEVICE_TIMEOUT);
+        if seen.len() == before {
+            return;
+        }
+        let snapshot = Self::snapshot(&seen);
+        drop(seen);
+        self.publish(snapshot);
+    }
+
+    /// How often a watcher driven through [`Self::ingest`] should call
+    /// [`Self::sweep`] — the same cadence [`Self::run`] uses internally.
+    pub const SWEEP_INTERVAL: Duration = SWEEP_INTERVAL;
+
+    /// Runs until the socket errors out or the process exits, owning its own
+    /// listener on [`ANNOUNCE_PORT`]. A bind failure (port already
+    /// exclusively held, no permission, ...) is logged and leaves the device
+    /// list permanently empty rather than crashing the app shell over a
+    /// diagnostics panel.
+    ///
+    /// Only for callers with no listener of their own on that port; anything
+    /// already reading it must use [`Self::ingest`] plus [`Self::sweep`]
+    /// instead, for the delivery reason spelled out on `ingest`.
     pub async fn run(self: Arc<Self>) {
         let socket = match bind_udp_socket(ANNOUNCE_PORT) {
             Ok(socket) => socket,
@@ -154,7 +207,6 @@ impl DeviceWatcher {
             }
         };
 
-        let mut seen: HashMap<u8, (DiscoveredDevice, Instant)> = HashMap::new();
         let mut buf = [0u8; 1500];
         let mut sweep = tokio::time::interval(SWEEP_INTERVAL);
 
@@ -169,26 +221,28 @@ impl DeviceWatcher {
                         }
                     };
                     let IpAddr::V4(source_ip) = source.ip() else { continue };
-                    if let Some(device) = parse_keepalive(&buf[..len], source_ip) {
-                        seen.insert(device.device_number, (device, Instant::now()));
-                        self.publish(&seen);
-                    }
+                    self.ingest(&buf[..len], source_ip);
                 }
-                _ = sweep.tick() => {
-                    let before = seen.len();
-                    seen.retain(|_, (_, last_seen)| last_seen.elapsed() < DEVICE_TIMEOUT);
-                    if seen.len() != before {
-                        self.publish(&seen);
-                    }
-                }
+                _ = sweep.tick() => self.sweep(),
             }
         }
     }
 
-    fn publish(&self, seen: &HashMap<u8, (DiscoveredDevice, Instant)>) {
+    /// The `seen` map, recovering from a poisoned lock rather than
+    /// propagating the panic: a capture session losing its device table
+    /// mid-set is worse than carrying on with whatever is in the map.
+    fn seen(&self) -> std::sync::MutexGuard<'_, HashMap<u8, (DiscoveredDevice, Instant)>> {
+        self.seen.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn snapshot(seen: &HashMap<u8, (DiscoveredDevice, Instant)>) -> Vec<DiscoveredDevice> {
         let mut devices: Vec<DiscoveredDevice> =
             seen.values().map(|(device, _)| device.clone()).collect();
         devices.sort_by_key(|device| device.device_number);
+        devices
+    }
+
+    fn publish(&self, devices: Vec<DiscoveredDevice>) {
         // No subscribers yet (window still opening) is not an error.
         let _ = self.devices_tx.send(devices);
     }

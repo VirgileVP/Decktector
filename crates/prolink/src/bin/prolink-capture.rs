@@ -17,10 +17,13 @@
 //!      record can carry the exact source address/timestamp of the packet
 //!      it came from, which that watcher's forwarding channel doesn't carry.
 //!   B. `prolink::discovery::DeviceWatcher` for `devices.jsonl` and a live
-//!      table printed to stderr, on its own socket (bound separately from
-//!      phase A's raw listener on the same port — both use `SO_REUSEADDR`,
-//!      the same coexistence mechanism this crate already relies on to run
-//!      next to rekordbox).
+//!      table printed to stderr, fed from phase A's own listener via
+//!      `DeviceWatcher::ingest` rather than opening a second socket on
+//!      [`prolink::ANNOUNCE_PORT`]. Two sockets on one port only fan out
+//!      under `SO_REUSEPORT`, which is Unix-only: on Windows the datagram
+//!      reaches exactly one of them, phase A wins the race, and phase B
+//!      silently sees nothing — an empty device table and a blank live
+//!      table, on the one night that can't be redone.
 //!   C. NFS pull: `export.pdb` plus each loaded track's `.DAT`/`.EXT`/
 //!      artwork, for every player discovered by phase A/B's status decoding
 //!      and every `--player`/`--slot` pair given explicitly.
@@ -256,16 +259,20 @@ async fn main() {
 
     let ledger: Ledger = Arc::new(Mutex::new(HashMap::new()));
 
+    // Phase B's watcher, created before phase A because phase A's
+    // announce-port listener is what feeds it (see this module's doc
+    // comment for why it doesn't get a socket of its own).
+    let device_watcher = DeviceWatcher::new();
+
     // Phase A: raw capture on all three ports, plus best-effort status
     // decoding (see this module's doc comment for why status decoding lives
     // here rather than behind `StatusWatcher`).
     for port in [ANNOUNCE_PORT, BEAT_PORT, STATUS_PORT] {
-        tokio::spawn(run_phase_a(Arc::clone(&writer), Arc::clone(&ledger), port));
+        tokio::spawn(run_phase_a(Arc::clone(&writer), Arc::clone(&ledger), Arc::clone(&device_watcher), port));
     }
 
-    // Phase B: device discovery, on its own socket.
-    let device_watcher = DeviceWatcher::new();
-    tokio::spawn(Arc::clone(&device_watcher).run());
+    // Phase B: device discovery, driven by phase A.
+    tokio::spawn(run_device_sweep(Arc::clone(&device_watcher)));
     tokio::spawn(run_device_log(Arc::clone(&writer), device_watcher.subscribe()));
     tokio::spawn(run_live_table(Arc::clone(&device_watcher), Arc::clone(&ledger)));
 
@@ -287,7 +294,7 @@ async fn main() {
 
     if config.duration.is_none() {
         println!("Recording continues — press Ctrl+C to stop and finish the session.");
-        let _ = tokio::signal::ctrl_c().await;
+        wait_for_stop().await;
     }
 
     session_info.ended_at_unix_ms = Some(now_unix_ms());
@@ -295,6 +302,36 @@ async fn main() {
         tracing::warn!(%error, "failed to write session.json at shutdown");
     }
     println!("Session complete: {}", writer.session_dir().display());
+}
+
+/// Ends an open-ended recording on whichever comes first: Ctrl+C (someone
+/// at the booth, the runbook's step 8) or stdin reaching EOF (a parent
+/// process closing the pipe — how `prolink-session` stops this tool).
+///
+/// Ctrl+C alone isn't enough for the guided driver: a parent can't
+/// portably deliver it to a child on Windows, and killing the process
+/// instead would skip the shutdown `write_session_info` below, leaving
+/// `session.json` without its `ended_at_unix_ms`. Stray bytes on stdin are
+/// ignored rather than treated as a stop, so running this in a terminal
+/// where someone leans on the keyboard doesn't end the session.
+async fn wait_for_stop() {
+    use tokio::io::AsyncReadExt;
+
+    let drained_stdin = async {
+        let mut stdin = tokio::io::stdin();
+        let mut buf = [0u8; 64];
+        loop {
+            match stdin.read(&mut buf).await {
+                Ok(0) | Err(_) => break, // EOF, or a closed pipe: the parent is done.
+                Ok(_) => continue,
+            }
+        }
+    };
+
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {}
+        _ = drained_stdin => {}
+    }
 }
 
 fn now_unix_ms() -> u128 {
@@ -339,7 +376,7 @@ fn resolve_bind_ip() -> Ipv4Addr {
 /// the task) writes every datagram raw to `udp.jsonl`. A bind failure is
 /// logged and this port's capture simply never runs — the other two ports'
 /// tasks are unaffected, matching every `*Watcher::run` in this crate.
-async fn run_phase_a(writer: Arc<CaptureWriter>, ledger: Ledger, port: u16) {
+async fn run_phase_a(writer: Arc<CaptureWriter>, ledger: Ledger, device_watcher: Arc<DeviceWatcher>, port: u16) {
     let socket = match bind_capture_socket(port).await {
         Ok(socket) => socket,
         Err(error) => {
@@ -361,6 +398,14 @@ async fn run_phase_a(writer: Arc<CaptureWriter>, ledger: Ledger, port: u16) {
         let record = UdpRecord::new(port, source.ip(), payload);
         if let Err(error) = writer.write_udp(&record) {
             tracing::warn!(%error, port, "phase A: failed to write a udp.jsonl record");
+        }
+
+        // Raw bytes are on disk by this point, so neither of these can cost
+        // the capture anything if it misreads the packet.
+        if port == ANNOUNCE_PORT {
+            if let IpAddr::V4(source_ip) = source.ip() {
+                device_watcher.ingest(payload, source_ip);
+            }
         }
 
         if port == STATUS_PORT {
@@ -489,6 +534,18 @@ fn now_micros() -> i64 {
 /// stderr, so the operator can see at a glance that the network is being
 /// read — required even if every parser in the crate is broken, since it's
 /// driven by the same raw ledger phase A already maintains.
+/// Expires devices that stopped broadcasting. [`DeviceWatcher::run`] does
+/// this on its own; a watcher driven through `ingest` needs it driven too,
+/// or a player that gets unplugged stays in the table for the rest of the
+/// session.
+async fn run_device_sweep(device_watcher: Arc<DeviceWatcher>) {
+    let mut tick = tokio::time::interval(DeviceWatcher::SWEEP_INTERVAL);
+    loop {
+        tick.tick().await;
+        device_watcher.sweep();
+    }
+}
+
 async fn run_live_table(device_watcher: Arc<DeviceWatcher>, ledger: Ledger) {
     let mut tick = tokio::time::interval(LIVE_TABLE_INTERVAL);
     loop {
