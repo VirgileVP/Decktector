@@ -97,10 +97,20 @@ export function WaveformDetail({
       for (let x = 0; x < width; x++) {
         const tMs = windowStartMs + x * msPerPx
         if (tMs < 0 || tMs >= track.durationMs) continue
-        const segment = detail[Math.floor(tMs / waveform.msPerDetailSegment)]
-        if (!segment) continue
-        const half = Math.max(1, segment.height * halfMax)
-        const [r, g, b] = segment.color
+        // Interpolate between neighboring detail columns so the envelope
+        // stays smooth when zoomed in past the waveform's native resolution,
+        // instead of stair-stepping between identical nearest-neighbor bars.
+        const idx = tMs / waveform.msPerDetailSegment
+        const i0 = Math.floor(idx)
+        const segA = detail[i0]
+        if (!segA) continue
+        const segB = detail[i0 + 1] ?? segA
+        const frac = idx - i0
+        const height = segA.height + (segB.height - segA.height) * frac
+        const half = Math.max(1, height * halfMax)
+        const r = segA.color[0] + (segB.color[0] - segA.color[0]) * frac
+        const g = segA.color[1] + (segB.color[1] - segA.color[1]) * frac
+        const b = segA.color[2] + (segB.color[2] - segA.color[2]) * frac
         ctx.globalAlpha = x < centerX ? PLAYED_DIM_ALPHA : 0.95
         ctx.fillStyle = `rgb(${soften(r, ink, wash)},${soften(g, ink, wash)},${soften(b, ink, wash)})`
         ctx.fillRect(x, midY - half, 1, half * 2)
