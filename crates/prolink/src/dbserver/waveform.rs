@@ -34,6 +34,43 @@ pub struct DbWaveformColumn {
 pub const COLOR_WAVEFORM_DETAIL_TAG: u32 = 0x3556_5750;
 pub const COLOR_WAVEFORM_FILE_EXTENSION: &str = ".EXT";
 
+/// The ANLZ tag magic for the classic mono waveform detail (`"PWV3"`,
+/// byte-reversed for the wire) — the pre-color "Blue" waveform every player
+/// still writes, even on media whose HD color waveform failed to analyze.
+/// Fetched the same way as [`COLOR_WAVEFORM_DETAIL_TAG`], through the same
+/// generic `ANLZ_TAG_REQ` passthrough — see this module's doc comment.
+pub const MONO_WAVEFORM_DETAIL_TAG: u32 = 0x3356_5750;
+
+/// One column of the classic mono waveform: `height` is the amplitude
+/// (0-1), `whiteness` how far a column's shade leans from blue toward
+/// white — hardware brightens the peaks of loud transients with it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DbMonoWaveformColumn {
+    /// 0-1.
+    pub height: f32,
+    /// 0-1.
+    pub whiteness: f32,
+}
+
+/// Decodes a mono waveform detail response the same way
+/// [`parse_color_waveform_detail`] does — same leading junk, same
+/// one-column-per-tick shape, just an 8-bit column instead of 16: the top 5
+/// bits are height, the bottom 3 are whiteness (`rekordcrate`'s
+/// `WaveformPreviewColumn`, which this format shares with the whole-track
+/// preview, confirms the field order).
+pub fn parse_mono_waveform_detail(blob: &[u8]) -> Vec<DbMonoWaveformColumn> {
+    if blob.len() <= LEADING_JUNK_BYTES {
+        return Vec::new();
+    }
+    blob[LEADING_JUNK_BYTES..]
+        .iter()
+        .map(|&byte| DbMonoWaveformColumn {
+            height: f32::from((byte >> 3) & 0x1f) / 31.0,
+            whiteness: f32::from(byte & 0x07) / 7.0,
+        })
+        .collect()
+}
+
 /// Bytes to skip at the start of the response before the column data
 /// starts — `beat-link`'s own documented, hardware-derived constant
 /// (`LEADING_DBSERVER_COLOR_JUNK_BYTES`). Not independently re-derived here;
@@ -109,5 +146,35 @@ mod tests {
     #[test]
     fn ms_per_segment_matches_150_columns_per_second() {
         assert!((ms_per_segment() - 6.666_666_666_666_667).abs() < 1e-9);
+    }
+
+    fn mono_column_byte(height5: u8, whiteness3: u8) -> u8 {
+        (height5 << 3) | whiteness3
+    }
+
+    #[test]
+    fn decodes_a_full_height_full_white_mono_column() {
+        let mut blob = vec![0u8; LEADING_JUNK_BYTES];
+        blob.push(mono_column_byte(31, 7));
+
+        let columns = parse_mono_waveform_detail(&blob);
+        assert_eq!(columns.len(), 1);
+        assert_eq!(columns[0].height, 1.0);
+        assert_eq!(columns[0].whiteness, 1.0);
+    }
+
+    #[test]
+    fn decodes_a_low_dim_mono_column() {
+        let mut blob = vec![0u8; LEADING_JUNK_BYTES];
+        blob.push(mono_column_byte(8, 0));
+
+        let columns = parse_mono_waveform_detail(&blob);
+        assert!((columns[0].height - 8.0 / 31.0).abs() < 0.001);
+        assert_eq!(columns[0].whiteness, 0.0);
+    }
+
+    #[test]
+    fn a_mono_blob_too_short_for_the_header_yields_no_columns() {
+        assert!(parse_mono_waveform_detail(&[0u8; 4]).is_empty());
     }
 }

@@ -6,6 +6,7 @@ import type { FrameRate } from '../model'
 
 /** Bounds of the sliders in the settings panel. */
 export const WAVEFORM_DESATURATION_RANGE = { min: 0, max: 1, step: 0.05 } as const
+export const WAVEFORM_AMPLITUDE_RANGE = { min: 0.5, max: 2.5, step: 0.1 } as const
 export const UI_SCALE_RANGE = { min: 0.8, max: 1.6, step: 0.05 } as const
 
 /** Drag bounds for the cue list / track structure rails in the deck body. */
@@ -18,6 +19,20 @@ export const LINEUP_VIEW_OPTIONS = [
   { value: 'full', label: 'Whole lineup' },
   { value: 'around', label: 'Previous, current, next' }
 ] as const satisfies readonly { value: LineupView; label: string }[]
+
+/** How the detail waveform's columns are painted — mirrors the "WAVE COLOR"
+ *  choice on real Pioneer hardware. `rgb` blends each column's frequency
+ *  bands into one hue (the HD color waveform); `3band` keeps the bands
+ *  separate as three stacked, semi-transparent bars from that same data;
+ *  `blue` uses the classic pre-color mono waveform, falling back to a
+ *  grayscale read of the color data when a track has no mono analysis. */
+export type WaveformStyle = 'rgb' | '3band' | 'blue'
+
+export const WAVEFORM_STYLE_OPTIONS = [
+  { value: 'rgb', label: 'RGB' },
+  { value: '3band', label: '3-band' },
+  { value: 'blue', label: 'Blue' }
+] as const satisfies readonly { value: WaveformStyle; label: string }[]
 
 /** Where the timecode generator sends its output. `off` disables it entirely. */
 export type TimecodeProtocolChoice = 'off' | 'artnet' | 'mtc' | 'ltc'
@@ -133,6 +148,11 @@ export interface Settings {
   theme: ThemeId
   /** 0 = raw rekordbox waveform colors, 1 = fully washed to the theme's target. */
   waveformDesaturation: number
+  /** Gain multiplier on bar height, for tracks that read too quiet or too loud;
+   *  clamped to the row at render time so it can never overflow. */
+  waveformAmplitude: number
+  /** How the detail waveform's columns are painted. */
+  waveformStyle: WaveformStyle
   /** Fade decks that are not on air so the live ones read at a glance. */
   dimIdleDecks: boolean
   /** Renderer zoom factor, for booth screens from 13" to 27". */
@@ -193,6 +213,8 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   theme: DEFAULT_THEME,
   waveformDesaturation: 0.45,
+  waveformAmplitude: 1,
+  waveformStyle: 'rgb',
   dimIdleDecks: true,
   uiScale: 1,
   lineupView: 'full',
@@ -258,6 +280,8 @@ function pickSettings(state: Settings): Settings {
   const {
     theme,
     waveformDesaturation,
+    waveformAmplitude,
+    waveformStyle,
     dimIdleDecks,
     uiScale,
     lineupView,
@@ -288,6 +312,8 @@ function pickSettings(state: Settings): Settings {
   return {
     theme,
     waveformDesaturation,
+    waveformAmplitude,
+    waveformStyle,
     dimIdleDecks,
     uiScale,
     lineupView,

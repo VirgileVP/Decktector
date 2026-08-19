@@ -102,6 +102,12 @@ pub struct WaveformSegment {
 pub struct WaveformData {
     /// Detailed waveform (~150 columns per second), null when unavailable.
     pub detail: Option<Vec<WaveformSegment>>,
+    /// The classic pre-color "Blue" detail waveform, same resolution and
+    /// timing as `detail` — every column's `color` here is a grayscale
+    /// `[w, w, w]` shade rather than a frequency-coded hue. Null when the
+    /// media has no mono analysis (rare — most players write it alongside
+    /// the color waveform regardless).
+    pub mono_detail: Option<Vec<WaveformSegment>>,
     /// How many ms one detail column covers.
     pub ms_per_detail_segment: f64,
     /// Whole-track preview for the minimap (fixed column count).
