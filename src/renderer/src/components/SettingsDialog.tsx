@@ -12,9 +12,7 @@ import {
   TIMECODE_FRAME_RATE_OPTIONS,
   TIMECODE_PROTOCOL_OPTIONS,
   UI_SCALE_RANGE,
-  WAVEFORM_AMPLITUDE_RANGE,
   WAVEFORM_DESATURATION_RANGE,
-  WAVEFORM_STYLE_OPTIONS,
   useSettings,
   type DeckViewPreset,
   type Settings
@@ -198,13 +196,6 @@ export function SettingsDialog({
                   format={asPercent}
                   onChange={update('uiScale')}
                 />
-                <ChoiceRow
-                  label="Waveform style"
-                  hint="RGB blends the frequency bands into one hue, 3-band keeps them stacked, Blue is the classic mono look"
-                  value={settings.waveformStyle}
-                  options={WAVEFORM_STYLE_OPTIONS}
-                  onChange={update('waveformStyle')}
-                />
                 <SliderRow
                   label="Waveform wash"
                   hint="Flattens the rekordbox colors; at 0 % they are left raw"
@@ -212,14 +203,6 @@ export function SettingsDialog({
                   range={WAVEFORM_DESATURATION_RANGE}
                   format={asPercent}
                   onChange={update('waveformDesaturation')}
-                />
-                <SliderRow
-                  label="Waveform amplitude"
-                  hint="Boosts or reduces bar height for quiet or clipped tracks"
-                  value={settings.waveformAmplitude}
-                  range={WAVEFORM_AMPLITUDE_RANGE}
-                  format={asPercent}
-                  onChange={update('waveformAmplitude')}
                 />
                 <ToggleRow
                   label="Dim decks that are off air"

@@ -200,7 +200,6 @@ mod tests {
                     })
                     .collect(),
             ),
-            mono_detail: None,
             ms_per_detail_segment: ms_per_segment,
             preview: None,
         }

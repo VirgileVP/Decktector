@@ -7,14 +7,6 @@ export type WaveformData = {
  */
 detail: Array<WaveformSegment> | null, 
 /**
- * The classic pre-color "Blue" detail waveform, same resolution and
- * timing as `detail` — every column's `color` here is a grayscale
- * `[w, w, w]` shade rather than a frequency-coded hue. Null when the
- * media has no mono analysis (rare — most players write it alongside
- * the color waveform regardless).
- */
-monoDetail: Array<WaveformSegment> | null, 
-/**
  * How many ms one detail column covers.
  */
 msPerDetailSegment: number, 

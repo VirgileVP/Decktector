@@ -268,30 +268,8 @@ impl MetadataFetcher {
         .ok()
         .and_then(Result::ok)
         .flatten();
-        let mono_waveform_blob = timeout(
-            ASSET_TIMEOUT,
-            connection.fetch_anlz_tag(
-                source_device,
-                slot,
-                track_type,
-                track_id,
-                db_waveform::MONO_WAVEFORM_DETAIL_TAG,
-                db_waveform::COLOR_WAVEFORM_FILE_EXTENSION,
-            ),
-        )
-        .await
-        .ok()
-        .and_then(Result::ok)
-        .flatten();
 
-        Some(assemble_dbserver_track_info(
-            track_id,
-            &items,
-            status_bpm,
-            beat_grid_blob.as_deref(),
-            waveform_blob.as_deref(),
-            mono_waveform_blob.as_deref(),
-        ))
+        Some(assemble_dbserver_track_info(track_id, &items, status_bpm, beat_grid_blob.as_deref(), waveform_blob.as_deref()))
     }
 
     /// The deck's pooled dbserver connection, opening a fresh one (bounded
@@ -327,12 +305,9 @@ fn assemble_dbserver_track_info(
     status_bpm: Option<f64>,
     beat_grid_blob: Option<&[u8]>,
     waveform_blob: Option<&[u8]>,
-    mono_waveform_blob: Option<&[u8]>,
 ) -> TrackInfo {
     let beat_grid = beat_grid_blob.map(|blob| normalize::beat_grid(&beatgrid::parse_beat_grid(blob)));
-    let color_columns = waveform_blob.map(db_waveform::parse_color_waveform_detail).unwrap_or_default();
-    let mono_columns = mono_waveform_blob.map(db_waveform::parse_mono_waveform_detail).unwrap_or_default();
-    let waveform = normalize::waveform_data(&color_columns, &mono_columns);
+    let waveform = waveform_blob.and_then(|blob| normalize::waveform_data(&db_waveform::parse_color_waveform_detail(blob)));
     let duration_ms = normalize::duration_ms(items);
     let cues = Vec::new(); // Cue-list wire format not yet confirmed — see prolink::dbserver::cues.
 
@@ -387,7 +362,7 @@ mod tests {
     #[test]
     fn assembles_a_track_info_from_menu_items_alone() {
         let items = vec![menu_item(MenuItemType::TrackTitle, "Strobe"), menu_item(MenuItemType::Artist, "deadmau5")];
-        let track = assemble_dbserver_track_info(4207, &items, Some(128.0), None, None, None);
+        let track = assemble_dbserver_track_info(4207, &items, Some(128.0), None, None);
 
         assert_eq!(track.track_id, 4207);
         assert_eq!(track.title, "Strobe");
@@ -400,7 +375,7 @@ mod tests {
 
     #[test]
     fn a_missing_title_item_falls_back_to_an_empty_title_rather_than_panicking() {
-        let track = assemble_dbserver_track_info(1, &[], None, None, None, None);
+        let track = assemble_dbserver_track_info(1, &[], None, None, None);
         assert_eq!(track.title, "");
     }
 

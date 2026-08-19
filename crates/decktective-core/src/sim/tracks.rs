@@ -149,7 +149,7 @@ fn build_waveform(spec: &SimTrackSpec, seed: u32) -> WaveformData {
     let segments_per_beat = DETAIL_SEGMENTS_PER_SECOND * 60.0 / spec.bpm;
     let total_beats = (total_segments as f64 / segments_per_beat).ceil() as usize;
 
-    let (detail, mono_detail): (Vec<WaveformSegment>, Vec<WaveformSegment>) = (0..total_segments)
+    let detail: Vec<WaveformSegment> = (0..total_segments)
         .map(|i| {
             let beat_index = (i as f64 / segments_per_beat).floor() as usize;
             let beat_phase = (i as f64 % segments_per_beat) / segments_per_beat;
@@ -161,32 +161,22 @@ fn build_waveform(spec: &SimTrackSpec, seed: u32) -> WaveformData {
             // Bass-heavy columns render deep blue, brighter ones toward white;
             // hue_shift nudges the palette per track so decks read distinctly
             let brightness = (energy * transient + noise).min(1.0);
-            (
-                WaveformSegment {
-                    height: height as f32,
-                    color: [
-                        (40.0 + 160.0 * brightness + 20.0 * style.hue_shift).round() as u8,
-                        (90.0 + 110.0 * brightness + 20.0 * (1.0 - style.hue_shift)).round() as u8,
-                        255,
-                    ],
-                },
-                // Mirrors the classic pre-color "Blue" waveform: same height,
-                // grayscale shade standing in for hardware's whiteness field.
-                WaveformSegment { height: height as f32, color: [gray(brightness); 3] },
-            )
+            WaveformSegment {
+                height: height as f32,
+                color: [
+                    (40.0 + 160.0 * brightness + 20.0 * style.hue_shift).round() as u8,
+                    (90.0 + 110.0 * brightness + 20.0 * (1.0 - style.hue_shift)).round() as u8,
+                    255,
+                ],
+            }
         })
-        .unzip();
+        .collect();
 
     WaveformData {
         preview: Some(build_preview_from_detail(&detail, PREVIEW_SEGMENT_COUNT)),
         ms_per_detail_segment: 1000.0 / DETAIL_SEGMENTS_PER_SECOND,
         detail: Some(detail),
-        mono_detail: Some(mono_detail),
     }
-}
-
-fn gray(whiteness: f64) -> u8 {
-    (90.0 + 165.0 * whiteness).round() as u8
 }
 
 /// Places cues the way a DJ would prep a track: hot cues on phrase starts,

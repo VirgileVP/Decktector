@@ -166,8 +166,7 @@ fn parse_analysis(ext_bytes: &[u8], dat_bytes: &[u8]) -> (Option<Vec<BeatGridBea
     sections.extend(read_sections(dat_bytes));
 
     let mut beat_grid = None;
-    let mut color_detail = None;
-    let mut mono_detail = None;
+    let mut waveform = None;
     let mut extended_cues = None;
     let mut basic_cues = None;
 
@@ -182,10 +181,7 @@ fn parse_analysis(ext_bytes: &[u8], dat_bytes: &[u8]) -> (Option<Vec<BeatGridBea
                 );
             }
             Content::WaveformColorDetail(detail) => {
-                color_detail = build_color_detail(detail);
-            }
-            Content::WaveformDetail(detail) => {
-                mono_detail = build_mono_detail(detail);
+                waveform = build_waveform(detail);
             }
             Content::ExtendedCueList(list) => {
                 extended_cues = Some(list.cues.iter().map(map_extended_cue).collect::<Vec<_>>());
@@ -198,32 +194,10 @@ fn parse_analysis(ext_bytes: &[u8], dat_bytes: &[u8]) -> (Option<Vec<BeatGridBea
     }
 
     let cues = extended_cues.or(basic_cues).unwrap_or_default();
-    (beat_grid, build_waveform(color_detail, mono_detail), cues)
+    (beat_grid, waveform, cues)
 }
 
-/// 150 HD segments/sec — same constant already established for the
-/// dbserver route's waveform (`prolink::dbserver::waveform`), and confirmed
-/// again directly in `rekordcrate`'s own doc comments. Shared by the color
-/// and mono detail waveforms: both are the same "detail" resolution, only
-/// the column encoding differs.
-const MS_PER_DETAIL_SEGMENT: f64 = 1000.0 / 150.0;
-
-/// Combines whichever detail waveform(s) parsed into one `WaveformData`.
-/// The minimap preview always prefers the color detail, falling back to
-/// mono so it still has something to show when only the classic waveform
-/// analyzed.
-fn build_waveform(color_detail: Option<Vec<WaveformSegment>>, mono_detail: Option<Vec<WaveformSegment>>) -> Option<WaveformData> {
-    let preview_source = color_detail.as_deref().or(mono_detail.as_deref())?;
-    let preview = build_preview_from_detail(preview_source, PREVIEW_SEGMENT_COUNT);
-    Some(WaveformData {
-        detail: color_detail,
-        mono_detail,
-        ms_per_detail_segment: MS_PER_DETAIL_SEGMENT,
-        preview: Some(preview),
-    })
-}
-
-fn build_color_detail(detail: &rekordcrate::anlz::WaveformColorDetail) -> Option<Vec<WaveformSegment>> {
+fn build_waveform(detail: &rekordcrate::anlz::WaveformColorDetail) -> Option<WaveformData> {
     if detail.data.is_empty() {
         return None;
     }
@@ -236,36 +210,24 @@ fn build_color_detail(detail: &rekordcrate::anlz::WaveformColorDetail) -> Option
     // is strictly safer than re-deriving the bit order by hand a second
     // time.
     let scale_3bit = |value: u8| (f32::from(value) / 7.0 * 255.0).round() as u8;
-    Some(
-        detail
-            .data
-            .iter()
-            .map(|column| WaveformSegment {
-                height: f32::from(column.height()) / 31.0,
-                color: [scale_3bit(column.red()), scale_3bit(column.green()), scale_3bit(column.blue())],
-            })
-            .collect(),
-    )
-}
+    let detail_segments: Vec<WaveformSegment> = detail
+        .data
+        .iter()
+        .map(|column| WaveformSegment {
+            height: f32::from(column.height()) / 31.0,
+            color: [scale_3bit(column.red()), scale_3bit(column.green()), scale_3bit(column.blue())],
+        })
+        .collect();
 
-/// Same accessor-trusting approach as [`build_color_detail`], for the
-/// classic pre-color "Blue" waveform (`WaveformDetail`'s columns share
-/// their `WaveformPreviewColumn` type with the whole-track preview).
-fn build_mono_detail(detail: &rekordcrate::anlz::WaveformDetail) -> Option<Vec<WaveformSegment>> {
-    if detail.data.is_empty() {
-        return None;
-    }
-    let scale_3bit = |value: u8| (f32::from(value) / 7.0 * 255.0).round() as u8;
-    Some(
-        detail
-            .data
-            .iter()
-            .map(|column| {
-                let gray = scale_3bit(column.whiteness());
-                WaveformSegment { height: f32::from(column.height()) / 31.0, color: [gray, gray, gray] }
-            })
-            .collect(),
-    )
+    let preview = build_preview_from_detail(&detail_segments, PREVIEW_SEGMENT_COUNT);
+    Some(WaveformData {
+        detail: Some(detail_segments),
+        // 150 HD segments/sec — same constant already established for the
+        // dbserver route's waveform (`prolink::dbserver::waveform`), and
+        // confirmed again directly in `rekordcrate`'s own doc comments.
+        ms_per_detail_segment: 1000.0 / 150.0,
+        preview: Some(preview),
+    })
 }
 
 fn cue_kind(hot_cue: u32, cue_type: &CueType) -> CueKind {

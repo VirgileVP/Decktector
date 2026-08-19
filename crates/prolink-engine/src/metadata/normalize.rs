@@ -79,35 +79,18 @@ pub fn beat_grid(entries: &[DbBeatGridEntry]) -> Vec<BeatGridBeat> {
         .collect()
 }
 
-/// Builds `WaveformData` from the dbserver route's two waveform fetches —
-/// the HD color detail and the classic mono ("Blue") detail. Either can be
-/// empty on its own (a track missing one analysis but not the other), but
-/// not both; the preview always comes from the color detail when it's
-/// there, falling back to mono so the minimap still has something to show.
-pub fn waveform_data(
-    color_columns: &[prolink::dbserver::waveform::DbWaveformColumn],
-    mono_columns: &[prolink::dbserver::waveform::DbMonoWaveformColumn],
-) -> Option<WaveformData> {
-    let detail = (!color_columns.is_empty()).then(|| {
-        color_columns.iter().map(|column| WaveformSegment { height: column.height, color: column.color }).collect::<Vec<_>>()
-    });
-    let mono_detail = (!mono_columns.is_empty()).then(|| {
-        mono_columns
-            .iter()
-            .map(|column| {
-                let gray = (column.whiteness * 255.0).round() as u8;
-                WaveformSegment { height: column.height, color: [gray, gray, gray] }
-            })
-            .collect::<Vec<_>>()
-    });
-    let preview_source = detail.as_deref().or(mono_detail.as_deref())?;
+pub fn waveform_data(columns: &[prolink::dbserver::waveform::DbWaveformColumn]) -> Option<WaveformData> {
+    if columns.is_empty() {
+        return None;
+    }
+    let detail: Vec<WaveformSegment> =
+        columns.iter().map(|column| WaveformSegment { height: column.height, color: column.color }).collect();
     let preview = decktective_core::waveform::build_preview_from_detail(
-        preview_source,
+        &detail,
         decktective_core::waveform::PREVIEW_SEGMENT_COUNT,
     );
     Some(WaveformData {
-        detail,
-        mono_detail,
+        detail: Some(detail),
         ms_per_detail_segment: waveform::ms_per_segment(),
         preview: Some(preview),
     })
@@ -160,6 +143,6 @@ mod tests {
 
     #[test]
     fn an_empty_waveform_response_is_none() {
-        assert!(waveform_data(&[], &[]).is_none());
+        assert!(waveform_data(&[]).is_none());
     }
 }

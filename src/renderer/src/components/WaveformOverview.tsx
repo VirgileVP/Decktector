@@ -5,7 +5,6 @@ import { prepareCanvas } from '../lib/canvas'
 import { canvasInk } from '../lib/ink'
 import { estimatePlayheadMs } from '../lib/playhead'
 import { useDecktectiveStore } from '../state/store'
-import { useSettings } from '../state/settings'
 
 interface WaveformOverviewProps {
   deckId: DeckId
@@ -49,13 +48,11 @@ export function WaveformOverview({
       const playhead = estimatePlayheadMs(deck, Date.now())
       const playedX = playhead !== null ? (playhead / track.durationMs) * width : 0
 
-      const gain = useSettings.getState().waveformAmplitude
-      const maxHalf = midY - 2
       const barWidth = width / preview.length
       for (let i = 0; i < preview.length; i++) {
         const segment = preview[i]
         const x = i * barWidth
-        const half = Math.max(0.5, Math.min(maxHalf, segment.height * gain * maxHalf))
+        const half = Math.max(0.5, segment.height * (midY - 2))
         ctx.fillStyle = x < playedX ? ink.played : ink.unplayed
         ctx.fillRect(x, midY - half, Math.ceil(barWidth), half * 2)
       }
