@@ -153,6 +153,12 @@ async fn main() -> anyhow::Result<()> {
         .map(|device| device.device_number);
 
     let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).await?;
+    // The address our simulated players announce as their own. Receivers
+    // read the IP out of the keep-alive payload (that is where real players
+    // learn where to unicast status), so it has to be a real local address
+    // rather than the wildcard this socket is bound to — loopback when the
+    // sim is talking to something on this machine, which is what it is for.
+    let sim_ip = local_ipv4().unwrap_or(Ipv4Addr::LOCALHOST);
     socket.set_broadcast(true)?;
     let socket = Arc::new(socket);
 
@@ -185,12 +191,22 @@ async fn main() -> anyhow::Result<()> {
         tick.tick().await;
         for device in &config.devices {
             let mac = [0x02, 0x00, 0x00, 0x00, 0x00, device.device_number];
-            let packet = build_keepalive(device.device_number, &device.name, mac, peer_count);
+            let packet = build_keepalive(device.device_number, &device.name, mac, sim_ip, peer_count);
             if let Err(error) = socket.send_to(&packet, (config.broadcast_addr, ANNOUNCE_PORT)).await {
                 eprintln!("failed to send keep-alive for device {}: {error}", device.device_number);
             }
         }
     }
+}
+
+/// This machine's first non-loopback IPv4 address, for the keep-alives'
+/// payload IP — mirrors `prolink-capture`'s `resolve_bind_ip`, kept
+/// separate because that one belongs to a different binary target.
+fn local_ipv4() -> Option<Ipv4Addr> {
+    if_addrs::get_if_addrs().ok()?.into_iter().find_map(|interface| match interface.ip() {
+        std::net::IpAddr::V4(ip) if !ip.is_loopback() => Some(ip),
+        _ => None,
+    })
 }
 
 /// Runs one simulated deck's status/beat traffic for as long as the process

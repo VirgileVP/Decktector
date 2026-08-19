@@ -50,13 +50,26 @@ pub(crate) fn decode_pitch(raw: u32) -> f64 {
 /// broadcast-capable since several packet types are broadcast rather than
 /// unicast, and non-blocking for use with Tokio.
 pub(crate) fn bind_udp_socket(port: u16) -> anyhow::Result<UdpSocket> {
+    bind_udp_socket_on(Ipv4Addr::UNSPECIFIED, port)
+}
+
+/// [`bind_udp_socket`] on one specific local address, for sending rather
+/// than listening: a broadcast leaving a multi-homed machine has to be
+/// pinned to the booth's adapter, and the port it leaves *from* matters too
+/// — real players send their keep-alives from [`ANNOUNCE_PORT`] itself, and
+/// that is the shape peers on the network are known to accept.
+///
+/// Binding a specific address is why the wildcard listeners' `SO_REUSEADDR`
+/// / `SO_REUSEPORT` are load-bearing here: this socket shares
+/// [`ANNOUNCE_PORT`] with whichever listener is already on it.
+pub(crate) fn bind_udp_socket_on(ip: Ipv4Addr, port: u16) -> anyhow::Result<UdpSocket> {
     let socket = Socket::new(Domain::IPV4, Type::DGRAM, None)?;
     socket.set_reuse_address(true)?;
     #[cfg(unix)]
     socket.set_reuse_port(true)?;
     socket.set_broadcast(true)?;
     socket.set_nonblocking(true)?;
-    socket.bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, port)).into())?;
+    socket.bind(&SocketAddr::from((ip, port)).into())?;
     Ok(UdpSocket::from_std(socket.into())?)
 }
 

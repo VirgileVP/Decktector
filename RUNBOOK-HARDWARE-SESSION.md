@@ -39,9 +39,14 @@ still documented at the bottom, for when something needs to be done by hand.
 
 ## On arrival
 
-1. **Close Rekordbox** on the laptop, if it's running. It competes for the
-   same virtual-player slot on the Pro DJ Link network and will distort or
-   block the capture. The preflight warns if it sees it still running.
+1. **Close Rekordbox _and the Decktective app_** on the laptop. Both
+   compete for the same virtual-player slot, and the app is the easier one
+   to leave running by accident — a `tauri dev` window behind the terminal
+   is enough. It binds the same three UDP ports, and because player status
+   arrives **unicast**, the operating system hands each player's stream to
+   exactly one process: the capture then records beats and discovery
+   normally while silently missing status for some or all players. The
+   preflight warns about both.
 
 2. **Connect Ethernet** from the laptop to the booth switch (or directly
    into a CDJ's LINK port if there's no switch).
@@ -54,10 +59,18 @@ still documented at the bottom, for when something needs to be done by hand.
 4. **Run the session, before powering on any player:**
 
    ```
-   ./target/release/prolink-session --out capture
+   ./target/release/prolink-session --out capture --bind <adapter IP>
    ```
 
    (`.\target\release\prolink-session.exe --out capture` on Windows.)
+
+   **Pass `--bind` explicitly.** Auto-detection picks the first non-loopback
+   adapter, which on a laptop with a phone plugged in, a VM, or a VPN is not
+   the booth's. The keep-alive we broadcast carries that address, and it is
+   where players send their status back — the wrong one means discovery and
+   beats still arrive and nothing else does. The preflight prints the
+   address it will use; if it is not the Ethernet adapter's, stop and pass
+   the right one.
 
    Everything else is prompts. Do what each one says on the gear, press
    ENTER, and it records when it happened. It starts by showing which
@@ -98,6 +111,21 @@ the kit can do something the prompts don't mention, do it anyway and say so
 in `notes.md` — the file is plain Markdown and stays editable by hand
 throughout.
 
+Two of these need the rig set up a particular way, or they capture nothing
+even though the session looks fine:
+
+- **On-air** is reported by the mixer per *channel*, and a player only
+  lights up as on-air when its **player number matches the mixer channel
+  it is plugged into**. The 2026-08-19 session ran two CDJ-3000s numbered 3
+  and 4 through channels 1 and 2: the mixer dutifully announced channels 1
+  and 2 as live, no player ever set its on-air flag, and the whole capture
+  contains not one on-air status. Renumber the players to match their
+  channels before this step.
+- **Metadata** is only interesting if it comes off more than one stick. Two
+  decks linked to the same USB is the normal booth setup and is worth
+  capturing, but it exercises exactly one player's database — put a second
+  stick in the other player for at least part of the session.
+
 ## If something looks wrong on-site
 
 Don't stop to debug it. The tooling is built to never let a parse or
@@ -105,6 +133,12 @@ connection failure abort a run (see `HARDWARE-CAPTURE-PLAN.md`'s governing
 rule) — a bad reading from one player, a failed metadata pull, a decode
 error, none of it stops the raw recording, and every check the session
 driver prints is advisory.
+
+If the live table shows players but the packet counter next to `status=`
+stays at zero, the players are not seeing our keep-alive: check `--bind` is
+the booth adapter and that nothing else on the laptop is holding the Pro DJ
+Link ports (see "On arrival"). Everything downstream — the whole metadata
+pull included — depends on status traffic.
 
 If a player never appears in the prompt's player count, read its IP straight
 off its own network settings screen and pass it explicitly, which works even

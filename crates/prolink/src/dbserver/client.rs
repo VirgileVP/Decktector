@@ -24,6 +24,32 @@ use tokio::net::{TcpSocket, TcpStream};
 use super::message::{Field, Message};
 use super::queries::{self, MenuItemType};
 
+/// How long one message may take to arrive before the connection is
+/// treated as dead. Generous next to a player's sub-second replies, short
+/// enough that a booth operator doesn't think the tool has crashed.
+const READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// The bare number field exchanged in both directions before a connection
+/// will accept any message — see [`Connection::greet`].
+const GREETING: u32 = 1;
+
+/// Transaction id the setup message travels under. Real clients use this
+/// fixed sentinel rather than starting the ordinary counter at zero, and it
+/// is what the CDJ-3000 echoed back in the reference exchange.
+const SETUP_TRANSACTION_ID: u32 = 0xffff_fffe;
+
+/// The single packed argument every menu and asset query opens with: the
+/// player being asked about, which menu it should render into, which media
+/// slot to read, and the track's type, one byte each in a 4-byte number
+/// field.
+///
+/// Not four separate byte arguments, which is what this client sent before
+/// 2026-08-19 — a CDJ-3000 answers a request shaped that way with a menu of
+/// zero items, if it answers at all.
+fn rmst_argument(target_device_number: u8, slot: u8, track_type: u8) -> u32 {
+    u32::from_be_bytes([target_device_number, queries::MENU_TARGET_MAIN, slot, track_type])
+}
+
 /// TCP port every player's dbserver listens on for the initial port-lookup
 /// query — the actual query/response port (commonly 1051) is learned from
 /// the response to this.
@@ -40,14 +66,23 @@ fn port_discovery_request() -> Vec<u8> {
 }
 
 /// One field of a track's metadata, as extracted from a single `MENU_ITEM`
-/// message. The exact argument index carrying the text/numeric value beyond
-/// `item_type` isn't confidently pinned down (see this module's doc
-/// comment), so extraction takes the first field of the expected *type*
-/// among the item's arguments rather than a fixed index — robust to the
-/// unused argument slots being padded with a different index than assumed,
-/// at the cost of being wrong if two same-typed fields both carry meaning
-/// in the same item (not expected to happen based on the item types this
-/// codebase reads).
+/// message.
+///
+/// The argument layout is fixed, and was read off a CDJ-3000 on 2026-08-19
+/// (`capture/reference-20260819/`):
+///
+/// ```text
+/// 0  parent id                 4  length of the second label
+/// 1  the item's numeric value  5  second label (always empty here)
+/// 2  length of the first label 6  item type
+/// 3  the item's text           7  colour/flags
+/// ```
+///
+/// Indices 1 and 3, then. This used to scan for "the first field of the
+/// right type", which reliably picked up index 2 — so every numeric field
+/// came back as the *length of an empty label* (2) instead of its value: a
+/// 180-second track reported a duration of 2, and an 82.50 BPM track a
+/// tempo of 2.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TrackMenuItem {
     pub item_type: MenuItemType,
@@ -55,27 +90,19 @@ pub struct TrackMenuItem {
     pub number: Option<u32>,
 }
 
+const MENU_ITEM_VALUE_INDEX: usize = 1;
+const MENU_ITEM_TEXT_INDEX: usize = 3;
+const MENU_ITEM_TYPE_INDEX: usize = 6;
+
 fn extract_menu_item(message: &Message) -> Option<TrackMenuItem> {
-    let item_type = MenuItemType::from_raw(message.arguments.get(6)?.as_u32()?);
+    let item_type = MenuItemType::from_raw(message.arguments.get(MENU_ITEM_TYPE_INDEX)?.as_u32()?);
     let text = message
         .arguments
-        .iter()
-        .find_map(Field::as_str)
+        .get(MENU_ITEM_TEXT_INDEX)
+        .and_then(Field::as_str)
         .filter(|text| !text.is_empty())
         .map(str::to_string);
-    // Excludes index 0/1 (parent id, item id) and 6 (`item_type` itself,
-    // already consumed above) so neither is mistaken for the item's actual
-    // numeric value, and keeps scanning past zero-valued placeholder args
-    // rather than stopping at the first one — `find_map` alone would stop
-    // at the first *convertible* field even if its value is a meaningless
-    // placeholder zero.
-    let number = message
-        .arguments
-        .iter()
-        .enumerate()
-        .filter(|&(index, _)| !matches!(index, 0 | 1 | 6))
-        .filter_map(|(_, field)| field.as_u32())
-        .find(|&n| n != 0);
+    let number = message.arguments.get(MENU_ITEM_VALUE_INDEX).and_then(Field::as_u32);
     Some(TrackMenuItem { item_type, text, number })
 }
 
@@ -109,11 +136,30 @@ impl Connection {
         let socket = bound_tcp_socket(bind_ip)?;
         let stream = socket.connect(SocketAddr::from((player_ip, query_port))).await?;
 
-        let mut connection = Self { stream, read_buffer: Vec::new(), next_transaction_id: 0 };
+        let mut connection = Self { stream, read_buffer: Vec::new(), next_transaction_id: 1 };
+        connection.greet().await?;
         connection
-            .simple_request(queries::SETUP_REQ, vec![Field::U32(u32::from(our_device_number))])
+            .request(SETUP_TRANSACTION_ID, queries::SETUP_REQ, vec![Field::U32(u32::from(our_device_number))])
             .await?;
         Ok(connection)
+    }
+
+    /// The bare 4-byte number field a player expects as the very first
+    /// thing on a new connection, before any message: it echoes the same
+    /// field straight back, and only then will it read a message. Skipping
+    /// it is not a protocol nicety — a CDJ-3000 closes the connection
+    /// without a word (`capture/reference-20260819/`).
+    async fn greet(&mut self) -> std::io::Result<()> {
+        let mut greeting = Vec::new();
+        Field::U32(GREETING).encode_field(&mut greeting);
+        self.stream.write_all(&greeting).await?;
+
+        let mut echoed = [0u8; 5];
+        self.stream.read_exact(&mut echoed).await?;
+        match Field::decode_field(&echoed).map(|(field, _)| field.as_u32()) {
+            Some(Some(GREETING)) => Ok(()),
+            _ => Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "dbserver did not echo the connection greeting")),
+        }
     }
 
     /// Fetches a track's metadata via the full menu-render exchange:
@@ -136,12 +182,7 @@ impl Connection {
         track_id: u32,
     ) -> std::io::Result<Vec<TrackMenuItem>> {
         let rmst = |extra: Vec<Field>| -> Vec<Field> {
-            let mut args = vec![
-                Field::U8(target_device_number),
-                Field::U8(queries::MENU_TARGET_MAIN),
-                Field::U8(slot),
-                Field::U8(track_type),
-            ];
+            let mut args = vec![Field::U32(rmst_argument(target_device_number, slot, track_type))];
             args.extend(extra);
             args
         };
@@ -149,7 +190,9 @@ impl Connection {
         let available = self
             .simple_request(queries::METADATA_REQ, rmst(vec![Field::U32(track_id)]))
             .await?;
-        let item_count = available.arguments.iter().find_map(Field::as_u32).unwrap_or(0);
+        // The first argument echoes the request type; the item count is the
+        // second. `find_map` would stop at the echo.
+        let item_count = available.arguments.get(1).and_then(Field::as_u32).unwrap_or(0);
         if item_count == 0 {
             return Ok(Vec::new());
         }
@@ -201,7 +244,7 @@ impl Connection {
     pub async fn fetch_beat_grid(&mut self, target_device_number: u8, slot: u8, track_type: u8, track_id: u32) -> std::io::Result<Option<Vec<u8>>> {
         self.fetch_blob(
             queries::BEAT_GRID_REQ,
-            vec![Field::U8(target_device_number), Field::U8(queries::MENU_TARGET_MAIN), Field::U8(slot), Field::U8(track_type), Field::U32(track_id)],
+            vec![Field::U32(rmst_argument(target_device_number, slot, track_type)), Field::U32(track_id)],
         )
         .await
     }
@@ -212,7 +255,7 @@ impl Connection {
     pub async fn fetch_cues_extended(&mut self, target_device_number: u8, slot: u8, track_type: u8, track_id: u32) -> std::io::Result<Option<Vec<u8>>> {
         self.fetch_blob(
             queries::CUE_LIST_EXT_REQ,
-            vec![Field::U8(target_device_number), Field::U8(queries::MENU_TARGET_MAIN), Field::U8(slot), Field::U8(track_type), Field::U32(track_id)],
+            vec![Field::U32(rmst_argument(target_device_number, slot, track_type)), Field::U32(track_id)],
         )
         .await
     }
@@ -220,7 +263,7 @@ impl Connection {
     pub async fn fetch_cues_basic(&mut self, target_device_number: u8, slot: u8, track_type: u8, track_id: u32) -> std::io::Result<Option<Vec<u8>>> {
         self.fetch_blob(
             queries::CUE_LIST_REQ,
-            vec![Field::U8(target_device_number), Field::U8(queries::MENU_TARGET_MAIN), Field::U8(slot), Field::U8(track_type), Field::U32(track_id)],
+            vec![Field::U32(rmst_argument(target_device_number, slot, track_type)), Field::U32(track_id)],
         )
         .await
     }
@@ -232,10 +275,7 @@ impl Connection {
         self.fetch_blob(
             queries::ANLZ_TAG_REQ,
             vec![
-                Field::U8(target_device_number),
-                Field::U8(queries::MENU_TARGET_MAIN),
-                Field::U8(slot),
-                Field::U8(track_type),
+                Field::U32(rmst_argument(target_device_number, slot, track_type)),
                 Field::U32(track_id),
                 Field::U32(tag_fourcc),
                 Field::Str(file_extension.to_string()),
@@ -244,24 +284,35 @@ impl Connection {
         .await
     }
 
-    pub async fn fetch_artwork(&mut self, target_device_number: u8, slot: u8, artwork_id: u32) -> std::io::Result<Option<Vec<u8>>> {
+    pub async fn fetch_artwork(&mut self, target_device_number: u8, slot: u8, track_type: u8, artwork_id: u32) -> std::io::Result<Option<Vec<u8>>> {
         self.fetch_blob(
             queries::ARTWORK_REQ,
-            vec![Field::U8(target_device_number), Field::U8(queries::MENU_TARGET_MAIN), Field::U8(slot), Field::U32(artwork_id)],
+            vec![Field::U32(rmst_argument(target_device_number, slot, track_type)), Field::U32(artwork_id)],
         )
         .await
     }
 
     async fn simple_request(&mut self, message_type: u16, args: Vec<Field>) -> std::io::Result<Message> {
-        self.send(message_type, args).await?;
+        let transaction_id = self.take_transaction_id();
+        self.request(transaction_id, message_type, args).await
+    }
+
+    async fn request(&mut self, transaction_id: u32, message_type: u16, args: Vec<Field>) -> std::io::Result<Message> {
+        let bytes = Message::new(transaction_id, message_type, args).encode();
+        self.stream.write_all(&bytes).await?;
         self.read_message().await
     }
 
     async fn send(&mut self, message_type: u16, args: Vec<Field>) -> std::io::Result<()> {
-        let transaction_id = self.next_transaction_id;
-        self.next_transaction_id = self.next_transaction_id.wrapping_add(1);
+        let transaction_id = self.take_transaction_id();
         let bytes = Message::new(transaction_id, message_type, args).encode();
         self.stream.write_all(&bytes).await
+    }
+
+    fn take_transaction_id(&mut self) -> u32 {
+        let transaction_id = self.next_transaction_id;
+        self.next_transaction_id = self.next_transaction_id.wrapping_add(1);
+        transaction_id
     }
 
     /// Reads one complete message, accumulating across as many socket reads
@@ -270,6 +321,15 @@ impl Connection {
     /// reads; this handles both without assuming either. Leftover bytes
     /// past the message just decoded stay in `read_buffer` for the next
     /// call.
+    ///
+    /// Bounded by [`READ_TIMEOUT`], because a player that simply never
+    /// answers a query is a real, observed condition (an artwork id it
+    /// doesn't recognize, for one) and
+    /// [`Message::decode`](super::message::Message::decode) can't tell
+    /// "not a message" from "not the whole message yet" — without a
+    /// deadline, one unanswered query hangs the caller forever, which for
+    /// the capture tool means a session that never reaches its own
+    /// shutdown.
     async fn read_message(&mut self) -> std::io::Result<Message> {
         loop {
             if let Some((message, consumed)) = Message::decode(&self.read_buffer) {
@@ -277,7 +337,24 @@ impl Connection {
                 return Ok(message);
             }
             let mut chunk = [0u8; 4096];
-            let read = self.stream.read(&mut chunk).await?;
+            let read = match tokio::time::timeout(READ_TIMEOUT, self.stream.read(&mut chunk)).await {
+                Ok(result) => result?,
+                Err(_) => {
+                    // Quiet long enough that "still arriving" is no longer
+                    // a plausible reading of a short message — so a
+                    // player's deliberately truncated no-data reply gets
+                    // reported as the empty answer it is, rather than as a
+                    // failure (see `Message::decode_lenient`).
+                    if let Some((message, consumed)) = Message::decode_lenient(&self.read_buffer) {
+                        self.read_buffer.drain(..consumed);
+                        return Ok(message);
+                    }
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        format!("dbserver went quiet with {} undecodable byte(s) buffered", self.read_buffer.len()),
+                    ));
+                }
+            };
             if read == 0 {
                 return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "dbserver closed the connection"));
             }
@@ -325,16 +402,14 @@ mod tests {
             1,
             queries::MENU_ITEM,
             vec![
-                Field::U32(0), // parent id
-                Field::U32(1), // item id
-                Field::U32(0),
+                Field::U32(1),  // parent id
+                Field::U32(2),  // the item's value
+                Field::U32(34), // length of the label below
                 Field::Str("Test Track".to_string()),
-                Field::U32(0),
+                Field::U32(2),
                 Field::Str(String::new()),
                 Field::U32(0x0004), // item_type: TrackTitle
-                Field::U32(0),
-                Field::U32(0),
-                Field::U32(0),
+                Field::U32(0x0100_0000),
             ],
         );
         let item = extract_menu_item(&message).expect("should extract");
@@ -342,6 +417,10 @@ mod tests {
         assert_eq!(item.text.as_deref(), Some("Test Track"));
     }
 
+    /// Arguments copied from a real CDJ-3000 menu item (the tempo entry of
+    /// track 2 on the 2026-08-19 rig): the value sits at index 1, and index
+    /// 2 is the length of the empty label that follows — the field the old
+    /// "first numeric argument" scan used to return instead.
     #[test]
     fn extracts_a_numeric_field_from_a_menu_item() {
         let message = Message::new(
@@ -349,20 +428,19 @@ mod tests {
             queries::MENU_ITEM,
             vec![
                 Field::U32(0),
-                Field::U32(1),
-                Field::U32(0),
+                Field::U32(8250), // 82.50 BPM
+                Field::U32(2),
                 Field::Str(String::new()),
-                Field::U32(0),
+                Field::U32(2),
                 Field::Str(String::new()),
                 Field::U32(0x000d), // item_type: Tempo
-                Field::U32(12800),  // 128.00 BPM
-                Field::U32(0),
                 Field::U32(0),
             ],
         );
         let item = extract_menu_item(&message).expect("should extract");
         assert_eq!(item.item_type, MenuItemType::Tempo);
-        assert_eq!(item.number, Some(12800));
+        assert_eq!(item.number, Some(8250));
+        assert_eq!(item.text, None);
     }
 
     #[test]

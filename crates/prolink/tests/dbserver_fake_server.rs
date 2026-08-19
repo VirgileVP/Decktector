@@ -45,22 +45,38 @@ async fn read_message(stream: &mut TcpStream, buffer: &mut Vec<u8>) -> Message {
     }
 }
 
+/// Answers the bare number field a real player expects before any message
+/// — see `Connection::greet`. Every fake server here has to do it, or the
+/// client under test blocks waiting for the echo, exactly as it would
+/// against hardware that refused the connection.
+async fn greet(stream: &mut TcpStream) {
+    let mut greeting = [0u8; 5];
+    stream.read_exact(&mut greeting).await.expect("read the client's greeting");
+    stream.write_all(&greeting).await.expect("echo the greeting");
+}
+
+/// What a player answers a metadata request with: the request type echoed
+/// back, then how many menu items it is willing to render.
+fn menu_available_args(item_count: u32) -> Vec<Field> {
+    vec![Field::U32(u32::from(queries::METADATA_REQ)), Field::U32(item_count)]
+}
+
 async fn send(stream: &mut TcpStream, transaction_id: u32, message_type: u16, args: Vec<Field>) {
     let bytes = Message::new(transaction_id, message_type, args).encode();
     stream.write_all(&bytes).await.expect("write to the client");
 }
 
+/// A menu item shaped like the ones a CDJ-3000 sends: value at index 1,
+/// label length at 2, label at 3, item type at 6.
 fn menu_item_args(item_type: u32, text: &str) -> Vec<Field> {
     vec![
-        Field::U32(0), // parent id
-        Field::U32(1), // item id
-        Field::U32(0),
+        Field::U32(1),                             // parent id
+        Field::U32(1),                             // the item's value
+        Field::U32(text.chars().count() as u32),   // label length
         Field::Str(text.to_string()),
-        Field::U32(0),
+        Field::U32(2),
         Field::Str(String::new()),
         Field::U32(item_type),
-        Field::U32(0),
-        Field::U32(0),
         Field::U32(0),
     ]
 }
@@ -71,6 +87,7 @@ async fn fetches_full_track_metadata_via_the_menu_render_exchange() {
 
     let server = tokio::spawn(async move {
         let (mut stream, _) = listener.accept().await.expect("accept");
+        greet(&mut stream).await;
         let mut buffer = Vec::new();
 
         let setup = read_message(&mut stream, &mut buffer).await;
@@ -79,7 +96,7 @@ async fn fetches_full_track_metadata_via_the_menu_render_exchange() {
 
         let metadata_req = read_message(&mut stream, &mut buffer).await;
         assert_eq!(metadata_req.message_type, queries::METADATA_REQ);
-        send(&mut stream, 1, queries::MENU_AVAILABLE, vec![Field::U32(2)]).await;
+        send(&mut stream, 1, queries::MENU_AVAILABLE, menu_available_args(2)).await;
 
         let render_req = read_message(&mut stream, &mut buffer).await;
         assert_eq!(render_req.message_type, queries::RENDER_MENU_REQ);
@@ -108,11 +125,12 @@ async fn a_zero_item_count_yields_an_empty_metadata_list_without_a_render_step()
 
     let server = tokio::spawn(async move {
         let (mut stream, _) = listener.accept().await.expect("accept");
+        greet(&mut stream).await;
         let mut buffer = Vec::new();
         read_message(&mut stream, &mut buffer).await; // SETUP_REQ
         send(&mut stream, 0, queries::SETUP_REQ, vec![]).await;
         read_message(&mut stream, &mut buffer).await; // METADATA_REQ
-        send(&mut stream, 1, queries::MENU_AVAILABLE, vec![Field::U32(0)]).await;
+        send(&mut stream, 1, queries::MENU_AVAILABLE, menu_available_args(0)).await;
     });
 
     let mut connection = Connection::connect(LOOPBACK, LOOPBACK, port, OUR_DEVICE_NUMBER).await.expect("should connect");
@@ -128,6 +146,7 @@ async fn fetches_and_parses_a_beat_grid_blob() {
 
     let server = tokio::spawn(async move {
         let (mut stream, _) = listener.accept().await.expect("accept");
+        greet(&mut stream).await;
         let mut buffer = Vec::new();
         read_message(&mut stream, &mut buffer).await; // SETUP_REQ
         send(&mut stream, 0, queries::SETUP_REQ, vec![]).await;
@@ -163,6 +182,7 @@ async fn fetches_and_parses_a_waveform_blob() {
 
     let server = tokio::spawn(async move {
         let (mut stream, _) = listener.accept().await.expect("accept");
+        greet(&mut stream).await;
         let mut buffer = Vec::new();
         read_message(&mut stream, &mut buffer).await; // SETUP_REQ
         send(&mut stream, 0, queries::SETUP_REQ, vec![]).await;

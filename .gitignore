@@ -22,5 +22,17 @@ skills-lock.json
 
 # Real Pro DJ Link hardware captures may hold a DJ's library metadata —
 # never committed. See HARDWARE-CAPTURE-PLAN.md and
-# crates/prolink/tests/hardware_capture_replay.rs.
-fixtures/hardware-capture/
+# crates/prolink/tests/hardware_capture_replay.rs. `capture/` is where the
+# capture tools write by default, `reference-*/` included: code and tests
+# quote bytes from those sessions inline rather than reading them from
+# here, so nothing breaks by their absence on another machine.
+# `**/` because the directory the replay test actually reads is
+# `crates/prolink/fixtures/hardware-capture/`, and a pattern with a slash in
+# it anchors to this file's own directory — the un-prefixed form matched
+# only a top-level `fixtures/` that has never existed, leaving real captures
+# tracked.
+**/fixtures/hardware-capture/
+capture/
+# A Wireshark capture of a booth network holds the same library metadata as
+# the tools' own sessions, and the runbook asks for one every time.
+*.pcapng

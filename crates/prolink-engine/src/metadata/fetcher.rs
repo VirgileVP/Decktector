@@ -60,6 +60,12 @@ const RETRY_FAILED_SOURCE_AFTER: Duration = Duration::from_secs(60);
 /// itself (the pooled dbserver connection, the failure caches).
 pub struct FetchRequest {
     pub deck_id: DeckId,
+    /// The player whose media holds the track — the deck itself on a
+    /// stand-alone player, a *different* player on a linked booth (see
+    /// `prolink::status::DeviceStatus::track_source_device`). Both the
+    /// address below and the device number every query names have to be
+    /// this player's, not the deck's.
+    pub source_device: u8,
     pub player_ip: Ipv4Addr,
     pub slot: MediaSlot,
     pub track_type: u8,
@@ -166,11 +172,11 @@ impl MetadataFetcher {
     }
 
     async fn fetch_and_report(self: Arc<Self>, handle: Arc<EngineHandle>, request: FetchRequest) {
-        let FetchRequest { deck_id, player_ip, slot, track_type, track_id, status_bpm } = request;
+        let FetchRequest { deck_id, source_device, player_ip, slot, track_type, track_id, status_bpm } = request;
 
         let track_info = match self.try_nfs(deck_id, player_ip, slot, track_id, status_bpm).await {
             Some(track_info) => Some(track_info),
-            None => self.try_dbserver(deck_id, player_ip, slot, track_type, track_id, status_bpm).await,
+            None => self.try_dbserver(deck_id, source_device, player_ip, slot, track_type, track_id, status_bpm).await,
         };
 
         let Some(track_info) = track_info else {
@@ -211,6 +217,7 @@ impl MetadataFetcher {
     async fn try_dbserver(
         &self,
         deck_id: DeckId,
+        source_device: u8,
         player_ip: Ipv4Addr,
         slot: MediaSlot,
         track_type: u8,
@@ -224,9 +231,14 @@ impl MetadataFetcher {
         let slot = slot.to_byte();
 
         let mut connection = connection.lock().await;
-        let our_number = self.presence.device_number()?; // Lost our claimed number mid-fetch; nothing to identify ourselves with.
+        // Only a gate: our own number identified us once, in the setup
+        // message `Connection::open` sent. Losing it mid-fetch means the
+        // connection no longer speaks for anyone. Every *query* below names
+        // the player being asked about instead — passing our own number
+        // there gets an empty menu back from real hardware.
+        self.presence.device_number()?;
 
-        let items = match timeout(METADATA_TIMEOUT, connection.fetch_metadata(our_number, slot, track_type, track_id)).await {
+        let items = match timeout(METADATA_TIMEOUT, connection.fetch_metadata(source_device, slot, track_type, track_id)).await {
             Ok(Ok(items)) if !items.is_empty() => items,
             Ok(Ok(_)) => return None, // The player answered: this track has no metadata.
             _ => {
@@ -236,7 +248,7 @@ impl MetadataFetcher {
             }
         };
 
-        let beat_grid_blob = timeout(ASSET_TIMEOUT, connection.fetch_beat_grid(our_number, slot, track_type, track_id))
+        let beat_grid_blob = timeout(ASSET_TIMEOUT, connection.fetch_beat_grid(source_device, slot, track_type, track_id))
             .await
             .ok()
             .and_then(Result::ok)
@@ -244,7 +256,7 @@ impl MetadataFetcher {
         let waveform_blob = timeout(
             ASSET_TIMEOUT,
             connection.fetch_anlz_tag(
-                our_number,
+                source_device,
                 slot,
                 track_type,
                 track_id,

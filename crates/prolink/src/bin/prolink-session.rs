@@ -273,10 +273,10 @@ fn run_preflight(config: &Config, bind_ip: Ipv4Addr) {
         Err(error) => check("output directory", false, &format!("{}: {error}", config.out_dir.display())),
     }
 
-    match rekordbox_running() {
-        Some(true) => check("rekordbox", false, "RUNNING — close it, it competes for the virtual-player slot"),
-        Some(false) => check("rekordbox", true, "not running"),
-        None => check("rekordbox", true, "could not check — confirm by hand that it's closed"),
+    match competing_apps_running() {
+        Some(apps) if apps.is_empty() => check("competing apps", true, "no rekordbox or Decktective app running"),
+        Some(apps) => check("competing apps", false, &format!("{} RUNNING — quit it before recording", apps.join(", "))),
+        None => check("competing apps", true, "could not check — confirm by hand that rekordbox and the Decktective app are closed"),
     }
 }
 
@@ -285,20 +285,51 @@ fn check(label: &str, ok: bool, detail: &str) {
     println!("[{mark}] {label:<20} {detail}");
 }
 
-/// `Some(true)`/`Some(false)` when the platform's process lister ran,
-/// `None` when it couldn't be consulted at all — an unknown is reported as
-/// an unknown rather than quietly passing as "not running", since a live
-/// rekordbox silently distorts the whole capture.
-fn rekordbox_running() -> Option<bool> {
+/// Other Pro DJ Link consumers running on this machine, which have to be
+/// closed before recording.
+///
+/// rekordbox competes for the virtual-player slot. The Decktective app
+/// itself is just as damaging and far easier to leave running by accident
+/// (a `tauri dev` window behind the terminal): it binds the same three
+/// ports with `SO_REUSEPORT`, and while broadcasts reach every listener,
+/// **status packets are unicast** — the kernel hands each player's stream
+/// to exactly one of the two processes, so the capture silently ends up
+/// with some players' status and not others'.
+///
+/// `None` when the platform's process lister couldn't be consulted at all —
+/// reported as an unknown rather than quietly passing as "nothing running".
+///
+/// Matching is on the executable's file name, never the full command line:
+/// this repository's own directory is called `decktective`, so every path
+/// in `ps` output — including this tool's own — contains that word.
+fn competing_apps_running() -> Option<Vec<String>> {
     let output = if cfg!(windows) {
         std::process::Command::new("tasklist").output().ok()?
     } else {
-        std::process::Command::new("ps").arg("-A").output().ok()?
+        std::process::Command::new("ps").args(["-A", "-o", "comm="]).output().ok()?
     };
     if !output.status.success() {
         return None;
     }
-    Some(String::from_utf8_lossy(&output.stdout).to_lowercase().contains("rekordbox"))
+
+    let listing = String::from_utf8_lossy(&output.stdout).to_lowercase();
+    let mut found: Vec<String> = Vec::new();
+    for line in listing.lines() {
+        // `tasklist` prints an image name followed by other columns; `ps
+        // -o comm=` prints one path, which on macOS can itself contain
+        // spaces ("…/MacOS/Google Chrome").
+        let command = if cfg!(windows) { line.split_whitespace().next().unwrap_or("") } else { line.trim() };
+        let executable = command.rsplit(['/', '\\']).next().unwrap_or("").trim_end_matches(".exe");
+        let app = match executable {
+            name if name.contains("rekordbox") => "rekordbox",
+            "decktective" => "the Decktective app",
+            _ => continue,
+        };
+        if !found.iter().any(|seen| seen == app) {
+            found.push(app.to_string());
+        }
+    }
+    Some(found)
 }
 
 /// Mirrors `prolink-capture`'s `resolve_bind_ip` — duplicated for the same

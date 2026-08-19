@@ -24,9 +24,19 @@
 //! implementation can't fully verify. If it turns out real hardware needs
 //! the full handshake to answer status/beat traffic too, that's the next
 //! thing to build here — see the phase-2 plan's open question about this.
+//!
+//! The 2026-08-19 hardware session answered the other half of that open
+//! question: keep-alives alone *are* enough. Two CDJ-3000s and a
+//! DJM-900NXS2 broadcast discovery and beat packets at a purely passive
+//! listener but sent nothing at all on [`crate::STATUS_PORT`], because
+//! players unicast status only to peers whose keep-alives they have seen
+//! (<https://djl-analysis.deepsymmetry.org/djl-analysis/vcdj.html>). So
+//! this module is not a nicety for the diagnostics panel — no presence
+//! means no status, and no status means no metadata either, since every
+//! later phase keys off the currently-loaded track.
 
 use std::net::Ipv4Addr;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use tokio::net::UdpSocket;
@@ -51,19 +61,134 @@ const CANDIDATE_DEVICE_NUMBERS: [u8; 6] = [PREFERRED_DEVICE_NUMBER, 6, 1, 2, 3, 
 
 const BROADCAST_ADDR: Ipv4Addr = Ipv4Addr::new(255, 255, 255, 255);
 
-/// Locally-administered MAC for our virtual identity, keyed by device
-/// number — deterministic so re-deriving it after a renumber is trivial, and
-/// so it's recognizable as "us" (not a real Pioneer OUI) in a packet capture.
+/// The MAC our keep-alives actually went out with, once [`Presence::run`]
+/// has resolved it. Process-global because it is a process-global fact —
+/// there is one Pro DJ Link identity per process — and because
+/// [`is_own_broadcast`] is called from code that has no handle on
+/// [`Presence`] (`prolink_engine::engine`'s deck mapping).
+static ANNOUNCED_MAC: OnceLock<[u8; 6]> = OnceLock::new();
+
+/// Fallback MAC for our virtual identity when the real adapter's can't be
+/// read: locally-administered, keyed by device number so it's deterministic
+/// after a renumber and recognizable as "us" (not a real Pioneer OUI) in a
+/// packet capture.
+///
+/// A fallback, not a preference. Real players appear to send status to the
+/// MAC a peer announced rather than ARPing for the IP, so a made-up MAC
+/// gets us counted as a peer and sent nothing — see [`interface_mac`].
 fn presence_mac(device_number: u8) -> [u8; 6] {
     [0x02, 0x00, 0x00, 0x00, 0x00, device_number]
 }
 
-fn presence_mac_string(device_number: u8) -> String {
-    presence_mac(device_number)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<Vec<_>>()
-        .join(":")
+fn mac_string(mac: [u8; 6]) -> String {
+    mac.iter().map(|byte| format!("{byte:02x}")).collect::<Vec<_>>().join(":")
+}
+
+/// The hardware MAC of the adapter holding `bind_ip`.
+///
+/// Deep Symmetry's virtual-CDJ notes say to announce "your actual MAC and
+/// IP addresses"; the 2026-08-19 hardware session showed why. Announcing a
+/// synthetic MAC with the correct IP got decktective counted as a peer by
+/// two CDJ-3000s and a DJM-900NXS2 — their keep-alives' peer counts went up
+/// — while not one status packet ever arrived, which is what it looks like
+/// when the players address their status frames straight to the MAC from
+/// the keep-alive instead of ARPing for the IP.
+///
+/// `None` on Windows (needs `GetAdaptersInfo`, not `getifaddrs`) and
+/// whenever the adapter can't be found, leaving the caller to fall back to
+/// [`presence_mac`].
+#[cfg(unix)]
+fn interface_mac(bind_ip: Ipv4Addr) -> Option<[u8; 6]> {
+    // Two passes over one `getifaddrs` list: find the interface name that
+    // holds `bind_ip` (an AF_INET entry), then that same name's link-layer
+    // entry, which is where the MAC lives.
+    let name = interface_entries(|entries| {
+        entries.iter().find(|(_, address)| matches!(address, InterfaceAddress::V4(ip) if *ip == bind_ip)).map(|(name, _)| name.clone())
+    })?;
+    interface_entries(|entries| {
+        entries.iter().find_map(|(entry_name, address)| match address {
+            InterfaceAddress::Link(mac) if *entry_name == name && *mac != [0; 6] => Some(*mac),
+            _ => None,
+        })
+    })
+}
+
+#[cfg(not(unix))]
+fn interface_mac(_bind_ip: Ipv4Addr) -> Option<[u8; 6]> {
+    None
+}
+
+#[cfg(unix)]
+enum InterfaceAddress {
+    V4(Ipv4Addr),
+    Link([u8; 6]),
+}
+
+/// Walks `getifaddrs` once and hands the collected `(name, address)` pairs
+/// to `read`, freeing the list before returning whatever `read` extracted.
+///
+/// The unsafe block is confined here: everything above works on plain owned
+/// values, and the list is freed on every path out.
+#[cfg(unix)]
+fn interface_entries<T>(read: impl FnOnce(&[(String, InterfaceAddress)]) -> Option<T>) -> Option<T> {
+    let mut list: *mut libc::ifaddrs = std::ptr::null_mut();
+    // SAFETY: `getifaddrs` either returns 0 and fills `list` with a
+    // null-terminated linked list it owns, or returns non-zero and leaves
+    // it untouched; we check the return before dereferencing.
+    if unsafe { libc::getifaddrs(&mut list) } != 0 {
+        return None;
+    }
+
+    let mut entries: Vec<(String, InterfaceAddress)> = Vec::new();
+    let mut current = list;
+    while !current.is_null() {
+        // SAFETY: `current` is non-null and, until the list is freed below,
+        // points at an `ifaddrs` whose `ifa_name` is a valid C string and
+        // whose `ifa_addr` is either null or a `sockaddr` whose `sa_family`
+        // says which concrete type it is.
+        unsafe {
+            let entry = &*current;
+            current = entry.ifa_next;
+            if entry.ifa_addr.is_null() {
+                continue;
+            }
+            let name = std::ffi::CStr::from_ptr(entry.ifa_name).to_string_lossy().into_owned();
+            match i32::from((*entry.ifa_addr).sa_family) {
+                libc::AF_INET => {
+                    let address = &*(entry.ifa_addr as *const libc::sockaddr_in);
+                    entries.push((name, InterfaceAddress::V4(Ipv4Addr::from(u32::from_be(address.sin_addr.s_addr)))));
+                }
+                #[cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))]
+                libc::AF_LINK => {
+                    let address = &*(entry.ifa_addr as *const libc::sockaddr_dl);
+                    let start = usize::from(address.sdl_nlen);
+                    if usize::from(address.sdl_alen) == 6 && start + 6 <= address.sdl_data.len() {
+                        let mut mac = [0u8; 6];
+                        for (index, byte) in mac.iter_mut().enumerate() {
+                            *byte = address.sdl_data[start + index] as u8;
+                        }
+                        entries.push((name, InterfaceAddress::Link(mac)));
+                    }
+                }
+                #[cfg(target_os = "linux")]
+                libc::AF_PACKET => {
+                    let address = &*(entry.ifa_addr as *const libc::sockaddr_ll);
+                    if address.sll_halen == 6 {
+                        let mut mac = [0u8; 6];
+                        mac.copy_from_slice(&address.sll_addr[..6]);
+                        entries.push((name, InterfaceAddress::Link(mac)));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let extracted = read(&entries);
+    // SAFETY: `list` came from a successful `getifaddrs` and nothing above
+    // freed it; `entries` owns copies, not borrows, of its contents.
+    unsafe { libc::freeifaddrs(list) };
+    extracted
 }
 
 fn pick_device_number(taken: &[u8], preferred_override: Option<u8>) -> Option<u8> {
@@ -75,13 +200,18 @@ fn pick_device_number(taken: &[u8], preferred_override: Option<u8>) -> Option<u8
 }
 
 /// Whether `device` is decktective's own presence broadcast rather than a
-/// real or simulated peer — recognized by number *and* MAC matching what
-/// [`presence_mac`] would generate for that number, so a genuine collision
-/// (same number, different MAC) is still detected as a conflict. Public so
+/// real or simulated peer — recognized by the MAC we are announcing with,
+/// so a genuine collision (another device on our number, with its own MAC)
+/// is still detected as a conflict. Public so
 /// callers building on [`DeviceWatcher`]'s list (e.g. mapping it to deck
 /// connect/disconnect events) can filter our own entry out the same way.
 pub fn is_own_broadcast(device: &DiscoveredDevice) -> bool {
-    device.mac_address == presence_mac_string(device.device_number)
+    match ANNOUNCED_MAC.get() {
+        Some(&mac) => device.mac_address == mac_string(mac),
+        // Not announcing (yet): fall back to recognizing the synthetic MAC
+        // shape, so callers behave as they did before presence started.
+        None => device.mac_address == mac_string(presence_mac(device.device_number)),
+    }
 }
 
 /// Owns decktective's claimed virtual player number, once one is picked.
@@ -138,17 +268,42 @@ impl Presence {
     /// listening keeps working regardless, since those don't depend on
     /// presence (see this module's doc comment).
     pub async fn run(self: Arc<Self>, device_watcher: Arc<DeviceWatcher>, name: String, bind_ip: Ipv4Addr) {
-        let socket = match UdpSocket::bind((bind_ip, 0)).await {
+        // Real players broadcast their keep-alives *from* ANNOUNCE_PORT, so
+        // that is what we do; an ephemeral source port is the fallback
+        // rather than the default, since a peer that filters on the source
+        // port would silently never send us status. Sharing the port with
+        // this process's own listener is what `bind_udp_socket_on`'s
+        // SO_REUSEADDR/SO_REUSEPORT is for.
+        let socket = match crate::bind_udp_socket_on(bind_ip, ANNOUNCE_PORT) {
             Ok(socket) => socket,
             Err(error) => {
-                tracing::error!(%error, "failed to open the Pro DJ Link presence socket");
-                return;
+                tracing::warn!(%error, port = ANNOUNCE_PORT, "could not send presence from the standard announce port; falling back to an ephemeral one");
+                match UdpSocket::bind((bind_ip, 0)).await.and_then(|socket| {
+                    socket.set_broadcast(true)?;
+                    Ok(socket)
+                }) {
+                    Ok(socket) => socket,
+                    Err(error) => {
+                        tracing::error!(%error, "failed to open the Pro DJ Link presence socket");
+                        return;
+                    }
+                }
             }
         };
-        if let Err(error) = socket.set_broadcast(true) {
-            tracing::error!(%error, "failed to enable broadcast on the presence socket");
-            return;
-        }
+
+        // Resolved once, before the first keep-alive goes out: this is the
+        // identity every player on the network will file us under, and
+        // changing it mid-session would leave stale peer entries behind.
+        let mac = match interface_mac(bind_ip) {
+            Some(mac) => mac,
+            None => {
+                tracing::warn!(%bind_ip, "could not read the adapter's hardware MAC; announcing a synthetic one, which real players may not send status packets back to");
+                presence_mac(PREFERRED_DEVICE_NUMBER)
+            }
+        };
+        let _ = ANNOUNCED_MAC.set(mac);
+        let mac = *ANNOUNCED_MAC.get().unwrap_or(&mac);
+        tracing::info!(mac = %mac_string(mac), %bind_ip, "announcing decktective's presence");
 
         let mut devices_rx = device_watcher.subscribe();
         self.ensure_claimed(&device_watcher.devices());
@@ -161,7 +316,7 @@ impl Presence {
                     self.ensure_claimed(&devices);
                     if let Some(number) = self.device_number() {
                         let peer_count = devices.iter().filter(|d| !is_own_broadcast(d)).count() as u8 + 1;
-                        let packet = build_keepalive(number, &name, presence_mac(number), peer_count);
+                        let packet = build_keepalive(number, &name, mac, bind_ip, peer_count);
                         if let Err(error) = socket.send_to(&packet, (BROADCAST_ADDR, ANNOUNCE_PORT)).await {
                             tracing::warn!(%error, "failed to broadcast our presence keep-alive");
                         }
@@ -262,7 +417,7 @@ mod tests {
     #[test]
     fn our_own_broadcast_does_not_look_like_a_conflict() {
         let presence = Presence::new(None);
-        let devices = vec![device(5, &presence_mac_string(5))];
+        let devices = vec![device(5, &mac_string(presence_mac(5)))];
         presence.ensure_claimed(&devices);
         assert_eq!(presence.device_number(), Some(5));
 
@@ -274,7 +429,7 @@ mod tests {
     #[test]
     fn a_real_device_taking_our_number_triggers_a_reclaim() {
         let presence = Presence::new(None);
-        presence.ensure_claimed(&[device(5, &presence_mac_string(5))]);
+        presence.ensure_claimed(&[device(5, &mac_string(presence_mac(5)))]);
         assert_eq!(presence.device_number(), Some(5));
 
         // A different MAC on our number is a genuine conflict, not us.

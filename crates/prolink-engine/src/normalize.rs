@@ -53,6 +53,7 @@ mod tests {
     fn status(overrides: impl FnOnce(DeviceStatus) -> DeviceStatus) -> DeviceStatus {
         overrides(DeviceStatus {
             device_number: 2,
+            track_source_device: 2,
             play_state: RawPlayState::NoTrack,
             is_master: false,
             is_synced: false,

@@ -238,33 +238,47 @@ fn handle_status(
     handle.update_deck_state(to_deck_state(&status, playhead_ms, now));
 
     let deck_id = status.device_number;
-    if known_track_ids.get(&deck_id) != Some(&status.track_id) {
-        known_track_ids.insert(deck_id, status.track_id);
-        metadata_fetcher.note_current_track(deck_id, status.track_id);
-
-        match status.track_id {
-            None => handle.update_deck_track(deck_id, None),
-            Some(track_id) => {
-                let Some(player) = known_players.get(&deck_id) else {
-                    return; // No IP on record for this deck yet; can't open a connection.
-                };
-                let Ok(player_ip) = player.ip.parse() else {
-                    return;
-                };
-                metadata_fetcher.spawn_fetch(
-                    Arc::clone(handle),
-                    FetchRequest {
-                        deck_id,
-                        player_ip,
-                        slot: status.media_slot,
-                        track_type: status.track_type,
-                        track_id,
-                        status_bpm: status.track_bpm,
-                    },
-                );
-            }
-        }
+    if known_track_ids.get(&deck_id) == Some(&status.track_id) {
+        return; // Same track as the last packet; nothing to fetch.
     }
+
+    let Some(track_id) = status.track_id else {
+        known_track_ids.insert(deck_id, None);
+        metadata_fetcher.note_current_track(deck_id, None);
+        handle.update_deck_track(deck_id, None);
+        return;
+    };
+
+    // The media may live in another player entirely: on a linked booth every
+    // deck plays off one stick, and asking a deck about a track it is only
+    // streaming gets an empty answer (and, over NFS, a mount failure on an
+    // empty slot).
+    let source_device = if status.track_source_device == 0 { deck_id } else { status.track_source_device };
+    let Some(player_ip) = known_players.get(&source_device).and_then(|player| player.ip.parse().ok()) else {
+        // No address for that player yet. Status packets arrive every
+        // ~200ms and keep-alives only every ~1.5s, so at startup this is
+        // simply the normal order of events — and it is why the track id
+        // is recorded *below*, once a fetch has actually been spawned:
+        // marking it as handled here would make this deck's opening track
+        // the one track that never gets metadata, until the DJ happens to
+        // load another one.
+        return;
+    };
+
+    known_track_ids.insert(deck_id, Some(track_id));
+    metadata_fetcher.note_current_track(deck_id, Some(track_id));
+    metadata_fetcher.spawn_fetch(
+        Arc::clone(handle),
+        FetchRequest {
+            deck_id,
+            source_device,
+            player_ip,
+            slot: status.media_slot,
+            track_type: status.track_type,
+            track_id,
+            status_bpm: status.track_bpm,
+        },
+    );
 }
 
 /// Diffs `devices` against what was previously known and reports

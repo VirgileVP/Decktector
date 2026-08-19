@@ -34,6 +34,14 @@ tracing = { workspace = true }
 tracing-subscriber = "0.3"
 ts-rs = { workspace = true }
 
+# `getifaddrs` for the real hardware MAC of the booth adapter, which our
+# keep-alive has to announce (see `crates/prolink/src/presence.rs`). Unix
+# only: Windows needs `GetAdaptersInfo` instead, and `presence` falls back
+# to a synthetic MAC there rather than pulling in a whole win32 crate for
+# a platform no booth session has used yet.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 # Only `tests/hardware_capture_replay.rs`'s `.EXT` replay needs these — same
 # versions `prolink-engine` already builds against, reused here rather than

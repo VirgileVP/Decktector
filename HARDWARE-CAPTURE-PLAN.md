@@ -3,6 +3,35 @@
 Implementation plan for the tooling needed before the first real Pro DJ Link
 hardware session (a CDJ + DJM kit, available for a single short window).
 
+## Status: the session happened
+
+The first hardware session ran on **2026-08-19** against two CDJ-3000s and a
+DJM-900NXS2, and the plan below did its job — every parser question it was
+written to answer is now answered against real bytes. What it found, since
+each item invalidates something this document takes as read:
+
+- **A passive listener records no player status at all.** Players unicast
+  status only to peers whose keep-alive they have seen, so `prolink-capture`
+  now announces itself as a virtual CDJ by default. Without it there is no
+  status traffic, and with no status there is no metadata either — every
+  later phase keys off the currently-loaded track. The keep-alive has to
+  carry the adapter's real IP *and* its real MAC to work.
+- **The dbserver framing was wrong end to end** — a missing connection
+  greeting, untagged header fields, the wrong argument-type codes, and menu
+  queries built from four separate byte arguments instead of one packed
+  word. Real players answered by closing the connection.
+- **The `export.pdb` parser found zero tracks** in a real database. Nearly
+  every structural constant in it was wrong; see that file's module doc for
+  the list.
+- **Metadata has to be asked of the player holding the media**, which on a
+  linked booth is not the deck doing the playing.
+- **`rekordcrate` 0.3 cannot read a CDJ-3000 `.EXT` in one piece**, so both
+  the engine and the replay harness now walk ANLZ sections individually.
+
+Reference bytes from that session — a real `export.pdb`, the dbserver
+exchanges, decoded status — are under `capture/reference-20260819/`, and
+the tests that pin this behaviour quote them directly.
+
 ## Why this exists
 
 Every metadata code path in this repo — the whole NFS route and the

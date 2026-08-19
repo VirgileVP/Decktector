@@ -171,6 +171,13 @@ impl RawPlayState {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DeviceStatus {
     pub device_number: u8,
+    /// Device number of the player whose media the loaded track came from
+    /// — **not** always [`Self::device_number`]. On a linked setup, one
+    /// player's USB feeds every deck: a CDJ-3000 playing a track off its
+    /// neighbour's stick reports that neighbour here, and metadata for the
+    /// track has to be asked of *that* player, in that player's slot, by
+    /// that player's number. Zero when nothing is loaded.
+    pub track_source_device: u8,
     pub play_state: RawPlayState,
     pub is_master: bool,
     pub is_synced: bool,
@@ -217,6 +224,7 @@ pub fn parse_status(data: &[u8], source_ip: IpAddr) -> Option<DeviceStatus> {
 
     Some(DeviceStatus {
         device_number: data[DEVICE_NUMBER_OFFSET],
+        track_source_device: data[TRACK_DEVICE_OFFSET],
         play_state: RawPlayState::from_byte(data[PLAY_STATE_OFFSET]),
         is_master: flags & FLAG_MASTER != 0,
         is_synced: flags & FLAG_SYNCED != 0,

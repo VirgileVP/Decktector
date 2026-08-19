@@ -1,23 +1,25 @@
 //! Hand-rolled, minimal parser for `export.pdb` — Rekordbox's on-device
 //! track database, fetched whole over NFS and parsed entirely in memory.
 //!
-//! **This is the least-confident file in the whole NFS route.** The
-//! `rekordcrate` crate (`https://github.com/Holzhaus/rekordcrate`) parses
-//! this exact format and was the layout reference here, but its own
-//! row-struct fields are private in the published version — reading its
-//! source (not its API) as documentation, rather than depending on it,
-//! is what `dbserver`'s protocol modules did successfully against
-//! `beat-link` earlier this session, but the two cases aren't equally
-//! solid: the ONC-RPC/MOUNT/NFS layer this file's bytes arrive through was
-//! cross-checked against multiple converging sources with concrete,
-//! consistent byte tables. This file's layout — especially the exact page
-//! -type numeric codes, [`Track`]'s fixed-header field order, and
-//! [`DeviceSQLString`]'s short-vs-long-form encoding — rests on a single,
-//! partially self-contradictory secondary reading of that source (it
-//! flagged its own uncertainty about the `Table` entry's byte size while
-//! reporting it). Treat every numeric constant below as a best
-//! reconstruction, not a confirmed fact, until checked against either
-//! `rekordcrate`'s actual source directly or a real `export.pdb` file.
+//! Every offset below was read off a real `export.pdb` — the 1 MB database
+//! from a rekordbox-exported USB stick in a CDJ-3000, pulled over NFS on
+//! 2026-08-19 (`capture/reference-20260819/`) — and cross-checked field by
+//! field against the same tracks' metadata as answered independently by
+//! that player's dbserver. The version before that was written from a
+//! secondary reading of `rekordcrate`'s source and got essentially every
+//! structural constant wrong: it found zero tracks in this file. What it
+//! got wrong, in case any of it resurfaces:
+//!
+//!   * a page's fields start after a 4-byte gap — `page_type` is at
+//!     `0x08`, not `0x04`, and the row counts at `0x18`/`0x22`;
+//!   * pages with `0x40` set in [`PAGE_FLAGS_OFFSET`] hold no rows at all,
+//!     and every table's first page is one of them;
+//!   * a row group's 16 offsets are stored **backwards** — slot `n`'s
+//!     offset is entry `15 - n`;
+//!   * a track row's string offsets are relative to the row, not to the
+//!     end of its fixed header, and the title is entry 17 of 21, not 0;
+//!   * entry 14, not the last one, is the `.DAT` analysis path. The last
+//!     is the audio file, which has no analysis data in it.
 //!
 //! Scoped to exactly what `prolink-engine::metadata` needs: id/name/
 //! cross-reference fields for seven row types, nothing else this database
@@ -35,13 +37,20 @@ const PAGE_SIZE_OFFSET: usize = 4;
 const NUM_TABLES_OFFSET: usize = 8;
 const TABLE_ENTRY_LEN: usize = 16;
 
-/// Page header: `page_index | page_type | next_page` (u32 each), several
-/// unknown/unused fields, `num_rows_small: u8`, more unknowns,
-/// `free_size: u16`, `used_size: u16`, unknown, `num_rows_large: u16`, two
-/// more unknowns — 40 bytes total before row data.
+/// Page header: a 4-byte gap, then `page_index | page_type | next_page`
+/// (u32 each), unknown fields, `num_rows_small: u8` at `0x18`, page flags
+/// at `0x1b`, `free_size`/`used_size` (u16) at `0x1c`/`0x1e`, and
+/// `num_rows_large: u16` at `0x22` — 40 bytes total before row data.
 const PAGE_HEADER_LEN: usize = 0x28;
-const NUM_ROWS_SMALL_OFFSET: usize = 0x12;
-const NUM_ROWS_LARGE_OFFSET: usize = 0x1a;
+const PAGE_TYPE_OFFSET: usize = 0x08;
+const NEXT_PAGE_OFFSET: usize = 0x0c;
+const NUM_ROWS_SMALL_OFFSET: usize = 0x18;
+const PAGE_FLAGS_OFFSET: usize = 0x1b;
+const NUM_ROWS_LARGE_OFFSET: usize = 0x22;
+/// Set in [`PAGE_FLAGS_OFFSET`] on a page that carries no rows — every
+/// table's first page is one, so a parser that doesn't check this reads a
+/// header as if it were row data and finds nothing anywhere.
+const PAGE_FLAG_NOT_DATA: u8 = 0x40;
 /// A `num_rows_large` at or above this sentinel means "use
 /// `num_rows_small` instead" — `rekordcrate`'s own logic for the same
 /// ambiguity.
@@ -53,9 +62,8 @@ const ROWS_PER_GROUP: usize = 16;
 /// unknown field per group.
 const ROW_GROUP_FOOTER_LEN: usize = ROWS_PER_GROUP * 2 + 4;
 
-/// Page-type codes — **the least confident numbers in this file**,
-/// reconstructed from general familiarity with this reverse-engineered
-/// format rather than a single quoted source.
+/// Page-type codes, confirmed against the table directory of a real
+/// `export.pdb`.
 mod page_type {
     pub const TRACKS: u32 = 0;
     pub const GENRES: u32 = 1;
@@ -123,6 +131,7 @@ pub fn parse(bytes: &[u8]) -> Option<Pdb> {
         return None;
     }
 
+    let max_pages = bytes.len() / page_size + 1;
     let mut pdb = Pdb::default();
     for table_index in 0..num_tables {
         let table_offset = HEADER_LEN + table_index as usize * TABLE_ENTRY_LEN;
@@ -137,11 +146,19 @@ pub fn parse(bytes: &[u8]) -> Option<Pdb> {
         }
 
         let mut page_index = first_page;
+        let mut pages_visited = 0usize;
         while let Some(page) = read_page(bytes, page_size, page_index) {
-            for row_bytes in page.row_slices(bytes) {
-                apply_row(&mut pdb, page_type, row_bytes);
+            if page.page_type == page_type {
+                for row_bytes in page.row_slices(bytes) {
+                    apply_row(&mut pdb, page_type, row_bytes);
+                }
             }
-            if page_index == last_page {
+            // `next_page` on the last page of a table points into the next
+            // table's chain, so `last_page` is the stop signal — plus a
+            // hard cap, since a corrupt file whose chain loops back on
+            // itself would otherwise spin here forever.
+            pages_visited += 1;
+            if page_index == last_page || page.next_page == page_index || pages_visited > max_pages {
                 break;
             }
             page_index = page.next_page;
@@ -151,6 +168,11 @@ pub fn parse(bytes: &[u8]) -> Option<Pdb> {
 }
 
 struct Page {
+    /// The page's own idea of which table it belongs to. Checked against
+    /// the table directory's before any row is read: `next_page` on a
+    /// table's last page points on into another table's chain, so a walk
+    /// that trusted the chain alone would parse album rows as tracks.
+    page_type: u32,
     /// Byte offset of this page's own start within the whole file —
     /// `page_index as usize * page_size`, kept rather than recomputed so
     /// [`Self::row_slices`] doesn't need `page_size` threaded back in.
@@ -187,7 +209,15 @@ fn read_page(bytes: &[u8], page_size: usize, page_index: u32) -> Option<Page> {
     if base + page_size > bytes.len() || base + PAGE_HEADER_LEN > bytes.len() {
         return None;
     }
-    let next_page = read_u32_le(bytes, base + 8)?;
+    let next_page = read_u32_le(bytes, base + NEXT_PAGE_OFFSET)?;
+
+    // A non-data page still has to be walked *through* — it holds the link
+    // to the rest of the table — it just has no rows to read out of it.
+    let page_type = read_u32_le(bytes, base + PAGE_TYPE_OFFSET)?;
+    if bytes.get(base + PAGE_FLAGS_OFFSET)? & PAGE_FLAG_NOT_DATA != 0 {
+        return Some(Page { base, page_size, page_type, next_page, row_offsets: Vec::new() });
+    }
+
     let num_rows_small = *bytes.get(base + NUM_ROWS_SMALL_OFFSET)?;
     let num_rows_large = read_u16_le(bytes, base + NUM_ROWS_LARGE_OFFSET)?;
     let num_rows = if num_rows_large > u16::from(num_rows_small) && num_rows_large != NUM_ROWS_LARGE_SENTINEL {
@@ -197,7 +227,7 @@ fn read_page(bytes: &[u8], page_size: usize, page_index: u32) -> Option<Page> {
     };
 
     let row_offsets = read_row_group_offsets(bytes, base, page_size, num_rows)?;
-    Some(Page { base, page_size, next_page, row_offsets })
+    Some(Page { base, page_size, page_type, next_page, row_offsets })
 }
 
 fn read_row_group_offsets(bytes: &[u8], page_base: usize, page_size: usize, num_rows: u16) -> Option<Vec<u16>> {
@@ -214,7 +244,12 @@ fn read_row_group_offsets(bytes: &[u8], page_base: usize, page_size: usize, num_
         let take = remaining.min(ROWS_PER_GROUP);
         for slot in 0..take {
             if presence & (1 << slot) != 0 {
-                let offset = read_u16_le(bytes, footer_start + slot * 2)?;
+                // Backwards: the offsets are stored last-slot-first, so
+                // slot 0 lives in the final entry of the block. Reading
+                // them in order yields the zero-filled unused entries for
+                // every page that isn't exactly full.
+                let entry = ROWS_PER_GROUP - 1 - slot;
+                let offset = read_u16_le(bytes, footer_start + entry * 2)?;
                 offsets.push(offset);
             }
         }
@@ -231,22 +266,40 @@ fn apply_row(pdb: &mut Pdb, page_type: u32, row: &[u8]) {
                 pdb.tracks.insert(track.id, track);
             }
         }
-        page_type::GENRES => insert_named_row(&mut pdb.genres, row),
-        page_type::ARTISTS => insert_named_row(&mut pdb.artists, row),
-        page_type::ALBUMS => insert_named_row(&mut pdb.albums, row),
-        page_type::LABELS => insert_named_row(&mut pdb.labels, row),
-        page_type::KEYS => insert_named_row(&mut pdb.keys, row),
-        page_type::ARTWORK => insert_named_row(&mut pdb.artwork_paths, row),
+        page_type::GENRES => insert_inline_row(&mut pdb.genres, row, 0x04),
+        page_type::LABELS => insert_inline_row(&mut pdb.labels, row, 0x04),
+        page_type::ARTWORK => insert_inline_row(&mut pdb.artwork_paths, row, 0x04),
+        // A key row repeats its id before the name.
+        page_type::KEYS => insert_inline_row(&mut pdb.keys, row, 0x08),
+        page_type::ARTISTS => insert_indirect_row(&mut pdb.artists, row, 0x04, 0x09),
+        page_type::ALBUMS => insert_indirect_row(&mut pdb.albums, row, 0x0c, 0x15),
         _ => {}
     }
 }
 
-/// Genre/Artist/Album/Label/Key/Artwork rows share the same simple shape:
-/// a 4-byte id, then one inline [`DeviceSQLString`](mod@device_sql_string)
-/// (the row's name, or — for Artwork — its file path).
-fn insert_named_row(table: &mut HashMap<u32, String>, row: &[u8]) {
+/// Genre, label, key and artwork rows: a 4-byte id at the start, then the
+/// row's single [`DeviceSQLString`](mod@device_sql_string) — its name, or
+/// for artwork its file path — inline at a fixed offset.
+fn insert_inline_row(table: &mut HashMap<u32, String>, row: &[u8], name_offset: usize) {
     let Some(id) = read_u32_le(row, 0) else { return };
-    let Some((name, _)) = device_sql_string::read(row, 4) else { return };
+    let Some((name, _)) = device_sql_string::read(row, name_offset) else { return };
+    table.insert(id, name);
+}
+
+/// Artist and album rows, which put their name somewhere else in the row
+/// and store *where* in a single byte: `id_offset` locates the row id,
+/// `name_pointer_offset` the byte holding the name's offset from the start
+/// of the row.
+///
+/// (Both row types also carry a subtype word saying whether that pointer
+/// is one byte or two. Only the one-byte form has ever been observed here,
+/// and a two-byte pointer would read as a plausible-but-wrong offset
+/// rather than as garbage, so the string parse below is what catches it:
+/// no valid string there, no row.)
+fn insert_indirect_row(table: &mut HashMap<u32, String>, row: &[u8], id_offset: usize, name_pointer_offset: usize) {
+    let Some(id) = read_u32_le(row, id_offset) else { return };
+    let Some(&name_offset) = row.get(name_pointer_offset) else { return };
+    let Some((name, _)) = device_sql_string::read(row, usize::from(name_offset)) else { return };
     table.insert(id, name);
 }
 
@@ -257,30 +310,35 @@ fn insert_named_row(table: &mut HashMap<u32, String>, row: &[u8]) {
 /// `analyze_path` (called `file_path` on-disk, but this is what
 /// `analyze_path` actually needs) among them.
 fn parse_track_row(row: &[u8]) -> Option<Track> {
-    let id = read_u32_le(row, 0x2c)?;
-    let artist_id = read_u32_le(row, 0x18)?;
-    let genre_id = read_u32_le(row, 0x28)?;
-    let album_id = read_u32_le(row, 0x24)?;
-    let label_id = read_u32_le(row, 0x0c)?;
-    let key_id = read_u32_le(row, 0x10)?;
-    let artwork_id = read_u32_le(row, 0x08)?;
-    let tempo_centibpm = read_u32_le(row, 0x1c)?;
-    let duration_sec = u32::from(read_u16_le(row, 0x38)?);
+    let artwork_id = read_u32_le(row, 0x1c)?;
+    let key_id = read_u32_le(row, 0x20)?;
+    let label_id = read_u32_le(row, 0x28)?;
+    let tempo_centibpm = read_u32_le(row, 0x38)?;
+    let genre_id = read_u32_le(row, 0x3c)?;
+    let album_id = read_u32_le(row, 0x40)?;
+    let artist_id = read_u32_le(row, 0x44)?;
+    let id = read_u32_le(row, 0x48)?;
+    let duration_sec = u32::from(read_u16_le(row, 0x54)?);
 
-    // The string offset table starts right after the fixed header
-    // (reconstructed length 0x5e) — title is conventionally the first
-    // entry, the file path the last of 21.
-    const FIXED_HEADER_LEN: usize = 0x5e;
-    const STRING_COUNT: usize = 21;
-    const TITLE_INDEX: usize = 0;
-    const FILE_PATH_INDEX: usize = STRING_COUNT - 1;
+    // 21 two-byte string offsets follow the fixed header, each relative to
+    // the start of the row.
+    const STRING_TABLE_OFFSET: usize = 0x5e;
+    const TITLE_INDEX: usize = 17;
+    /// The `.DAT` this track's analysis lives in — the `.EXT`/`.2EX`
+    /// variants share the path with the extension swapped. Deliberately
+    /// not entry 20, which is the audio file itself.
+    const ANALYZE_PATH_INDEX: usize = 14;
 
     let string_offset = |index: usize| -> Option<usize> {
-        read_u16_le(row, FIXED_HEADER_LEN + index * 2).map(|value| FIXED_HEADER_LEN + value as usize)
+        read_u16_le(row, STRING_TABLE_OFFSET + index * 2).map(usize::from)
     };
 
-    let (title, _) = device_sql_string::read(row, string_offset(TITLE_INDEX)?)?;
-    let (analyze_path, _) = device_sql_string::read(row, string_offset(FILE_PATH_INDEX)?)?;
+    // A string this parser can't read (the long form — see
+    // `device_sql_string`) costs that one field, not the whole row: a track
+    // with an unreadable title still has an id, a tempo and a duration
+    // worth having, and the dbserver route can fill the rest in.
+    let title = device_sql_string::read(row, string_offset(TITLE_INDEX)?).map(|(text, _)| text).unwrap_or_default();
+    let analyze_path = device_sql_string::read(row, string_offset(ANALYZE_PATH_INDEX)?).map(|(text, _)| text).unwrap_or_default();
 
     Some(Track { id, title, artist_id, album_id, genre_id, key_id, label_id, artwork_id, duration_sec, tempo_centibpm, analyze_path })
 }
@@ -341,12 +399,28 @@ mod tests {
     }
 
     #[test]
-    fn a_named_row_is_indexed_by_id() {
+    fn an_inline_named_row_is_indexed_by_id() {
         let mut row = 4u32.to_le_bytes().to_vec();
         row.extend_from_slice(&short_string("Progressive House"));
         let mut table = HashMap::new();
-        insert_named_row(&mut table, &row);
+        insert_inline_row(&mut table, &row, 0x04);
         assert_eq!(table.get(&4).map(String::as_str), Some("Progressive House"));
+    }
+
+    /// An artist row, in the shape a CDJ-3000's `export.pdb` writes: the id
+    /// at `0x04` and, at `0x09`, the offset of the name rather than the
+    /// name itself.
+    #[test]
+    fn an_indirect_named_row_follows_its_name_pointer() {
+        let mut row = vec![0u8; 0x0a];
+        row[0x00] = 0x60; // subtype
+        row[0x04] = 7; // id
+        row[0x09] = 0x0a; // where the name starts
+        row.extend_from_slice(&short_string("Trinix"));
+
+        let mut table = HashMap::new();
+        insert_indirect_row(&mut table, &row, 0x04, 0x09);
+        assert_eq!(table.get(&7).map(String::as_str), Some("Trinix"));
     }
 
     #[test]

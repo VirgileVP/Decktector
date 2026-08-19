@@ -38,7 +38,27 @@ const NAME_LEN: usize = 20;
 const DEVICE_NUMBER_OFFSET: usize = 0x24;
 const MAC_OFFSET: usize = 0x26;
 const MAC_LEN: usize = 6;
+const IP_OFFSET: usize = 0x2c;
+const IP_LEN: usize = 4;
 const PEER_COUNT_OFFSET: usize = 0x30;
+/// The fields a real keep-alive carries besides name/number/MAC/IP/peer
+/// count, at the offsets a captured CDJ-3000 and DJM-900NXS2 agree on
+/// (`capture/` sessions, cross-checked against Deep Symmetry's analysis):
+/// `0x20`-`0x21` a constant plus the device kind, `0x22`-`0x23` the packet
+/// length, `0x25` the device kind again, `0x34`-`0x35` a trailing constant
+/// pair that also varies by kind. They are transmitted, not just parsed:
+/// players decide whether to treat us as a peer worth unicasting status to
+/// from the whole packet, so a keep-alive with these left zeroed is a
+/// keep-alive real hardware can ignore.
+const PROTOCOL_OFFSET: usize = 0x20;
+const KIND_OFFSET: usize = 0x21;
+const LENGTH_OFFSET: usize = 0x22;
+const KIND_REPEAT_OFFSET: usize = 0x25;
+const TRAILER_OFFSET: usize = 0x34;
+/// The `0x21`/`0x25` device-kind value a CDJ sends (a mixer sends `0x02`
+/// there); we announce ourselves as a player because that is the identity
+/// metadata queries are answered for.
+const KIND_PLAYER: u8 = 0x03;
 
 /// What a device number identifies, by Pro DJ Link convention — 1-6 are
 /// players, 33 (`0x21`) is reserved for the mixer channel.
@@ -248,22 +268,37 @@ impl DeviceWatcher {
     }
 }
 
-/// Builds a well-formed 54-byte keep-alive payload for a player or mixer
-/// with the given number, name, MAC and peer count — the IP travels
-/// separately, as it does over the wire (the sender's socket address, not a
-/// payload field). Encoding lives next to [`parse_keepalive`] so the wire
-/// format is defined once; used by the crate's tests and by the `cdj-sim`
-/// dev tool that simulates fake devices on the network.
-pub fn build_keepalive(device_number: u8, name: &str, mac: [u8; 6], peer_count: u8) -> Vec<u8> {
+/// Builds a well-formed 54-byte keep-alive payload for a player with the
+/// given number, name, MAC, IP and peer count, byte-for-byte in the shape a
+/// real CDJ-3000 broadcasts (see [`KIND_OFFSET`]'s doc comment for the
+/// fields beyond the obvious ones).
+///
+/// `ip` is a payload field, not just the sender's socket address: players
+/// unicast their status packets to the address they read out of a peer's
+/// keep-alive, so a keep-alive announcing `0.0.0.0` gets a device listed on
+/// other tools' device tables and nothing on [`crate::STATUS_PORT`] — which
+/// is exactly what the first hardware capture recorded.
+///
+/// Encoding lives next to [`parse_keepalive`] so the wire format is defined
+/// once; used by [`crate::presence`], by the `prolink-capture` tool and by
+/// the `cdj-sim` dev tool that simulates fake devices on the network.
+pub fn build_keepalive(device_number: u8, name: &str, mac: [u8; 6], ip: Ipv4Addr, peer_count: u8) -> Vec<u8> {
     let mut packet = vec![0u8; KEEPALIVE_PACKET_LEN];
     packet[..PROLINK_HEADER.len()].copy_from_slice(&PROLINK_HEADER);
     packet[PROLINK_HEADER.len()] = KEEPALIVE_PACKET_TYPE;
     let name_bytes = name.as_bytes();
     let name_len = name_bytes.len().min(NAME_LEN);
     packet[NAME_OFFSET..NAME_OFFSET + name_len].copy_from_slice(&name_bytes[..name_len]);
+    packet[PROTOCOL_OFFSET] = 0x01;
+    packet[KIND_OFFSET] = KIND_PLAYER;
+    packet[LENGTH_OFFSET..LENGTH_OFFSET + 2].copy_from_slice(&(KEEPALIVE_PACKET_LEN as u16).to_be_bytes());
     packet[DEVICE_NUMBER_OFFSET] = device_number;
+    packet[KIND_REPEAT_OFFSET] = 0x01;
     packet[MAC_OFFSET..MAC_OFFSET + MAC_LEN].copy_from_slice(&mac);
+    packet[IP_OFFSET..IP_OFFSET + IP_LEN].copy_from_slice(&ip.octets());
     packet[PEER_COUNT_OFFSET] = peer_count;
+    packet[TRAILER_OFFSET] = 0x01;
+    packet[TRAILER_OFFSET + 1] = 0x64;
     packet
 }
 
@@ -272,7 +307,7 @@ mod tests {
     use super::*;
 
     fn keepalive_bytes(device_number: u8, name: &str, mac: [u8; 6]) -> Vec<u8> {
-        build_keepalive(device_number, name, mac, 1)
+        build_keepalive(device_number, name, mac, Ipv4Addr::new(192, 168, 1, 42), 1)
     }
 
     #[test]
@@ -307,6 +342,26 @@ mod tests {
         let mut bytes = keepalive_bytes(2, "CDJ-3000", [0; 6]);
         bytes[PROLINK_HEADER.len()] = 0x0a; // Initial device announcement, not a keep-alive.
         assert!(parse_keepalive(&bytes, Ipv4Addr::LOCALHOST).is_none());
+    }
+
+    /// The exact keep-alive a CDJ-3000 broadcast during the 2026-08-19
+    /// hardware session (`capture/capture-20260819-083643/udp.jsonl`), with
+    /// only the name/number/MAC/IP that identify *that* player differing —
+    /// every other byte we transmit has to match hardware, since the whole
+    /// packet is what decides whether real players start unicasting status
+    /// to us.
+    #[test]
+    fn matches_a_captured_cdj_3000_keepalive() {
+        let captured = "5173707431576d4a4f4c060043444a2d33303030000000000000000000000000010300360301c83dfc126917a9fe0583020000000164";
+        let bytes = build_keepalive(
+            3,
+            "CDJ-3000",
+            [0xc8, 0x3d, 0xfc, 0x12, 0x69, 0x17],
+            Ipv4Addr::new(169, 254, 5, 131),
+            2,
+        );
+        let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
+        assert_eq!(hex, captured);
     }
 
     #[test]

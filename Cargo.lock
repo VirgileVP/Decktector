@@ -3216,6 +3216,7 @@ dependencies = [
  "binrw",
  "chrono",
  "if-addrs",
+ "libc",
  "rekordcrate",
  "serde",
  "serde_json",

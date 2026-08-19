@@ -16,7 +16,8 @@
 //!      rather than via `prolink::status::StatusWatcher` so each decoded
 //!      record can carry the exact source address/timestamp of the packet
 //!      it came from, which that watcher's forwarding channel doesn't carry.
-//!   B. `prolink::discovery::DeviceWatcher` for `devices.jsonl` and a live
+//!   B. `prolink::presence::Presence` broadcasting a virtual-CDJ keep-alive,
+//!      plus `prolink::discovery::DeviceWatcher` for `devices.jsonl` and a live
 //!      table printed to stderr, fed from phase A's own listener via
 //!      `DeviceWatcher::ingest` rather than opening a second socket on
 //!      [`prolink::ANNOUNCE_PORT`]. Two sockets on one port only fan out
@@ -24,6 +25,13 @@
 //!      reaches exactly one of them, phase A wins the race, and phase B
 //!      silently sees nothing — an empty device table and a blank live
 //!      table, on the one night that can't be redone.
+//!      The keep-alive is not cosmetic and is why this tool transmits at
+//!      all: players unicast their status packets only to peers whose
+//!      keep-alives they have seen, so a purely passive run records
+//!      discovery and beats and *nothing* on `STATUS_PORT` — which is
+//!      exactly what the 2026-08-19 session recorded, taking phases C and D
+//!      down with it since both key off the currently-loaded track. Opt out
+//!      with `--no-announce` for a strictly listen-only capture.
 //!   C. NFS pull: `export.pdb` plus each loaded track's `.DAT`/`.EXT`/
 //!      artwork, for every player discovered by phase A/B's status decoding
 //!      and every `--player`/`--slot` pair given explicitly.
@@ -41,11 +49,13 @@
 //! Usage:
 //!   prolink-capture [--out DIR] [--bind IP] [--player IP] [--slot usb|sd|cd]
 //!                    [--max-tracks N] [--duration-sec N] [--no-nfs] [--no-dbserver]
+//!                    [--no-announce] [--device-number N]
 
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
 use std::panic::AssertUnwindSafe;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -54,6 +64,7 @@ use prolink::dbserver::Connection;
 use prolink::discovery::{DeviceKind, DeviceWatcher, DiscoveredDevice};
 use prolink::nfs::pdb::{self, Pdb, Track};
 use prolink::nfs::NfsClient;
+use prolink::presence::Presence;
 use prolink::status::{parse_status, DeviceStatus, MediaSlot, RawPlayState};
 use prolink::{ANNOUNCE_PORT, BEAT_PORT, STATUS_PORT};
 use serde::Serialize;
@@ -74,6 +85,12 @@ const EXT_SUFFIX: &str = ".EXT";
 /// on the network.
 const DEFAULT_SETTLE: Duration = Duration::from_secs(3);
 const DEFAULT_MAX_TRACKS: usize = 50;
+/// Device name our keep-alive announces. Kept to the 20 bytes the packet
+/// has room for, and deliberately not a Pioneer model name: whoever is
+/// looking at a CDJ's link menu or another capture during the session
+/// should be able to tell our virtual player from the real hardware at a
+/// glance.
+const PRESENCE_NAME: &str = "decktective";
 const DEFAULT_OUT_DIR: &str = "./capture";
 const LIVE_TABLE_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -86,6 +103,13 @@ struct Config {
     duration: Option<Duration>,
     no_nfs: bool,
     no_dbserver: bool,
+    /// Whether to broadcast a virtual-CDJ keep-alive (phase B) — on by
+    /// default, since without it there is no status traffic to capture.
+    announce: bool,
+    /// Virtual player number to prefer over `prolink::presence`'s default,
+    /// for a booth where 5 and 6 are already taken or where a metadata
+    /// query needs a number in the 1-4 range.
+    device_number: Option<u8>,
 }
 
 impl Default for Config {
@@ -99,6 +123,8 @@ impl Default for Config {
             duration: None,
             no_nfs: false,
             no_dbserver: false,
+            announce: true,
+            device_number: None,
         }
     }
 }
@@ -122,6 +148,12 @@ fn parse_args() -> Config {
             }
             "--no-nfs" => config.no_nfs = true,
             "--no-dbserver" => config.no_dbserver = true,
+            "--no-announce" => config.announce = false,
+            "--device-number" => {
+                let number: u8 = args.next().and_then(|v| v.parse().ok()).expect("--device-number needs a number");
+                assert!((1..=6).contains(&number), "--device-number must be between 1 and 6");
+                config.device_number = Some(number);
+            }
             "--help" | "-h" => {
                 print_usage();
                 std::process::exit(0);
@@ -186,6 +218,9 @@ fn print_usage() {
     eprintln!("  --duration-sec N     stop after N seconds instead of running until Ctrl+C");
     eprintln!("  --no-nfs             skip phase C (NFS metadata pull)");
     eprintln!("  --no-dbserver        skip phase D (dbserver metadata pull)");
+    eprintln!("  --no-announce        do not broadcast a virtual-CDJ keep-alive (players will then");
+    eprintln!("                       send no status packets at all — listen-only diagnostics)");
+    eprintln!("  --device-number N    virtual player number 1-6 to claim (default: first free of 5, 6, 1-4)");
 }
 
 /// One player's most-recently-seen status, keyed by device number —
@@ -194,6 +229,10 @@ fn print_usage() {
 #[derive(Debug, Clone)]
 struct LedgerEntry {
     ip: Ipv4Addr,
+    /// The player whose media this deck's track came from — the one every
+    /// metadata query has to be aimed at, which on a linked rig is not this
+    /// deck (see `prolink::status::DeviceStatus::track_source_device`).
+    track_source_device: u8,
     media_slot: MediaSlot,
     track_type: u8,
     track_id: Option<u32>,
@@ -201,6 +240,39 @@ struct LedgerEntry {
 }
 
 type Ledger = Arc<Mutex<HashMap<u8, LedgerEntry>>>;
+
+/// Datagrams recorded per port, for the live table's per-port line.
+///
+/// A capture that is silently missing one whole port is the failure mode
+/// that costs a whole session: `udp.jsonl` looks healthy — it fills up with
+/// discovery and beat traffic — while the port everything downstream needs
+/// contributes nothing, and the only place that is visible on-site is a
+/// count next to the port number. Cheap enough to keep for all three ports
+/// rather than special-casing the status port.
+#[derive(Default)]
+struct PortCounts {
+    announce: AtomicU64,
+    beat: AtomicU64,
+    status: AtomicU64,
+}
+
+impl PortCounts {
+    fn counter(&self, port: u16) -> &AtomicU64 {
+        match port {
+            BEAT_PORT => &self.beat,
+            STATUS_PORT => &self.status,
+            _ => &self.announce,
+        }
+    }
+
+    fn record(&self, port: u16) {
+        self.counter(port).fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn get(&self, port: u16) -> u64 {
+        self.counter(port).load(Ordering::Relaxed)
+    }
+}
 
 #[derive(Serialize)]
 struct HostInterface {
@@ -258,6 +330,7 @@ async fn main() {
     }
 
     let ledger: Ledger = Arc::new(Mutex::new(HashMap::new()));
+    let counts = Arc::new(PortCounts::default());
 
     // Phase B's watcher, created before phase A because phase A's
     // announce-port listener is what feeds it (see this module's doc
@@ -268,16 +341,37 @@ async fn main() {
     // decoding (see this module's doc comment for why status decoding lives
     // here rather than behind `StatusWatcher`).
     for port in [ANNOUNCE_PORT, BEAT_PORT, STATUS_PORT] {
-        tokio::spawn(run_phase_a(Arc::clone(&writer), Arc::clone(&ledger), Arc::clone(&device_watcher), port));
+        tokio::spawn(run_phase_a(Arc::clone(&writer), Arc::clone(&ledger), Arc::clone(&device_watcher), Arc::clone(&counts), port));
     }
 
-    // Phase B: device discovery, driven by phase A.
+    // Phase B: device discovery, driven by phase A, and the keep-alive that
+    // makes the players talk back on STATUS_PORT (see the module doc).
     tokio::spawn(run_device_sweep(Arc::clone(&device_watcher)));
     tokio::spawn(run_device_log(Arc::clone(&writer), device_watcher.subscribe()));
-    tokio::spawn(run_live_table(Arc::clone(&device_watcher), Arc::clone(&ledger)));
+    tokio::spawn(run_live_table(Arc::clone(&device_watcher), Arc::clone(&ledger), Arc::clone(&counts)));
+    let presence = config.announce.then(|| {
+        let presence = Presence::new(config.device_number);
+        println!("Announcing as a virtual CDJ named {PRESENCE_NAME} (use --no-announce for a listen-only capture)");
+        tokio::spawn(Arc::clone(&presence).run(Arc::clone(&device_watcher), PRESENCE_NAME.to_string(), bind_ip));
+        presence
+    });
+    if presence.is_none() {
+        println!("--no-announce: not claiming a player number — expect no status packets on port {STATUS_PORT}");
+    }
 
     let settle = config.duration.unwrap_or(DEFAULT_SETTLE);
     tokio::time::sleep(settle).await;
+
+    // Said once, loudly, at the moment it can still be acted on: every
+    // question this capture exists to answer is downstream of status
+    // packets, and their absence is otherwise invisible until the files are
+    // read back somewhere else, days later.
+    if counts.get(STATUS_PORT) == 0 && !device_watcher.devices().is_empty() {
+        println!("WARNING: {} device(s) discovered but not one status packet on port {STATUS_PORT}.", device_watcher.devices().len());
+        println!("         Players only unicast status to peers whose keep-alives they see, so this");
+        println!("         means our keep-alive isn't reaching them: check --bind ({bind_ip}) is the");
+        println!("         adapter the players are on, and that --no-announce was not passed.");
+    }
 
     let targets = build_nfs_targets(&config, &ledger);
     if config.no_nfs {
@@ -289,7 +383,7 @@ async fn main() {
     if config.no_dbserver {
         println!("phase D (dbserver) skipped: --no-dbserver");
     } else {
-        run_phase_d(Arc::clone(&writer), bind_ip, Arc::clone(&ledger)).await;
+        run_phase_d(Arc::clone(&writer), bind_ip, Arc::clone(&ledger), our_device_number(&config, presence.as_ref())).await;
     }
 
     if config.duration.is_none() {
@@ -376,7 +470,7 @@ fn resolve_bind_ip() -> Ipv4Addr {
 /// the task) writes every datagram raw to `udp.jsonl`. A bind failure is
 /// logged and this port's capture simply never runs — the other two ports'
 /// tasks are unaffected, matching every `*Watcher::run` in this crate.
-async fn run_phase_a(writer: Arc<CaptureWriter>, ledger: Ledger, device_watcher: Arc<DeviceWatcher>, port: u16) {
+async fn run_phase_a(writer: Arc<CaptureWriter>, ledger: Ledger, device_watcher: Arc<DeviceWatcher>, counts: Arc<PortCounts>, port: u16) {
     let socket = match bind_capture_socket(port).await {
         Ok(socket) => socket,
         Err(error) => {
@@ -395,6 +489,7 @@ async fn run_phase_a(writer: Arc<CaptureWriter>, ledger: Ledger, device_watcher:
             }
         };
         let payload = &buf[..len];
+        counts.record(port);
         let record = UdpRecord::new(port, source.ip(), payload);
         if let Err(error) = writer.write_udp(&record) {
             tracing::warn!(%error, port, "phase A: failed to write a udp.jsonl record");
@@ -495,12 +590,14 @@ fn update_ledger(ledger: &Ledger, status: &DeviceStatus, source_ip: IpAddr) {
     let mut ledger = ledger.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let entry = ledger.entry(status.device_number).or_insert_with(|| LedgerEntry {
         ip,
+        track_source_device: status.track_source_device,
         media_slot: status.media_slot,
         track_type: status.track_type,
         track_id: status.track_id,
         play_state: status.play_state,
     });
     entry.ip = ip;
+    entry.track_source_device = status.track_source_device;
     entry.media_slot = status.media_slot;
     entry.track_type = status.track_type;
     entry.track_id = status.track_id;
@@ -546,7 +643,7 @@ async fn run_device_sweep(device_watcher: Arc<DeviceWatcher>) {
     }
 }
 
-async fn run_live_table(device_watcher: Arc<DeviceWatcher>, ledger: Ledger) {
+async fn run_live_table(device_watcher: Arc<DeviceWatcher>, ledger: Ledger, counts: Arc<PortCounts>) {
     let mut tick = tokio::time::interval(LIVE_TABLE_INTERVAL);
     loop {
         tick.tick().await;
@@ -554,7 +651,15 @@ async fn run_live_table(device_watcher: Arc<DeviceWatcher>, ledger: Ledger) {
         if devices.is_empty() {
             continue;
         }
+        let status_packets = counts.get(STATUS_PORT);
         eprintln!("--- Pro DJ Link devices ({} seen) ---", devices.len());
+        eprintln!(
+            "  packets: announce={} beat={} status={}{}",
+            counts.get(ANNOUNCE_PORT),
+            counts.get(BEAT_PORT),
+            status_packets,
+            if status_packets == 0 { "  <-- NO STATUS: players are not seeing our keep-alive" } else { "" }
+        );
         let ledger = ledger.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         for device in &devices {
             let extra = ledger
@@ -582,12 +687,24 @@ fn build_nfs_targets(config: &Config, ledger: &Ledger) -> Vec<(Ipv4Addr, MediaSl
 
     let ledger = ledger.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     for entry in ledger.values() {
-        let pair = (entry.ip, entry.media_slot);
+        // The media lives on `track_source_device`, which is a *different*
+        // player than this deck whenever the booth is linked off one stick
+        // — mounting this deck's own NFS export would fail on an empty slot
+        // (and did, for the whole 2026-08-19 session).
+        let pair = (source_ip(&ledger, entry), entry.media_slot);
         if !targets.contains(&pair) {
             targets.push(pair);
         }
     }
     targets
+}
+
+/// The address of the player holding `entry`'s media. Falls back to the
+/// deck's own address when the source device isn't in the ledger — an
+/// unhelpful target, but a better guess than none, and the parse report
+/// records what was tried either way.
+fn source_ip(ledger: &HashMap<u8, LedgerEntry>, entry: &LedgerEntry) -> Ipv4Addr {
+    ledger.get(&entry.track_source_device).map_or(entry.ip, |source| source.ip)
 }
 
 #[derive(Serialize)]
@@ -697,12 +814,13 @@ async fn run_phase_c(writer: Arc<CaptureWriter>, bind_ip: Ipv4Addr, targets: Vec
     }
 }
 
-/// Track ids to prefer when capping at `max_tracks`: whatever this
-/// player's own ledger entries currently report as loaded (there can be
-/// more than one if the operator changed tracks during the settle window).
+/// Track ids to prefer when capping at `max_tracks`: everything currently
+/// loaded *off this player's media*, which includes tracks spinning on
+/// other decks linked to it — those are exactly the ones worth having, and
+/// keying on the deck's own address would miss every one of them.
 fn preferred_track_ids_for(ledger: &Ledger, player_ip: Ipv4Addr) -> Vec<u32> {
     let ledger = ledger.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    ledger.values().filter(|entry| entry.ip == player_ip).filter_map(|entry| entry.track_id).collect()
+    ledger.values().filter(|entry| source_ip(&ledger, entry) == player_ip).filter_map(|entry| entry.track_id).collect()
 }
 
 async fn fetch_tracks(client: &mut NfsClient, dir: &std::path::Path, pdb: &Pdb, preferred: Vec<u32>, max_tracks: usize) -> Vec<TrackFetchReport> {
@@ -798,8 +916,16 @@ fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
 }
 
 fn write_parse_report(dir: &std::path::Path, report: &impl Serialize) {
-    if let Err(error) = write_json_file(&dir.join("parse-report.json"), report) {
-        tracing::error!(%error, dir = %dir.display(), "failed to write parse-report.json");
+    write_parse_report_named(dir, "parse-report.json", report);
+}
+
+/// Phase D's variant: one report per track rather than per player. A linked
+/// booth has several decks playing off one player's media, so their reports
+/// all land in that player's directory — sharing one file name means every
+/// deck but the last leaves no record of what was asked or what came back.
+fn write_parse_report_named(dir: &std::path::Path, name: &str, report: &impl Serialize) {
+    if let Err(error) = write_json_file(&dir.join(name), report) {
+        tracing::error!(%error, dir = %dir.display(), name, "failed to write a parse report");
     }
 }
 
@@ -821,28 +947,51 @@ struct QueryReport {
     error: Option<String>,
 }
 
-/// Decktective's own virtual player number for this run — honours
-/// `DECKTECTIVE_VCDJ_ID` the same way `prolink-engine::engine` does (see
-/// the project README's "Metadata on a full four-player network" section);
-/// duplicated here for the same reason as [`EXPORT_PDB_PATH`] — this binary
-/// can't depend on `prolink-engine`.
-fn our_device_number() -> u8 {
-    let number = std::env::var("DECKTECTIVE_VCDJ_ID").ok().and_then(|value| value.parse().ok()).unwrap_or(5);
+/// The virtual player number phase D identifies itself with in its dbserver
+/// `SETUP` request.
+///
+/// Whatever [`Presence`] actually claimed wins: that is the number the
+/// players have seen in our keep-alives, and asking the database as a
+/// player number nobody has announced is how a dbserver connection opens
+/// and then answers nothing. Only when we are not announcing at all
+/// (`--no-announce`) does this fall back to `--device-number`, then to
+/// `DECKTECTIVE_VCDJ_ID` — honoured the same way `prolink-engine::engine`
+/// does (see the project README's "Metadata on a full four-player network"
+/// section), duplicated here for the same reason as [`EXPORT_PDB_PATH`]:
+/// this binary can't depend on `prolink-engine`.
+fn our_device_number(config: &Config, presence: Option<&Arc<Presence>>) -> u8 {
+    let claimed = presence.and_then(|presence| presence.device_number());
+    let number = claimed
+        .or(config.device_number)
+        .or_else(|| std::env::var("DECKTECTIVE_VCDJ_ID").ok().and_then(|value| value.parse().ok()))
+        .unwrap_or(5);
+    // CDJ-3000s answer queries from numbers 1-6; older players only from
+    // 1-4. Worth saying out loud rather than silently producing an empty
+    // metadata pull on mixed gear.
     if !(1..=4).contains(&number) {
-        tracing::warn!(number, "DECKTECTIVE_VCDJ_ID (or the default, 5) is outside dbserver's accepted 1-4 range; dbserver may legitimately answer nothing — see the README's 'Metadata on a full four-player network'");
+        tracing::warn!(number, "our player number is outside the 1-4 range players older than the CDJ-3000 answer database queries from; if metadata comes back empty, free up a low number and re-run with --device-number — see the README's 'Metadata on a full four-player network'");
     }
     number
 }
 
-async fn run_phase_d(writer: Arc<CaptureWriter>, bind_ip: Ipv4Addr, ledger: Ledger) {
-    let our_device_number = our_device_number();
-    let targets: Vec<(u8, LedgerEntry)> = {
+async fn run_phase_d(writer: Arc<CaptureWriter>, bind_ip: Ipv4Addr, ledger: Ledger, our_device_number: u8) {
+    // Keyed by the player being *asked*, not the deck doing the playing:
+    // several decks linked off one stick all resolve to the same dbserver,
+    // and asking it once for each of them would pull the same bytes twice.
+    let targets: Vec<(u8, Ipv4Addr, LedgerEntry)> = {
         let ledger = ledger.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        ledger
-            .iter()
-            .filter(|(&device_number, entry)| DeviceKind::from_device_number(device_number) == DeviceKind::Player && entry.track_id.is_some())
-            .map(|(&device_number, entry)| (device_number, entry.clone()))
-            .collect()
+        let mut targets: Vec<(u8, Ipv4Addr, LedgerEntry)> = Vec::new();
+        for (&device_number, entry) in ledger.iter() {
+            if DeviceKind::from_device_number(device_number) != DeviceKind::Player || entry.track_id.is_none() {
+                continue;
+            }
+            let source_device = if entry.track_source_device == 0 { device_number } else { entry.track_source_device };
+            let target = (source_device, source_ip(&ledger, entry), entry.clone());
+            if !targets.iter().any(|(device, _, existing)| *device == source_device && existing.track_id == entry.track_id) {
+                targets.push(target);
+            }
+        }
+        targets
     };
 
     if targets.is_empty() {
@@ -850,23 +999,23 @@ async fn run_phase_d(writer: Arc<CaptureWriter>, bind_ip: Ipv4Addr, ledger: Ledg
         return;
     }
 
-    for (device_number, entry) in targets {
+    for (device_number, player_ip, entry) in targets {
         let track_id = entry.track_id.expect("filtered to Some above");
-        println!("phase D: pulling dbserver metadata from {} (device {device_number}, track {track_id})", entry.ip);
-        let dir = match writer.dbserver_capture_dir(entry.ip) {
+        println!("phase D: pulling dbserver metadata from {player_ip} (device {device_number}, track {track_id})");
+        let dir = match writer.dbserver_capture_dir(player_ip) {
             Ok(dir) => dir,
             Err(error) => {
-                tracing::error!(%error, ip = %entry.ip, "phase D: failed to create the capture directory");
+                tracing::error!(%error, ip = %player_ip, "phase D: failed to create the capture directory");
                 continue;
             }
         };
 
-        let mut connection = match Connection::open(entry.ip, bind_ip, our_device_number).await {
+        let mut connection = match Connection::open(player_ip, bind_ip, our_device_number).await {
             Ok(connection) => connection,
             Err(error) => {
-                tracing::warn!(%error, ip = %entry.ip, "phase D: could not open a dbserver connection — a dead/unreachable player is expected on a live network");
-                let report = DbserverParseReport { player_ip: entry.ip, device_number, track_id: Some(track_id), connected: false, queries: Vec::new(), error: Some(error.to_string()) };
-                write_parse_report(&dir, &report);
+                tracing::warn!(%error, ip = %player_ip, "phase D: could not open a dbserver connection — a dead/unreachable player is expected on a live network");
+                let report = DbserverParseReport { player_ip, device_number, track_id: Some(track_id), connected: false, queries: Vec::new(), error: Some(error.to_string()) };
+                write_parse_report_named(&dir, &format!("parse-report-{track_id}.json"), &report);
                 continue;
             }
         };
@@ -885,10 +1034,10 @@ async fn run_phase_d(writer: Arc<CaptureWriter>, bind_ip: Ipv4Addr, ledger: Ledg
         let cues_basic = connection.fetch_cues_basic(device_number, slot_byte, entry.track_type, track_id).await;
         queries.push(record_blob_result(&dir, "cues-basic", track_id, cues_basic));
 
-        queries.push(run_artwork_query(&mut connection, &dir, device_number, slot_byte, track_id).await);
+        queries.push(run_artwork_query(&mut connection, &dir, device_number, slot_byte, entry.track_type, track_id).await);
 
-        let report = DbserverParseReport { player_ip: entry.ip, device_number, track_id: Some(track_id), connected: true, queries, error: None };
-        write_parse_report(&dir, &report);
+        let report = DbserverParseReport { player_ip, device_number, track_id: Some(track_id), connected: true, queries, error: None };
+        write_parse_report_named(&dir, &format!("parse-report-{track_id}.json"), &report);
     }
 }
 
@@ -934,7 +1083,7 @@ fn record_blob_result(dir: &std::path::Path, name: &'static str, track_id: u32, 
     }
 }
 
-async fn run_artwork_query(connection: &mut Connection, dir: &std::path::Path, device_number: u8, slot: u8, track_id: u32) -> QueryReport {
+async fn run_artwork_query(connection: &mut Connection, dir: &std::path::Path, device_number: u8, slot: u8, track_type: u8, track_id: u32) -> QueryReport {
     // Artwork is looked up by artwork id in the real protocol, but this
     // tool doesn't have one available without a prior metadata parse it
     // deliberately keeps decoupled (see `run_metadata_query`'s doc comment)
@@ -943,7 +1092,7 @@ async fn run_artwork_query(connection: &mut Connection, dir: &std::path::Path, d
     // the player, recorded as "fetched: false" rather than corrupting
     // anything, and the raw metadata JSON captured above still carries
     // whatever the real artwork id was for offline reconciliation.
-    match connection.fetch_artwork(device_number, slot, track_id).await {
+    match connection.fetch_artwork(device_number, slot, track_type, track_id).await {
         Ok(Some(bytes)) => {
             let path = dir.join(format!("artwork-{track_id}.bin"));
             let error = write_raw_file(&path, &bytes).err().map(|e| e.to_string());

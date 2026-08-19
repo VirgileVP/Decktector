@@ -19,7 +19,12 @@ use decktective_core::waveform::{build_preview_from_detail, PREVIEW_SEGMENT_COUN
 use prolink::nfs::pdb::{self, Pdb, Track};
 use prolink::nfs::NfsClient;
 use prolink::status::MediaSlot;
-use rekordcrate::anlz::{Content, Cue, CueType, ExtendedCue, ANLZ};
+use binrw::Endian;
+use rekordcrate::anlz::{Content, ContentKind, Cue, CueType, ExtendedCue, Header, Section};
+
+/// Bytes of an ANLZ section header: its kind, its own size, and the
+/// section's total size.
+const HEADER_LEN: usize = 12;
 
 use super::colors;
 use super::normalize::normalize_tempo;
@@ -97,11 +102,15 @@ pub async fn fetch_track_info(
 /// etc, already resolved by this point) is more valuable than analysis
 /// data, and a track is still worth showing without a waveform.
 async fn fetch_analysis(client: &mut NfsClient, dat_path: &str) -> (Option<Vec<BeatGridBeat>>, Option<WaveformData>, Vec<TrackCue>) {
-    let ext_path = ext_variant_path(dat_path);
-    let Ok(bytes) = client.read_file(&ext_path).await else {
-        return (None, None, Vec::new());
-    };
-    parse_analysis(&bytes)
+    // Both files, because the two things this route wants live in
+    // different ones: the HD colour waveform and the extended cues are only
+    // in the `.EXT`, while the beat grid `rekordcrate` can read (`PQTZ`) is
+    // only in the `.DAT` — the `.EXT`'s own `PQT2` beat grid is a format it
+    // has no variant for. Reading only the `.EXT`, as this did before
+    // 2026-08-19, means never getting a beat grid over NFS at all.
+    let ext_bytes = client.read_file(&ext_variant_path(dat_path)).await.unwrap_or_default();
+    let dat_bytes = client.read_file(dat_path).await.unwrap_or_default();
+    parse_analysis(&ext_bytes, &dat_bytes)
 }
 
 fn ext_variant_path(dat_path: &str) -> String {
@@ -113,18 +122,55 @@ fn ext_variant_path(dat_path: &str) -> String {
     dat_path.to_string() // Not a recognized `.DAT` path; use as given.
 }
 
-fn parse_analysis(bytes: &[u8]) -> (Option<Vec<BeatGridBeat>>, Option<WaveformData>, Vec<TrackCue>) {
-    let mut cursor = Cursor::new(bytes);
-    let Ok(anlz) = ANLZ::read(&mut cursor) else {
-        return (None, None, Vec::new());
+/// Reads an `.EXT`/`.DAT` file's sections one at a time, skipping any that
+/// don't parse instead of giving up on the file.
+///
+/// `ANLZ::read` is all-or-nothing: one section `rekordcrate` 0.3 can't
+/// decode and the whole file is lost. A CDJ-3000's `.EXT` contains exactly
+/// that — an extended cue whose `cue_type` byte the crate rejects
+/// (`capture/reference-20260819/`) — and it sits *after* the waveform and
+/// beat grid this route came for. Walking the section table by its own
+/// declared sizes recovers everything before and after the section that
+/// fails.
+fn read_sections(bytes: &[u8]) -> Vec<Section> {
+    let Ok(file_header) = Header::read(&mut Cursor::new(bytes)) else {
+        return Vec::new();
     };
+    if file_header.kind != ContentKind::File {
+        return Vec::new();
+    }
+
+    // Sections run from the end of the file header block to the end of the
+    // file, both as the header itself declares them.
+    let mut position = file_header.size as usize;
+    let end = (file_header.total_size as usize).min(bytes.len());
+
+    let mut sections = Vec::new();
+    while position < end {
+        let Some(remaining) = bytes.get(position..end) else { break };
+        let Ok(header) = Header::read(&mut Cursor::new(remaining)) else { break };
+        // A zero/short size would leave `position` stuck and loop forever.
+        let Some(section_bytes) = usize::try_from(header.total_size).ok().filter(|size| *size >= HEADER_LEN).and_then(|size| remaining.get(..size)) else {
+            break;
+        };
+        if let Ok(section) = Section::read_options(&mut Cursor::new(section_bytes), Endian::Big, ()) {
+            sections.push(section);
+        }
+        position += section_bytes.len();
+    }
+    sections
+}
+
+fn parse_analysis(ext_bytes: &[u8], dat_bytes: &[u8]) -> (Option<Vec<BeatGridBeat>>, Option<WaveformData>, Vec<TrackCue>) {
+    let mut sections = read_sections(ext_bytes);
+    sections.extend(read_sections(dat_bytes));
 
     let mut beat_grid = None;
     let mut waveform = None;
     let mut extended_cues = None;
     let mut basic_cues = None;
 
-    for section in &anlz.sections {
+    for section in &sections {
         match &section.content {
             Content::BeatGrid(grid) => {
                 beat_grid = Some(

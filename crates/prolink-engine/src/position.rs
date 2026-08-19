@@ -85,6 +85,7 @@ mod tests {
     fn status(beat_count: Option<u32>, track_bpm: Option<f64>) -> DeviceStatus {
         DeviceStatus {
             device_number: 1,
+            track_source_device: 1,
             play_state: RawPlayState::Playing,
             is_master: false,
             is_synced: false,

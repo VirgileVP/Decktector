@@ -11,18 +11,22 @@ for every deck:
 
 Primary targets: **XDJ-XZ** and **XDJ-1000MK2** (works with 2 to 4 CDJ-2000-era players).
 
-> **Status — Rust rewrite in progress.** The app is being moved off Electron onto a
-> Rust backend with Tauri, keeping the same UI. The shell, domain model, simulation
-> engine, the Pro DJ Link UDP layer, and both metadata routes (NFS and dbserver —
-> title/artist/album/genre/key/label/bpm, beat grid, HD waveform, cues, artwork) are
-> in place — `npm run dev` connects to real players and fetches real track info with
-> no virtual-player-number workaround needed. **None of this has been run against
-> real hardware yet** (see [Porting status](#porting-status) for exactly which parts
-> carry how much confidence — the NFS transport and metadata query protocol are
-> cross-checked against hardware-validated reference implementations; the PDB
-> database parser is this codebase's own reconstruction and is the shakiest part).
-> The Electron implementation remains on the `master` branch. See
-> [Architecture](#architecture) for the plan.
+> **Status — 1.0, the Rust rewrite.** The app now runs on a Rust backend with
+> Tauri, keeping the same UI. The shell, domain model, simulation engine, the Pro
+> DJ Link UDP layer and both metadata routes (NFS and dbserver —
+> title/artist/album/genre/key/label/bpm, beat grid, HD waveform, artwork) are in
+> place, with no virtual-player-number workaround needed.
+>
+> **Validated against real hardware on 2026-08-19** — two CDJ-3000s and a
+> DJM-900NXS2, linked off one USB stick. Discovery, status, beat, the `export.pdb`
+> parser and both metadata routes run against live players, and every fix that
+> session forced is pinned by tests quoting the captured bytes. Both decks came up
+> with title, artist, BPM, HD waveform, beat grid and artwork within a second of
+> connecting.
+>
+> **Known gap**: hot cues and memory cues are not read on either route — see
+> [Porting status](#porting-status). The Electron implementation remains on the
+> `master` branch; see [Architecture](#architecture).
 
 ## Requirements
 
@@ -161,23 +165,34 @@ build rather than surfacing mid-set. The same engine layer also feeds the
 | 1     | App shell, domain model, simulation engine                                | done  |
 | 2     | UDP layer: announce, discovery, status, beat, precise position            | done  |
 | 3     | Metadata over dbserver: title/artist/album/genre/key/label/comment/bpm, beat grid, HD waveform | done (cues and artwork not implemented — see below) |
-| 4     | Metadata over NFS: `export.pdb` + `.EXT` analysis files, needs no virtual player number — the primary route, dbserver is the fallback | done — **untested against real hardware, see below** |
+| 4     | Metadata over NFS: `export.pdb` + `.EXT`/`.DAT` analysis files, needs no virtual player number — the primary route, dbserver is the fallback | done — validated against a CDJ-3000's own media, see below |
 
 Phase 2 listens for real player traffic passively rather than running the full
 virtual-CDJ channel-claim handshake Deep Symmetry documents: the handshake's exact
 byte layout isn't pinned down precisely enough to transmit safely onto a live
-network yet, and passive listening is enough for status/beat traffic (see
-`crates/prolink/src/presence.rs`'s module doc). Decktective still shows up as a
-peer on the network — it picks a free virtual player number and broadcasts the
+network yet. Decktective picks a free virtual player number and broadcasts the
 same settled-state keep-alive a real player does — it just never contests a number
-another device claims first.
+another device claims first. That keep-alive is not optional: players send their
+status packets **unicast, only to peers whose keep-alive they have seen**, so a
+purely passive listener sees discovery and beats and no status at all (see
+`crates/prolink/src/presence.rs`'s module doc). It also has to announce the real
+address and MAC of the adapter facing the booth, which is why picking the right
+one matters on a multi-homed laptop.
 
 Phase 3's two gaps stay open — dbserver's cue-list wire format
 (`crates/prolink/src/dbserver/cues.rs`) is variable-length and still unconfirmed
 (a wrong offset would desync every cue after it, not just misread one field), and
-dbserver has no artwork route wired up. Both are moot for a deck reading real media
-now that phase 4 gets cues and artwork through NFS instead, which is why dbserver
-was demoted to the fallback route — see phase 4 below.
+dbserver has no artwork route wired up. Artwork is moot for a deck reading real
+media, since phase 4 gets it through NFS, which is part of why dbserver was
+demoted to the fallback route.
+
+**Cues are the one thing 1.0 does not read, on either route.** The NFS route
+can't either: a CDJ-3000's `.EXT` cue list (`PCO2`) is one of the sections
+`rekordcrate` 0.3 rejects outright, and its older `.DAT` list (`PCOB`) comes back
+empty even for a track whose raw bytes plainly hold three hot cues. Closing this
+means hand-rolling cue parsers for both formats, against the bytes the
+2026-08-19 session captured. Until then a track arrives with no cues rather than
+with wrong ones.
 
 **Phase 4 carries real, explicit confidence differences worth reading before
 trusting it at a gig.** Cross-checked against Deep Symmetry's `crate-digger` (the
@@ -192,25 +207,28 @@ hardware-validated Java reference for exactly this NFS-based read):
   (`crates/prolink/tests/nfs_fake_server.rs`, not `#[ignore]`-gated) covering the
   full portmap → mount → lookup-chain → multi-chunk read flow and the
   give-up-cleanly-on-no-response path.
-- **High confidence**: parsing the fetched `.EXT` analysis file (beat grid, HD
-  color waveform, cues) — done with the `rekordcrate` crate
-  (`crates/prolink-engine/src/metadata/nfs.rs`), whose `anlz` module has a clean,
-  documented public API and whose hot-cue color table
+- **Validated against hardware**: parsing the fetched analysis files (beat grid,
+  HD color waveform — not cues, see above) with the `rekordcrate` crate
+  (`crates/prolink-engine/src/metadata/nfs.rs`), whose hot-cue color table
   (`crates/prolink-engine/src/metadata/colors.rs`) is copied verbatim from its own
-  doc comments.
-- **Low confidence, flagged in code**: the hand-rolled `export.pdb` database
-  parser (`crates/prolink/src/nfs/pdb.rs`) — `rekordcrate`'s own `pdb` module
-  parses this exact format but its row fields (title, artist id, ...) are private
-  in the published crate version, so this codebase reconstructs a minimal parser
-  from `rekordcrate`'s source as a *layout reference* rather than depending on it.
-  That reference reading was itself only partially certain (page-type numeric
-  codes, `Track`'s exact field order) — this is genuinely the shakiest code in the
-  whole Rust port, more so than any UDP/TCP protocol work, and the one most likely
-  to need fixing once it meets a real `export.pdb`.
-- **Unconfirmed, needs a real network to check**: the MOUNT path per media slot
-  (`"/B/"`/`"/C/"` for SD/USB, `crates/prolink/src/nfs/client.rs`'s `slot_path`) —
-  a wrong mapping fails at the very first NFS call, which at least makes it an
-  obvious failure rather than a subtle one.
+  doc comments. Two things a real CDJ-3000 forced: the file is read **section by
+  section**, because `ANLZ::read` abandons the whole file over one section that
+  crate can't decode and a CDJ-3000's `.EXT` contains exactly that; and both the
+  `.EXT` and the `.DAT` are fetched, because the beat grid `rekordcrate` reads
+  (`PQTZ`) is only in the `.DAT` while the colour waveform is only in the `.EXT`.
+- **Validated against hardware**: the hand-rolled `export.pdb` database parser
+  (`crates/prolink/src/nfs/pdb.rs`). It was written from a reading of
+  `rekordcrate`'s source — whose own row fields are private in the published
+  version — and that reading got essentially every structural constant wrong: it
+  found *zero* tracks in the first real database it met. Every offset in it now
+  comes from that file, cross-checked field by field against the same tracks'
+  metadata as answered independently by the player's dbserver. The file's module
+  doc lists what was wrong, in case any of it resurfaces.
+- **Confirmed**: the MOUNT path per media slot (`"/B/"`/`"/C/"` for SD/USB,
+  `crates/prolink/src/nfs/client.rs`'s `slot_path`) — `"/C/"` mounts a CDJ-3000's
+  USB slot. Note that a mount failure is the expected answer from a player with an
+  empty slot, which is the normal case on a linked booth: metadata is fetched from
+  the player holding the media, not from the deck playing it.
 
 ### Protocol notes
 
@@ -220,6 +238,14 @@ hardware-validated Java reference for exactly this NFS-based read):
 - The **XDJ-XZ** exposes its two decks behind a single IP and always claims player
   numbers 1 and 2; Decktective announces itself as virtual player 5 to stay clear
   while remaining in the 1-6 range CDJs accept database queries from.
+- A track loaded over **link** belongs to another player: a deck's status packet
+  names the player whose media it came from, and metadata has to be asked of that
+  player, in that player's slot, by that player's number. Two decks fed by one USB
+  stick is the ordinary booth setup, and asking the deck itself gets an empty menu
+  over dbserver and a failed mount over NFS.
+- A player reports itself **on air** only when its player number matches the mixer
+  channel it is plugged into — the mixer announces on-air per channel, not per
+  device.
 
 ## Credits
 

@@ -112,8 +112,22 @@ async fn phases_a_and_b_capture_every_simulated_device_at_a_full_decode_rate() {
 
     let devices_read = read_jsonl::<serde_json::Value>(&session.join("devices.jsonl")).expect("read devices.jsonl");
     let last_snapshot = devices_read.records.last().expect("at least one device snapshot");
-    let device_count = last_snapshot["devices"].as_array().map(Vec::len).unwrap_or(0);
-    assert_eq!(device_count, 5, "expected 4 simulated players + 1 mixer, got: {last_snapshot}");
+    let devices = last_snapshot["devices"].as_array().cloned().unwrap_or_default();
+    // Asserted by membership, not by count: this test binds the real Pro
+    // DJ Link ports, so anything else Pro DJ Link on the machine or the
+    // LAN — a Decktective window left open, real players in the room —
+    // legitimately shows up here too.
+    for simulated in ["CDJ-3000 #1", "CDJ-3000 #2", "CDJ-3000 #3", "CDJ-3000 #4", "DJM-900NXS2"] {
+        assert!(devices.iter().any(|device| device["name"] == simulated), "{simulated} missing from the device table: {last_snapshot}");
+    }
+    // Our own keep-alive is in there on purpose: without it real players
+    // never unicast status packets to us (see `prolink::presence`), so a
+    // capture that does not announce itself is a capture with no status
+    // traffic in it at all.
+    assert!(
+        devices.iter().any(|device| device["name"] == "decktective"),
+        "prolink-capture should announce itself as a virtual player: {last_snapshot}"
+    );
 
     let udp_read = read_jsonl::<UdpRecord>(&session.join("udp.jsonl")).expect("read udp.jsonl");
     assert!(!udp_read.records.is_empty(), "udp.jsonl should not be empty");
@@ -298,6 +312,13 @@ async fn start_fake_dbserver() -> Option<tokio::task::JoinHandle<()>> {
 }
 
 async fn serve_dbserver_connection(mut stream: TcpStream) {
+    // The bare number field a real player echoes before it will read a
+    // message at all — see `Connection::greet`.
+    let mut greeting = [0u8; 5];
+    if stream.read_exact(&mut greeting).await.is_err() || stream.write_all(&greeting).await.is_err() {
+        return;
+    }
+
     let mut buffer = Vec::new();
 
     // SETUP_REQ: any first message acks it, matching `Connection::open`'s
@@ -311,7 +332,9 @@ async fn serve_dbserver_connection(mut stream: TcpStream) {
         let Some(request) = read_dbserver_message(&mut stream, &mut buffer).await else { break };
         match request.message_type {
             queries::METADATA_REQ => {
-                send_dbserver_message(&mut stream, 1, queries::MENU_AVAILABLE, vec![Field::U32(1)]).await;
+                // The request type echoed back, then the item count — index 1 is
+                // where a real player puts the count.
+                send_dbserver_message(&mut stream, 1, queries::MENU_AVAILABLE, vec![Field::U32(u32::from(queries::METADATA_REQ)), Field::U32(1)]).await;
                 let Some(render_req) = read_dbserver_message(&mut stream, &mut buffer).await else { break };
                 if render_req.message_type != queries::RENDER_MENU_REQ {
                     break;
@@ -322,15 +345,13 @@ async fn serve_dbserver_connection(mut stream: TcpStream) {
                     3,
                     queries::MENU_ITEM,
                     vec![
-                        Field::U32(0),
                         Field::U32(1),
-                        Field::U32(0),
+                        Field::U32(1),
+                        Field::U32(10),
                         Field::Str("Fake Track".to_string()),
-                        Field::U32(0),
+                        Field::U32(2),
                         Field::Str(String::new()),
                         Field::U32(0x0004), // TrackTitle
-                        Field::U32(0),
-                        Field::U32(0),
                         Field::U32(0),
                     ],
                 )
@@ -382,7 +403,10 @@ async fn phase_d_pulls_metadata_and_blobs_for_a_player_with_a_loaded_track() {
     let session = session_dir(out_dir.path());
     let db_dir = session.join("dbserver").join("127.0.0.1");
 
-    let report: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(db_dir.join("parse-report.json")).expect("parse-report.json")).expect("valid json");
+    // One report per track: several decks can be playing off one player's
+    // media, and they share that player's directory.
+    let report_path = db_dir.join(format!("parse-report-{DBSERVER_TRACK_ID}.json"));
+    let report: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&report_path).unwrap_or_else(|error| panic!("{}: {error}", report_path.display()))).expect("valid json");
     assert_eq!(report["connected"], true, "report: {report}");
 
     for name in ["beatgrid", "cues-ext", "cues-basic", "artwork"] {

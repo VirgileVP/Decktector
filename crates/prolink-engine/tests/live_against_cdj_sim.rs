@@ -85,7 +85,7 @@ async fn broadcast_a_playing_deck() {
         tokio::select! {
             _ = keepalive_tick.tick() => {
                 let mac = [0x02, 0x00, 0x00, 0x00, 0x00, SIMULATED_DEVICE];
-                let packet = build_keepalive(SIMULATED_DEVICE, "TEST-CDJ", mac, 1);
+                let packet = build_keepalive(SIMULATED_DEVICE, "TEST-CDJ", mac, Ipv4Addr::LOCALHOST, 1);
                 let _ = socket.send_to(&packet, (target, ANNOUNCE_PORT)).await;
             }
             _ = status_tick.tick() => {

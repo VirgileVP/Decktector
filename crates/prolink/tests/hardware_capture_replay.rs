@@ -24,7 +24,7 @@ use prolink::capture::{read_jsonl, UdpRecord};
 use prolink::nfs::pdb;
 use prolink::status::parse_status;
 use prolink::{BEAT_PORT, STATUS_PORT};
-use rekordcrate::anlz::{Content, ANLZ};
+use rekordcrate::anlz::{Content, ContentKind, Header, Section};
 
 fn fixtures_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/hardware-capture")
@@ -175,26 +175,66 @@ fn a_synthetic_export_pdb_parses_with_resolved_cross_references() {
     assert_eq!(parsed.labels.get(&track.label_id).map(String::as_str), Some("Test Label"));
 }
 
+/// Reads an ANLZ file section by section, keeping the ones that parse.
+///
+/// Mirrors `prolink_engine::metadata::nfs`'s reader of the same shape, and
+/// duplicated rather than shared because that crate depends on this one,
+/// not the other way around. The reason both exist: `ANLZ::read` gives up
+/// on the whole file if any single section fails, and a real CDJ-3000
+/// `.EXT` contains one that `rekordcrate` 0.3 rejects (an extended cue
+/// whose `cue_type` it doesn't recognize) — sitting after the waveform and
+/// beat grid that make the file worth reading.
+fn read_sections_leniently(bytes: &[u8]) -> Vec<Section> {
+    const HEADER_LEN: usize = 12;
+
+    let Ok(file_header) = Header::read(&mut Cursor::new(bytes)) else { return Vec::new() };
+    if file_header.kind != ContentKind::File {
+        return Vec::new();
+    }
+
+    let mut position = file_header.size as usize;
+    let end = (file_header.total_size as usize).min(bytes.len());
+    let mut sections = Vec::new();
+    while position < end {
+        let Some(remaining) = bytes.get(position..end) else { break };
+        let Ok(header) = Header::read(&mut Cursor::new(remaining)) else { break };
+        let Some(section_bytes) = usize::try_from(header.total_size).ok().filter(|size| *size >= HEADER_LEN).and_then(|size| remaining.get(..size)) else {
+            break;
+        };
+        if let Ok(section) = Section::read_options(&mut Cursor::new(section_bytes), binrw::Endian::Big, ()) {
+            sections.push(section);
+        }
+        position += section_bytes.len();
+    }
+    sections
+}
+
+/// The beat grid and the waveform come from *different* files: `PQTZ` (the
+/// only beat grid `rekordcrate` reads) is in the `.DAT`, the HD colour
+/// waveform only in the `.EXT`. Both are checked together, since a session
+/// that pulled one always pulled the other.
 #[test]
-fn ext_analysis_fixtures_yield_a_beat_grid_and_a_waveform() {
+fn analysis_fixtures_yield_a_beat_grid_and_a_waveform() {
     let sessions = capture_sessions();
     if sessions.is_empty() {
         eprintln!("no fixtures under {}; skipping (see this file's module doc)", fixtures_dir().display());
         return;
     }
 
-    let (mut checked_any, mut saw_beat_grid, mut saw_waveform) = (false, false, false);
+    let (mut checked_any, mut saw_beat_grid, mut saw_waveform, mut saw_cues) = (false, false, false, false);
     for session in &sessions {
-        for ext_path in find_files(session, "analysis", |file| file.extension().and_then(|e| e.to_str()) == Some("EXT")) {
+        let is_analysis = |file: &Path| matches!(file.extension().and_then(|e| e.to_str()), Some("EXT" | "DAT"));
+        for ext_path in find_files(session, "analysis", is_analysis) {
             checked_any = true;
             let bytes = std::fs::read(&ext_path).unwrap_or_else(|error| panic!("failed to read {}: {error}", ext_path.display()));
-            let mut cursor = Cursor::new(bytes);
-            let anlz = ANLZ::read(&mut cursor).unwrap_or_else(|error| panic!("{} did not parse as ANLZ: {error}", ext_path.display()));
+            let sections = read_sections_leniently(&bytes);
+            assert!(!sections.is_empty(), "{} yielded no readable sections at all", ext_path.display());
 
-            for section in &anlz.sections {
+            for section in &sections {
                 match &section.content {
                     Content::BeatGrid(_) => saw_beat_grid = true,
                     Content::WaveformColorDetail(_) => saw_waveform = true,
+                    Content::CueList(list) if !list.cues.is_empty() => saw_cues = true,
                     _ => {}
                 }
             }
@@ -202,9 +242,23 @@ fn ext_analysis_fixtures_yield_a_beat_grid_and_a_waveform() {
     }
 
     if !checked_any {
-        eprintln!("no analysis/*.EXT found under any session's nfs/ directory; skipping");
+        eprintln!("no analysis/*.DAT or *.EXT found under any session's nfs/ directory; skipping");
         return;
     }
-    assert!(saw_beat_grid, "no .EXT fixture across any session yielded a beat grid section");
+    assert!(saw_beat_grid, "no .DAT fixture across any session yielded a beat grid section");
     assert!(saw_waveform, "no .EXT fixture across any session yielded an HD color waveform section");
+
+    // Cues are deliberately *not* asserted, and `saw_cues` is tracked only
+    // to document why. Neither cue format survives `rekordcrate` 0.3 on
+    // this hardware: the `.EXT`'s `PCO2` is rejected outright (an extended
+    // cue whose `cue_type` it doesn't know), and the `.DAT`'s older `PCOB`
+    // yields nothing either, even for a track whose raw bytes plainly hold
+    // three hot cues — `capture/reference-20260819/`'s `5.DAT` carries a
+    // 168-byte `PCOB` with `len_cues = 3`. Reading them needs cue parsers
+    // of our own, the same gap `prolink::dbserver::cues` already documents
+    // on the other route. Until then a track arrives with no cues rather
+    // than with wrong ones.
+    if saw_cues {
+        eprintln!("note: a fixture yielded cues — `rekordcrate` may have gained support; the assertion above can be tightened");
+    }
 }
