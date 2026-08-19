@@ -929,7 +929,7 @@ dependencies = [
 
 [[package]]
 name = "decktective"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -949,7 +949,7 @@ dependencies = [
 
 [[package]]
 name = "decktective-core"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -962,7 +962,7 @@ dependencies = [
 
 [[package]]
 name = "decktective-net"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "if-addrs",
@@ -972,7 +972,7 @@ dependencies = [
 
 [[package]]
 name = "decktective-remote"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -997,7 +997,7 @@ dependencies = [
 
 [[package]]
 name = "decktective-timecode"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "cpal",
@@ -3210,7 +3210,7 @@ dependencies = [
 
 [[package]]
 name = "prolink"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "binrw",
@@ -3231,7 +3231,7 @@ dependencies = [
 
 [[package]]
 name = "prolink-engine"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
