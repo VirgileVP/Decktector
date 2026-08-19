@@ -7,7 +7,8 @@ import type {
   EngineSnapshot,
   NetworkState,
   TrackInfo
-} from '../../../engine/types'
+} from '../model'
+import { selectTransport } from './transport'
 
 interface DecktectiveStore {
   networkState: NetworkState
@@ -23,6 +24,7 @@ export const useDecktectiveStore = create<DecktectiveStore>(() => ({
   tracks: {}
 }))
 
+/** Idempotent — a reconnecting transport re-hydrates by calling this again. */
 function applySnapshot(snapshot: EngineSnapshot): void {
   useDecktectiveStore.setState({
     networkState: snapshot.networkState,
@@ -33,43 +35,29 @@ function applySnapshot(snapshot: EngineSnapshot): void {
 }
 
 /**
- * Wires the store to the engine IPC events and hydrates it from the
- * current snapshot. Returns the teardown function.
+ * Wires the store to whichever transport is feeding this window, and
+ * hydrates it from the current snapshot. Returns the teardown function.
  */
 export function connectStoreToEngine(): () => void {
   const { setState } = useDecktectiveStore
-  const api = window.decktective
-  if (!api) {
-    // Renderer opened outside Electron (plain browser): no engine available
-    console.warn('Decktective API unavailable; engine events will not be received')
-    return () => {}
-  }
 
-  const unsubscribes = [
-    api.onNetworkState((networkState) => setState({ networkState })),
-    api.onDeviceConnected((device) =>
+  return selectTransport().connect({
+    snapshot: applySnapshot,
+    networkState: (networkState) => setState({ networkState }),
+    deviceConnected: (device) =>
       setState((s) => ({
         devices: [...s.devices.filter((d) => d.deckId !== device.deckId), device]
-      }))
-    ),
-    api.onDeviceDisconnected((device) =>
+      })),
+    deviceDisconnected: (device) =>
       setState((s) => {
         const decks = { ...s.decks }
         const tracks = { ...s.tracks }
         delete decks[device.deckId]
         delete tracks[device.deckId]
         return { devices: s.devices.filter((d) => d.deckId !== device.deckId), decks, tracks }
-      })
-    ),
-    api.onDeckState((deck) => setState((s) => ({ decks: { ...s.decks, [deck.deckId]: deck } }))),
-    api.onDeckTrack((deckId, track) =>
+      }),
+    deckState: (deck) => setState((s) => ({ decks: { ...s.decks, [deck.deckId]: deck } })),
+    deckTrack: ({ deckId, track }) =>
       setState((s) => ({ tracks: { ...s.tracks, [deckId]: track } }))
-    )
-  ]
-
-  api.getSnapshot().then(applySnapshot, (error) => {
-    console.error('Failed to load engine snapshot:', error)
   })
-
-  return () => unsubscribes.forEach((unsubscribe) => unsubscribe())
 }

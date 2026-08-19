@@ -1,4 +1,5 @@
-import { buildLineup, formatClockMinutes, selectAroundNow, type LineupEntry } from '../lib/lineup'
+import { formatClockMinutes } from '../lib/lineup-axis'
+import { buildLineup, selectAroundNow, type LineupEntry } from '../lib/lineup'
 import { useLineup } from '../state/lineup'
 import { useSettings } from '../state/settings'
 import { useClockMinutes } from '../state/wall-clock'
@@ -10,11 +11,12 @@ import { useClockMinutes } from '../state/wall-clock'
  */
 export function LineupNow(): React.JSX.Element | null {
   const slots = useLineup((s) => s.slots)
-  const endMinutes = useLineup((s) => s.endMinutes)
+  const endOffset = useLineup((s) => s.endOffset)
+  const doorsOffset = useLineup((s) => s.doorsOffset)
   const lineupView = useSettings((s) => s.lineupView)
   const nowMinutes = useClockMinutes()
 
-  const entries = buildLineup(slots, endMinutes, nowMinutes)
+  const entries = buildLineup(slots, endOffset, nowMinutes, doorsOffset)
   const shown = lineupView === 'full' ? entries : selectAroundNow(entries)
   if (shown.length === 0) return null
 
@@ -34,8 +36,8 @@ export function LineupNow(): React.JSX.Element | null {
 
 /** The set on air spells out its end; the others are bounded by their successor. */
 function formatSetTimes(entry: LineupEntry): string {
-  const start = formatClockMinutes(entry.startMinutes)
+  const start = formatClockMinutes(entry.startOffset)
   if (entry.state !== 'current') return start
-  const end = entry.endMinutes === null ? '' : formatClockMinutes(entry.endMinutes)
+  const end = entry.endOffset === null ? '' : formatClockMinutes(entry.endOffset)
   return `${start}–${end}`
 }

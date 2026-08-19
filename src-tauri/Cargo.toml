@@ -1,0 +1,32 @@
+[package]
+name = "decktective"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Real-time visualizer for Pioneer Pro DJ Link decks (CDJ/XDJ)"
+
+[lib]
+# The app lives in the library so it stays testable; the binary in
+# src/main.rs is a thin wrapper around `run()`. Desktop-only, so none of the
+# staticlib/cdylib targets the Tauri mobile templates carry are needed.
+name = "decktective_lib"
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+decktective-core = { workspace = true }
+decktective-remote = { workspace = true }
+decktective-timecode = { workspace = true }
+keepawake = "0.6"
+prolink = { workspace = true }
+prolink-engine = { workspace = true }
+serde = { workspace = true }
+tauri = { version = "2", features = ["macos-private-api"] }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

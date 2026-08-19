@@ -1,11 +1,14 @@
 import { useEffect, useRef } from 'react'
 
-import type { DeckId, TrackInfo } from '../../../engine/types'
+import type { DeckId, TrackInfo, WaveformSegment } from '../model'
 import { prepareCanvas } from '../lib/canvas'
 import { canvasInk, type CanvasInk } from '../lib/ink'
 import { estimatePlayheadMs } from '../lib/playhead'
-import { useSettings } from '../state/settings'
+import { useSettings, type WaveformStyle } from '../state/settings'
 import { useDecktectiveStore } from '../state/store'
+
+/** The classic CDJ mono waveform's base hue, before whiteness brightens it. */
+const BLUE_STYLE_BASE: readonly [number, number, number] = [60, 130, 255]
 
 /** Default seconds of audio visible across the full width of the canvas. */
 const DEFAULT_WINDOW_SEC = 8
@@ -76,7 +79,10 @@ export function WaveformDetail({
       const playhead = estimatePlayheadMs(deck, Date.now())
       const ink = canvasInk()
       // Read straight from the store: the rAF loop must not depend on a render.
-      const wash = useSettings.getState().waveformDesaturation
+      const settings = useSettings.getState()
+      const wash = settings.waveformDesaturation
+      const gain = settings.waveformAmplitude
+      const style = settings.waveformStyle
 
       if (!track || !waveform?.detail || playhead === null) {
         ctx.strokeStyle = ink.empty
@@ -90,6 +96,15 @@ export function WaveformDetail({
       const windowStartMs = playhead - centerX * msPerPx
       const windowEndMs = playhead + (width - centerX) * msPerPx
       const detail = waveform.detail
+      // 'blue' reads the classic mono detail when the track has one;
+      // otherwise it falls back to a grayscale read of the color detail
+      // rather than going blank.
+      const getColumn =
+        style === 'blue'
+          ? waveform.monoDetail
+            ? segmentAt(waveform.monoDetail)
+            : grayscaleSegmentAt(detail)
+          : segmentAt(detail)
 
       // Loop regions first, under everything else
       drawLoopRegions(ctx, track, windowStartMs, windowEndMs, msPerPx, height)
@@ -97,13 +112,20 @@ export function WaveformDetail({
       for (let x = 0; x < width; x++) {
         const tMs = windowStartMs + x * msPerPx
         if (tMs < 0 || tMs >= track.durationMs) continue
-        const segment = detail[Math.floor(tMs / waveform.msPerDetailSegment)]
-        if (!segment) continue
-        const half = Math.max(1, segment.height * halfMax)
-        const [r, g, b] = segment.color
+        // Interpolate between neighboring detail columns so the envelope
+        // stays smooth when zoomed in past the waveform's native resolution,
+        // instead of stair-stepping between identical nearest-neighbor bars.
+        const column = interpolateColumn(getColumn, waveform.msPerDetailSegment, tMs)
+        if (!column) continue
+        const half = Math.max(1, Math.min(halfMax, column.height * gain * halfMax))
         ctx.globalAlpha = x < centerX ? PLAYED_DIM_ALPHA : 0.95
-        ctx.fillStyle = `rgb(${soften(r, ink, wash)},${soften(g, ink, wash)},${soften(b, ink, wash)})`
-        ctx.fillRect(x, midY - half, 1, half * 2)
+        if (style === '3band') {
+          draw3BandColumn(ctx, x, midY, half, column.color, ink, wash)
+        } else if (style === 'blue') {
+          drawBlueColumn(ctx, x, midY, half, column.color[0], ink, wash)
+        } else {
+          drawRgbColumn(ctx, x, midY, half, column.color, ink, wash)
+        }
       }
       ctx.globalAlpha = 1
 

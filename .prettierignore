@@ -1,6 +1,10 @@
-out
 dist
+target
 pnpm-lock.yaml
 LICENSE.md
 tsconfig.json
 tsconfig.*.json
+# Generated from the Rust model by `cargo test` — reformatting them here
+# would just be undone on the next run.
+src/renderer/src/model/*.ts
+!src/renderer/src/model/index.ts

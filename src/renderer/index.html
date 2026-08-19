@@ -2,6 +2,9 @@
 <html>
   <head>
     <meta charset="UTF-8" />
+    <!-- Without this, mobile browsers assume a ~980px desktop layout and
+         scale it down, so the remote view's responsive rules never fire. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Decktective</title>
     <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
     <meta

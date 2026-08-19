@@ -11,6 +11,23 @@ for every deck:
 
 Primary targets: **XDJ-XZ** and **XDJ-1000MK2** (works with 2 to 4 CDJ-2000-era players).
 
+> **Status — 1.0, the Rust rewrite.** The app now runs on a Rust backend with
+> Tauri, keeping the same UI. The shell, domain model, simulation engine, the Pro
+> DJ Link UDP layer and both metadata routes (NFS and dbserver —
+> title/artist/album/genre/key/label/bpm, beat grid, HD waveform, artwork) are in
+> place, with no virtual-player-number workaround needed.
+>
+> **Validated against real hardware on 2026-08-19** — two CDJ-3000s and a
+> DJM-900NXS2, linked off one USB stick. Discovery, status, beat, the `export.pdb`
+> parser and both metadata routes run against live players, and every fix that
+> session forced is pinned by tests quoting the captured bytes. Both decks came up
+> with title, artist, BPM, HD waveform, beat grid and artwork within a second of
+> connecting.
+>
+> **Known gap**: hot cues and memory cues are not read on either route — see
+> [Porting status](#porting-status). The Electron implementation remains on the
+> `master` branch; see [Architecture](#architecture).
+
 ## Requirements
 
 - The computer must be on the **same LAN** as the players (Ethernet into the booth
@@ -19,77 +36,199 @@ Primary targets: **XDJ-XZ** and **XDJ-1000MK2** (works with 2 to 4 CDJ-2000-era 
   virtual-player slot on the Pro DJ Link network.
 - Tracks must come from Rekordbox-analyzed media (USB/SD) for metadata and waveforms
   to be available.
-- Node must be built for the same architecture as the machine. The Rekordbox database
-  downloaded from the players is read through `better-sqlite3`, a native module, and
-  `postinstall` builds it for whatever architecture `node` reports: an x64 Node under
-  Rosetta on an Apple Silicon Mac produces a module arm64 Electron cannot load, and
-  every metadata lookup fails with a `dlopen` architecture error. Check with
-  `node -p process.arch`, and rebuild after switching Node:
-
-```sh
-npx electron-builder install-app-deps --arch arm64
-```
+- A [Rust toolchain](https://rustup.rs) and the platform's webview: WebView2 on
+  Windows (preinstalled on Windows 11), WebKitGTK on Linux, WKWebView on macOS. No
+  native Node modules are involved anymore, so there is nothing to rebuild per
+  architecture.
 
 ## Metadata on a full four-player network
 
-Players only answer media-slot queries and metadata requests coming from a virtual
-CDJ numbered 1-4. With four players on the network all four numbers are taken, ours
-is 5, and both of those doors are closed — the track database is then read straight
-off the player over NFS instead, which needs no player number (see
-`src/engine/prolink/media-slot-bypass.ts`).
+Decktective tries NFS first, which needs no virtual player number at all — this
+should just work on any network size, including four CDJs with all of 1-4 taken.
+dbserver is the fallback if NFS doesn't answer (e.g. an unsupported media slot),
+and *that* route only answers a virtual CDJ numbered 1-4 — Decktective defaults to
+5 to stay clear of numbers real hardware self-assigns, so on a full four-player
+network the dbserver fallback alone wouldn't get metadata either.
 
-A CDJ-3000 can be renumbered to player 5 or 6, which frees a number in range. Set
-one player that way, then claim the freed number:
+A CDJ-3000 can be renumbered to player 5 or 6, which frees a number in range, for
+the dbserver fallback specifically. Set one player that way, then claim the freed
+number:
 
 ```sh
 DECKTECTIVE_VCDJ_ID=4 npm run dev
 ```
 
 Never point it at a number a device already uses — two devices sharing one breaks the
-network. Every metadata lookup is traced to `prolink-diagnostic.log` in the log
-directory (`./logs` in dev, the app's user-data directory in packaged builds).
+network.
+
+This behaviour is documented here because it is a hard-won constraint the port has
+to preserve.
 
 ## Getting started
 
 ```sh
 npm install
 
-# Run against real hardware
-npm run dev
-
 # Run with two simulated decks (no hardware needed)
 npm run dev:sim
+
+# Four simulated decks
+npm run dev:sim4
+```
+
+```sh
+npm run test:rust    # Rust tests, and regenerates the renderer's model types
+npm run lint:rust    # clippy, warnings as errors
+npm run typecheck    # renderer
 ```
 
 ## Building
 
 ```sh
-npm run build:mac    # .dmg (arm64 + x64) — must run on macOS
-npm run build:win    # .exe installer
+npm run build
 ```
 
-CI (GitHub Actions) builds unsigned macOS dmg and Windows installer artifacts on
-every push to master — see `.github/workflows/build.yml`. macOS builds are
-unsigned for now: right-click → Open on first launch, or configure a Developer ID
-certificate in CI to sign and notarize.
+Produces an NSIS installer on Windows, a `.dmg` on macOS and `.AppImage`/`.deb` on
+Linux — each must be built on its own platform.
+
+## Remote view
+
+A second screen — a phone by the lighting desk, a laptop out front — can watch the
+same decks the desktop app shows, in any browser on the local network. It is
+**off by default**: turn it on from Settings → Remote view, which also shows the
+URL and a QR code once it is listening.
+
+It is **read-only**. A remote browser watches; it never controls the app — there is
+no write path from a remote client back into the engine, and shell-only controls
+(window behaviour, timecode output) are hidden there since they would not do
+anything.
+
+The link is gated by a token embedded in the URL, **regenerated every time the
+server starts** — closing and reopening the remote view drops anyone using the old
+link. This is a guard against someone on the same network stumbling onto the feed,
+not hardened authentication: **a venue network is not a trusted network**, and
+nothing sensitive should be exposed through this beyond what is already on screen.
+
+This works the same in development, with no extra setup: `npm run dev` has no
+bundle to serve, so the remote server proxies asset requests through to Vite.
+Everything stays on the remote server's own port, exactly as in a packaged
+build. Vite must be reachable for that, which is why its dev server binds every
+interface (`server.host` in `vite.config.ts`).
+
+`VITE_REMOTE_WS_PORT` overrides the port the remote WebSocket connects to. It is
+not needed for the flow above; it exists for the case where the page is opened
+on Vite's own port rather than the remote server's.
+
+## Detachable panels
+
+The clock, the timecode readout, the whole header block (clock + timecode +
+lineup), and any deck can be popped into its own OS window — useful for putting
+the clock on a second monitor, or feeding a deck to a video mixer. Hover a panel
+to reveal a small pop-out button; each click opens another window, and several
+windows of the same panel are allowed.
+
+These windows **mirror** the main window rather than moving content out of it —
+the main window's layout never changes, whatever is popped out stays visible
+there too. Each panel window has its own chrome (a title bar and a close button
+appear on hover; drag the bar to move it, drag an edge to resize), and its own
+always-on-top, transparency and zoom controls, independent of the main window's
+settings. Transparency is meant for keying the window over a video feed — pin a
+deck or the clock on top, drop its background, and key out the rest. Open panel
+windows are remembered across restarts, in their last position.
+
+This is desktop-only. The [remote view](#remote-view)'s `?deck=N` focus mode is
+unrelated and unaffected.
 
 ## Architecture
 
 ```
-src/
-├── engine/          # Domain layer, no Electron/UI dependency
-│   ├── types.ts     #   Normalized model (DeckState, TrackInfo, WaveformData…)
-│   ├── engine.ts    #   ProlinkEngine interface + snapshot bookkeeping
-│   ├── prolink/     #   Real implementation on top of prolink-connect
-│   └── sim/         #   Scripted simulation (npm run dev:sim)
-├── main/            # Electron main: window + engine → IPC bridge
-├── preload/         # contextBridge: typed window.decktective API
-└── renderer/        # React UI: deck panels + canvas waveforms
+crates/
+├── prolink/            # Pro DJ Link protocol, no app dependency
+└── decktective-core/   # Domain layer, no UI dependency
+    ├── model.rs        #   Normalized model (DeckState, TrackInfo, WaveformData…)
+    ├── engine.rs       #   Engine trait + snapshot bookkeeping + event stream
+    └── sim/            #   Scripted simulation (npm run dev:sim)
+src-tauri/              # App shell: window, commands, engine → event bridge
+src/renderer/           # React UI: deck panels + canvas waveforms
+    └── src/model/      #   TypeScript generated from model.rs by `cargo test`
 ```
 
-The UI only ever consumes the normalized model, so the protocol backend can be
-swapped (e.g. for a beat-link sidecar) without touching components. The same
-engine layer can later feed a web server for remote viewing.
+The UI only ever consumes the normalized model, and the model itself is generated
+from the Rust definitions — a divergence between engine and renderer fails the
+build rather than surfacing mid-set. The same engine layer also feeds the
+[remote view](#remote-view) over a WebSocket, without touching the protocol.
+
+### Porting status
+
+| Phase | Scope                                                                    | State |
+| ----- | ------------------------------------------------------------------------- | ----- |
+| 1     | App shell, domain model, simulation engine                                | done  |
+| 2     | UDP layer: announce, discovery, status, beat, precise position            | done  |
+| 3     | Metadata over dbserver: title/artist/album/genre/key/label/comment/bpm, beat grid, HD waveform | done (cues and artwork not implemented — see below) |
+| 4     | Metadata over NFS: `export.pdb` + `.EXT`/`.DAT` analysis files, needs no virtual player number — the primary route, dbserver is the fallback | done — validated against a CDJ-3000's own media, see below |
+
+Phase 2 listens for real player traffic passively rather than running the full
+virtual-CDJ channel-claim handshake Deep Symmetry documents: the handshake's exact
+byte layout isn't pinned down precisely enough to transmit safely onto a live
+network yet. Decktective picks a free virtual player number and broadcasts the
+same settled-state keep-alive a real player does — it just never contests a number
+another device claims first. That keep-alive is not optional: players send their
+status packets **unicast, only to peers whose keep-alive they have seen**, so a
+purely passive listener sees discovery and beats and no status at all (see
+`crates/prolink/src/presence.rs`'s module doc). It also has to announce the real
+address and MAC of the adapter facing the booth, which is why picking the right
+one matters on a multi-homed laptop.
+
+Phase 3's two gaps stay open — dbserver's cue-list wire format
+(`crates/prolink/src/dbserver/cues.rs`) is variable-length and still unconfirmed
+(a wrong offset would desync every cue after it, not just misread one field), and
+dbserver has no artwork route wired up. Artwork is moot for a deck reading real
+media, since phase 4 gets it through NFS, which is part of why dbserver was
+demoted to the fallback route.
+
+**Cues are the one thing 1.0 does not read, on either route.** The NFS route
+can't either: a CDJ-3000's `.EXT` cue list (`PCO2`) is one of the sections
+`rekordcrate` 0.3 rejects outright, and its older `.DAT` list (`PCOB`) comes back
+empty even for a track whose raw bytes plainly hold three hot cues. Closing this
+means hand-rolling cue parsers for both formats, against the bytes the
+2026-08-19 session captured. Until then a track arrives with no cues rather than
+with wrong ones.
+
+**Phase 4 carries real, explicit confidence differences worth reading before
+trusting it at a gig.** Cross-checked against Deep Symmetry's `crate-digger` (the
+hardware-validated Java reference for exactly this NFS-based read):
+
+- **High confidence**: the transport itself. What was assumed to be a
+  "non-standard NFSv2" server turned out to be standard ONC-RPC/portmapper/NFSv2
+  (RFC 1057/1094) almost everywhere — only filenames/paths are encoded UTF-16LE
+  instead of ASCII, confirmed straight from `crate-digger`'s own hand-written
+  protocol spec. `crates/prolink/src/nfs/{xdr,rpc,portmap,mount,procedures,client}.rs`
+  implement this, tested against an in-process fake UDP server
+  (`crates/prolink/tests/nfs_fake_server.rs`, not `#[ignore]`-gated) covering the
+  full portmap → mount → lookup-chain → multi-chunk read flow and the
+  give-up-cleanly-on-no-response path.
+- **Validated against hardware**: parsing the fetched analysis files (beat grid,
+  HD color waveform — not cues, see above) with the `rekordcrate` crate
+  (`crates/prolink-engine/src/metadata/nfs.rs`), whose hot-cue color table
+  (`crates/prolink-engine/src/metadata/colors.rs`) is copied verbatim from its own
+  doc comments. Two things a real CDJ-3000 forced: the file is read **section by
+  section**, because `ANLZ::read` abandons the whole file over one section that
+  crate can't decode and a CDJ-3000's `.EXT` contains exactly that; and both the
+  `.EXT` and the `.DAT` are fetched, because the beat grid `rekordcrate` reads
+  (`PQTZ`) is only in the `.DAT` while the colour waveform is only in the `.EXT`.
+- **Validated against hardware**: the hand-rolled `export.pdb` database parser
+  (`crates/prolink/src/nfs/pdb.rs`). It was written from a reading of
+  `rekordcrate`'s source — whose own row fields are private in the published
+  version — and that reading got essentially every structural constant wrong: it
+  found *zero* tracks in the first real database it met. Every offset in it now
+  comes from that file, cross-checked field by field against the same tracks'
+  metadata as answered independently by the player's dbserver. The file's module
+  doc lists what was wrong, in case any of it resurfaces.
+- **Confirmed**: the MOUNT path per media slot (`"/B/"`/`"/C/"` for SD/USB,
+  `crates/prolink/src/nfs/client.rs`'s `slot_path`) — `"/C/"` mounts a CDJ-3000's
+  USB slot. Note that a mount failure is the expected answer from a player with an
+  empty slot, which is the normal case on a linked booth: metadata is fetched from
+  the player holding the media, not from the deck playing it.
 
 ### Protocol notes
 
@@ -99,11 +238,31 @@ engine layer can later feed a web server for remote viewing.
 - The **XDJ-XZ** exposes its two decks behind a single IP and always claims player
   numbers 1 and 2; Decktective announces itself as virtual player 5 to stay clear
   while remaining in the 1-6 range CDJs accept database queries from.
+- A track loaded over **link** belongs to another player: a deck's status packet
+  names the player whose media it came from, and metadata has to be asked of that
+  player, in that player's slot, by that player's number. Two decks fed by one USB
+  stick is the ordinary booth setup, and asking the deck itself gets an empty menu
+  over dbserver and a failed mount over NFS.
+- A player reports itself **on air** only when its player number matches the mixer
+  channel it is plugged into — the mixer announces on-air per channel, not per
+  device.
 
 ## Credits
 
-- [prolink-connect](https://github.com/evanpurkhiser/prolink-connect) — TypeScript
-  implementation of the Pro DJ Link protocol.
 - [Deep Symmetry's beat-link](https://github.com/Deep-Symmetry/beat-link) and the
   [DJ Link packet analysis](https://djl-analysis.deepsymmetry.org/) — the protocol
   research that makes all of this possible.
+- [prolink-connect](https://github.com/evanpurkhiser/prolink-connect) — the
+  TypeScript implementation this project ran on until the Rust port, and the
+  reference the port follows.
+- [rekordcrate](https://github.com/Holzhaus/rekordcrate) — Rust parser for
+  Rekordbox analysis files (`.DAT`/`.EXT`, beat grid/waveform/cues), used as-is.
+  Its own `export.pdb` parser's row fields are private in the published version,
+  so `crates/prolink/src/nfs/pdb.rs` is a from-scratch minimal parser instead,
+  using `rekordcrate`'s source as a layout reference — see
+  [Porting status](#porting-status) for the confidence caveat that comes with
+  that.
+- [crate-digger](https://github.com/Deep-Symmetry/crate-digger) — Deep
+  Symmetry's Java reference implementation for reading a player's database over
+  NFS, the source this port's `prolink::nfs` transport layer was cross-checked
+  against.

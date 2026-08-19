@@ -1,0 +1,54 @@
+[package]
+name = "prolink"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Pro DJ Link protocol client: virtual CDJ, device discovery, player status and metadata"
+
+[dependencies]
+anyhow = { workspace = true }
+# Wall-clock stamps for `capture::append_note` — a session's notes are read
+# back against a human's memory and a Wireshark timeline, both of which are
+# in local time, which `std::time` alone can't produce.
+chrono = { workspace = true }
+# Only the `prolink-capture` binary resolves `--bind`'s default this way
+# (already a workspace dependency — see `HARDWARE-CAPTURE-PLAN.md`).
+if-addrs = { workspace = true }
+serde = { workspace = true }
+# Needed for the hardware capture tool's JSONL session logs
+# (`crates/prolink/src/capture.rs`) — see `HARDWARE-CAPTURE-PLAN.md`.
+serde_json = { workspace = true }
+socket2 = { workspace = true }
+thiserror = { workspace = true }
+# `signal` on top of the workspace's tokio features is only needed by the
+# `prolink-capture` binary, to wait for Ctrl+C at the end of a session.
+# `process` is needed by `tests/capture_tool_e2e.rs` and by the
+# `prolink-session` binary, both of which drive `prolink-capture`/`cdj-sim`
+# as real child processes. `io-std` is what lets `prolink-capture` also stop
+# on stdin EOF and `prolink-session` read the booth operator's ENTER.
+tokio = { workspace = true, features = ["signal", "process", "io-std"] }
+tracing = { workspace = true }
+# Only the `prolink-capture` binary installs a subscriber (see its own doc
+# comment) — the library itself just emits `tracing` events as before.
+tracing-subscriber = "0.3"
+ts-rs = { workspace = true }
+
+# `getifaddrs` for the real hardware MAC of the booth adapter, which our
+# keep-alive has to announce (see `crates/prolink/src/presence.rs`). Unix
+# only: Windows needs `GetAdaptersInfo` instead, and `presence` falls back
+# to a synthetic MAC there rather than pulling in a whole win32 crate for
+# a platform no booth session has used yet.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+# Only `tests/hardware_capture_replay.rs`'s `.EXT` replay needs these — same
+# versions `prolink-engine` already builds against, reused here rather than
+# re-pinned (see that crate's `Cargo.toml` for why `binrw` is needed
+# alongside `rekordcrate`). `prolink-engine` itself can't be a dev
+# -dependency here: it already depends on `prolink`, and Cargo rejects that
+# cycle even for dev-only edges.
+binrw = "0.14"
+rekordcrate = { workspace = true }
+tempfile = "3"

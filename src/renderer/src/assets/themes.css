@@ -31,8 +31,8 @@
   --logo-glow: rgba(34, 211, 238, 0.45);
   --waveform-idle-filter: brightness(0.4) saturate(0.5);
   --wave-empty: rgba(255, 255, 255, 0.05);
-  --wave-played: rgba(148, 158, 178, 0.3);
-  --wave-unplayed: rgba(196, 204, 220, 0.75);
+  --wave-played: rgba(148, 158, 178, 0.15);
+  --wave-unplayed: rgba(196, 204, 220, 0.9);
   --playhead: #ffffff;
   --grid-downbeat: rgba(255, 255, 255, 0.55);
   --grid-beat: rgba(255, 255, 255, 0.18);
@@ -61,8 +61,8 @@
   --logo-glow: rgba(160, 160, 175, 0.35);
   --waveform-idle-filter: brightness(0.45) saturate(0.5);
   --wave-empty: rgba(255, 255, 255, 0.05);
-  --wave-played: rgba(150, 150, 160, 0.3);
-  --wave-unplayed: rgba(205, 205, 215, 0.75);
+  --wave-played: rgba(150, 150, 160, 0.15);
+  --wave-unplayed: rgba(205, 205, 215, 0.9);
   --playhead: #ffffff;
   --grid-downbeat: rgba(255, 255, 255, 0.55);
   --grid-beat: rgba(255, 255, 255, 0.18);
@@ -92,8 +92,8 @@
   /* Fading works better than dimming when the surface behind is bright. */
   --waveform-idle-filter: saturate(0.4) opacity(0.5);
   --wave-empty: rgba(0, 0, 0, 0.05);
-  --wave-played: rgba(90, 100, 120, 0.35);
-  --wave-unplayed: rgba(60, 70, 90, 0.8);
+  --wave-played: rgba(90, 100, 120, 0.18);
+  --wave-unplayed: rgba(60, 70, 90, 0.95);
   --playhead: #1a1d23;
   --grid-downbeat: rgba(0, 0, 0, 0.5);
   --grid-beat: rgba(0, 0, 0, 0.16);
@@ -122,8 +122,8 @@
   --logo-glow: rgba(0, 229, 255, 0.55);
   --waveform-idle-filter: brightness(0.55);
   --wave-empty: rgba(255, 255, 255, 0.08);
-  --wave-played: rgba(255, 255, 255, 0.35);
-  --wave-unplayed: rgba(255, 255, 255, 0.9);
+  --wave-played: rgba(255, 255, 255, 0.15);
+  --wave-unplayed: rgba(255, 255, 255, 1);
   --playhead: #ffffff;
   --grid-downbeat: rgba(255, 255, 255, 0.75);
   --grid-beat: rgba(255, 255, 255, 0.3);
@@ -152,8 +152,8 @@
   --logo-glow: rgba(255, 181, 69, 0.45);
   --waveform-idle-filter: brightness(0.45) saturate(0.6);
   --wave-empty: rgba(255, 181, 69, 0.06);
-  --wave-played: rgba(255, 181, 69, 0.28);
-  --wave-unplayed: rgba(255, 181, 69, 0.75);
+  --wave-played: rgba(255, 181, 69, 0.14);
+  --wave-unplayed: rgba(255, 181, 69, 0.9);
   --playhead: #ffd9a0;
   --grid-downbeat: rgba(255, 181, 69, 0.5);
   --grid-beat: rgba(255, 181, 69, 0.16);
@@ -182,8 +182,8 @@
   --logo-glow: rgba(99, 179, 255, 0.45);
   --waveform-idle-filter: brightness(0.45) saturate(0.55);
   --wave-empty: rgba(220, 230, 247, 0.05);
-  --wave-played: rgba(130, 150, 184, 0.3);
-  --wave-unplayed: rgba(190, 214, 255, 0.75);
+  --wave-played: rgba(130, 150, 184, 0.15);
+  --wave-unplayed: rgba(190, 214, 255, 0.9);
   --playhead: #ffffff;
   --grid-downbeat: rgba(220, 230, 247, 0.55);
   --grid-beat: rgba(220, 230, 247, 0.18);

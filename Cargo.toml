@@ -1,0 +1,54 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/decktective-core",
+    "crates/decktective-net",
+    "crates/decktective-remote",
+    "crates/decktective-timecode",
+    "crates/prolink",
+    "crates/prolink-engine",
+    "src-tauri",
+]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
+authors = ["Virgile Pornet"]
+license = "MIT"
+
+[workspace.dependencies]
+decktective-core = { path = "crates/decktective-core" }
+decktective-net = { path = "crates/decktective-net" }
+decktective-remote = { path = "crates/decktective-remote" }
+decktective-timecode = { path = "crates/decktective-timecode" }
+prolink = { path = "crates/prolink" }
+prolink-engine = { path = "crates/prolink-engine" }
+
+anyhow = "1"
+async-trait = "0.1"
+chrono = "0.4"
+cpal = "0.15"
+if-addrs = "0.13"
+midir = "0.10"
+rand = { version = "0.9", features = ["small_rng"] }
+# `anlz` module only — its `pdb` module's row types are private in this
+# published version, see crates/prolink/src/nfs/pdb.rs's doc comment for
+# why this phase hand-rolls PDB parsing instead of depending on it there
+# too. `default-features = false` drops the `cli` feature (pulls in clap
+# for a binary this workspace doesn't use).
+rekordcrate = { version = "0.3", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+socket2 = "0.6"
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util"] }
+tracing = "0.1"
+ts-rs = "10"
+
+[profile.release]
+# A visualizer running next to a live set: prefer a small, fast binary and
+# accept the longer build.
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

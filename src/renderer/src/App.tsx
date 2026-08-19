@@ -1,15 +1,25 @@
+import { isTauri } from '@tauri-apps/api/core'
 import { useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
 import neonLogo from './assets/neon-logo.png'
 import { DeckPanel } from './components/DeckPanel'
-import { HeaderClock } from './components/HeaderClock'
-import { LineupNow } from './components/LineupNow'
-import { SettingsDialog } from './components/SettingsDialog'
+import { HeaderBlock } from './components/HeaderBlock'
+import { RemoteLinkBanner } from './components/RemoteLinkBanner'
+import { SettingsDialog, type SettingsTab } from './components/SettingsDialog'
 import { deckColor } from './lib/deck-colors'
+import { remoteFocusedDeck } from './lib/remote-url'
+import { connectMainWindowCloseCascade } from './panels/close-panel-windows-on-exit'
+import { restorePanelWindows } from './panels/restore-panel-windows'
+import { connectDevicesToEngine, useDevicesStore } from './state/devices'
+import { connectPanelWindowRegistry } from './state/panel-windows'
+import { connectRemoteToEngine } from './state/remote'
+import { connectSettingsBroadcast } from './state/settings-broadcast'
 import { useSettings } from './state/settings'
 import { connectSettingsToApp } from './state/settings-sync'
 import { connectStoreToEngine, useDecktectiveStore } from './state/store'
+import { connectTimecodeToEngine } from './state/timecode'
+import { useClockNow } from './state/wall-clock'
 
 type DeckView = 'stack' | 'quad'
 
@@ -29,20 +39,52 @@ const NETWORK_LABELS: Record<string, string> = {
   failed: 'Connection failed'
 }
 
+const MS_PER_MINUTE = 60_000
+const MS_PER_HOUR = 3_600_000
+
+/** Coarse "how long ago", client-observed — the protocol gives us no failure
+ *  reason, so this is honestly just "since we last saw any device", not a
+ *  diagnosis. */
+function formatElapsed(ms: number): string {
+  if (ms < MS_PER_MINUTE) return `${Math.max(1, Math.floor(ms / 1000))}s`
+  if (ms < MS_PER_HOUR) return `${Math.floor(ms / MS_PER_MINUTE)}m`
+  return `${Math.floor(ms / MS_PER_HOUR)}h`
+}
+
 function App(): React.JSX.Element {
   useEffect(() => connectStoreToEngine(), [])
-  useEffect(() => connectSettingsToApp(), [])
+  useEffect(() => connectSettingsToApp('main'), [])
+  useEffect(() => connectSettingsBroadcast(), [])
+  useEffect(() => connectTimecodeToEngine(), [])
+  useEffect(() => connectDevicesToEngine(), [])
+  useEffect(() => connectRemoteToEngine(), [])
+  useEffect(() => connectPanelWindowRegistry(), [])
+  useEffect(() => connectMainWindowCloseCascade(), [])
+  useEffect(() => {
+    void restorePanelWindows()
+  }, [])
 
+  const [focusedDeckId] = useState<number | null>(() => remoteFocusedDeck(window.location))
   const [view, setView] = useState<DeckView>(loadView)
   const selectView = (next: DeckView): void => {
     setView(next)
     localStorage.setItem(VIEW_STORAGE_KEY, next)
   }
 
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null)
   const deckColors = useSettings((s) => s.deckColors)
 
   const networkState = useDecktectiveStore((s) => s.networkState)
+  const lastDeviceSeenAt = useDevicesStore((s) => s.lastSeenAt)
+  // Piggybacks on the app's one shared per-second tick so the "last seen"
+  // label stays live without a second timer or an impure `Date.now()` read
+  // in render.
+  const nowMs = useClockNow()
+  const networkFailed = networkState === 'failed'
+  const lastSeenHint =
+    networkFailed && lastDeviceSeenAt !== null
+      ? ` — last seen ${formatElapsed(nowMs - lastDeviceSeenAt)} ago`
+      : ''
   const deckIds = useDecktectiveStore(
     useShallow((s) =>
       Object.keys(s.decks)
@@ -50,20 +92,41 @@ function App(): React.JSX.Element {
         .sort((a, b) => a - b)
     )
   )
+  // Full-screen focus (via `?deck=N`) forces the single-column layout
+  // regardless of the view toggle — a `view-quad` grid would otherwise
+  // leave the one visible deck sharing the screen with empty cells.
+  const visibleDeckIds =
+    focusedDeckId !== null && deckIds.includes(focusedDeckId) ? [focusedDeckId] : deckIds
+  const effectiveView: DeckView = focusedDeckId !== null ? 'stack' : view
 
   return (
     <div className="app">
+      <RemoteLinkBanner />
       <header className="app-header">
         <img className="neon-logo" src={neonLogo} alt="NEON" />
-        <div className="header-center">
-          <HeaderClock />
-          <LineupNow />
-        </div>
+        <HeaderBlock />
         <div className="header-right">
-          <div className={`network-status network-${networkState}`}>
-            <span className="network-dot" />
-            {NETWORK_LABELS[networkState]}
-          </div>
+          {networkFailed && isTauri() ? (
+            // The Devices tab is shell-only (see `SettingsDialog.tsx`), so this
+            // shortcut only makes sense — and only renders as interactive — in
+            // the desktop shell; a remote viewer gets the same plain, inert
+            // indicator as every other network state.
+            <button
+              type="button"
+              className="network-status network-failed network-status-action"
+              title="Connection failed — open Devices to check what Decktective can see on the network"
+              onClick={() => setSettingsTab('Devices')}
+            >
+              <span className="network-dot" />
+              {NETWORK_LABELS.failed}
+              {lastSeenHint}
+            </button>
+          ) : (
+            <div className={`network-status network-${networkState}`}>
+              <span className="network-dot" />
+              {NETWORK_LABELS[networkState]}
+            </div>
+          )}
           <div className="view-toggle">
             <button
               type="button"
@@ -95,7 +158,7 @@ function App(): React.JSX.Element {
             className="settings-button"
             title="Settings"
             aria-label="Settings"
-            onClick={() => setSettingsOpen(true)}
+            onClick={() => setSettingsTab('Interface')}
           >
             <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
               {GEAR_TOOTH_ANGLES.map((angle) => (
@@ -119,10 +182,12 @@ function App(): React.JSX.Element {
         </div>
       </header>
 
-      {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+      {settingsTab !== null && (
+        <SettingsDialog initialTab={settingsTab} onClose={() => setSettingsTab(null)} />
+      )}
 
-      <main className={`deck-grid view-${view}`}>
-        {deckIds.length === 0 ? (
+      <main className={`deck-grid view-${effectiveView}`}>
+        {visibleDeckIds.length === 0 ? (
           <div className="empty-state">
             <p>Waiting for Pro DJ Link devices…</p>
             <p className="empty-hint">
@@ -131,7 +196,7 @@ function App(): React.JSX.Element {
             </p>
           </div>
         ) : (
-          deckIds.map((deckId) => (
+          visibleDeckIds.map((deckId) => (
             <DeckPanel key={deckId} deckId={deckId} accentColor={deckColor(deckId, deckColors)} />
           ))
         )}
