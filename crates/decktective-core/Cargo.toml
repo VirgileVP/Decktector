@@ -11,6 +11,9 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
+# The simulation can run on tracks recorded from real hardware, read from a
+# JSON fixture file (`sim::SimLibrary`).
+serde_json = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 ts-rs = { workspace = true }

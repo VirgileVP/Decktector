@@ -17,5 +17,10 @@ decktective-core = { workspace = true }
 decktective-net = { workspace = true }
 prolink = { workspace = true }
 rekordcrate = { workspace = true }
+# Only the `sim-fixtures` binary needs these: it serialises the `TrackInfo`
+# fixtures it builds, which the simulator reads back (see that file's doc
+# comment).
+serde = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

@@ -13,7 +13,7 @@
 //! `decktective_core::Engine`-shaped plumbing `SimEngine` already uses.
 
 mod engine;
-mod metadata;
+pub mod metadata;
 mod network;
 mod normalize;
 mod position;

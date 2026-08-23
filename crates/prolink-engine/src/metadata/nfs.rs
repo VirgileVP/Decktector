@@ -59,9 +59,26 @@ pub async fn fetch_track_info(
         return Ok(None);
     };
 
-    let (beat_grid, waveform, cues) = fetch_analysis(&mut client, &track.analyze_path).await;
+    let analysis = fetch_analysis(&mut client, &track.analyze_path).await;
     let artwork = fetch_artwork(&mut client, &pdb, track).await;
 
+    Ok(Some(build_track_info(&pdb, track, analysis, artwork, status_bpm)))
+}
+
+/// A track's beat grid, waveform and cues, as read out of its `.DAT`/`.EXT`
+/// pair — the three things that come from analysis files rather than from
+/// the database.
+pub type Analysis = (Option<Vec<BeatGridBeat>>, Option<WaveformData>, Vec<TrackCue>);
+
+/// Assembles one [`TrackInfo`] from bytes already in hand.
+///
+/// Split from [`fetch_track_info`] so the same mapping serves a source that
+/// does no I/O at all: `sim-fixtures` builds the simulator's tracks from an
+/// `export.pdb` and the analysis files recovered out of a recorded capture,
+/// and it must produce exactly what a live player would have, not a second
+/// approximation of it.
+pub fn build_track_info(pdb: &Pdb, track: &Track, analysis: Analysis, artwork: Option<String>, status_bpm: Option<f64>) -> TrackInfo {
+    let (beat_grid, waveform, cues) = analysis;
     let duration_ms = f64::from(track.duration_sec) * 1000.0;
     let bpm = normalize_tempo(f64::from(track.tempo_centibpm)).or(status_bpm);
 
@@ -72,8 +89,8 @@ pub async fn fetch_track_info(
         cues: &cues,
     });
 
-    Ok(Some(TrackInfo {
-        track_id,
+    TrackInfo {
+        track_id: track.id,
         title: track.title.clone(),
         artist: pdb.artists.get(&track.artist_id).cloned(),
         album: pdb.albums.get(&track.album_id).cloned(),
@@ -93,7 +110,7 @@ pub async fn fetch_track_info(
         waveform,
         cues,
         events,
-    }))
+    }
 }
 
 /// Downloads `dat_path`'s `.EXT` sibling and parses whatever sections it
@@ -101,7 +118,7 @@ pub async fn fetch_track_info(
 /// found" rather than failing the whole track — metadata (title/artist/
 /// etc, already resolved by this point) is more valuable than analysis
 /// data, and a track is still worth showing without a waveform.
-async fn fetch_analysis(client: &mut NfsClient, dat_path: &str) -> (Option<Vec<BeatGridBeat>>, Option<WaveformData>, Vec<TrackCue>) {
+async fn fetch_analysis(client: &mut NfsClient, dat_path: &str) -> Analysis {
     // Both files, because the two things this route wants live in
     // different ones: the HD colour waveform and the extended cues are only
     // in the `.EXT`, while the beat grid `rekordcrate` can read (`PQTZ`) is
@@ -113,7 +130,7 @@ async fn fetch_analysis(client: &mut NfsClient, dat_path: &str) -> (Option<Vec<B
     parse_analysis(&ext_bytes, &dat_bytes)
 }
 
-fn ext_variant_path(dat_path: &str) -> String {
+pub fn ext_variant_path(dat_path: &str) -> String {
     for suffix in [".DAT", ".dat"] {
         if let Some(base) = dat_path.strip_suffix(suffix) {
             return format!("{base}{EXT_SUFFIX}");
@@ -161,7 +178,7 @@ fn read_sections(bytes: &[u8]) -> Vec<Section> {
     sections
 }
 
-fn parse_analysis(ext_bytes: &[u8], dat_bytes: &[u8]) -> (Option<Vec<BeatGridBeat>>, Option<WaveformData>, Vec<TrackCue>) {
+pub fn parse_analysis(ext_bytes: &[u8], dat_bytes: &[u8]) -> Analysis {
     let mut sections = read_sections(ext_bytes);
     sections.extend(read_sections(dat_bytes));
 

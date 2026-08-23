@@ -15,7 +15,7 @@
 
 mod colors;
 mod fetcher;
-mod nfs;
+pub mod nfs;
 mod normalize;
 
 pub use fetcher::{FetchRequest, MetadataFetcher};

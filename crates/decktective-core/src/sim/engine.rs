@@ -12,7 +12,7 @@ use rand::{Rng, SeedableRng};
 use tokio::task::JoinHandle;
 use tokio::time::{interval, Duration, Instant, MissedTickBehavior};
 
-use super::tracks::{build_sim_track, SIM_TRACKS};
+use super::library::SimLibrary;
 use crate::engine::{Engine, EngineHandle};
 use crate::model::{DeckId, DeckState, DeviceInfo, NetworkState, PlayState, TrackInfo};
 
@@ -84,7 +84,7 @@ struct SimDeck {
     play_state: PlayState,
     track: Option<TrackInfo>,
     playhead_ms: f64,
-    /// Index in `SIM_TRACKS` of the currently loaded track.
+    /// Index into the [`SimLibrary`] of the currently loaded track.
     track_index: usize,
     pitch_phase: f64,
     swapping: bool,
@@ -94,11 +94,11 @@ struct SimDeck {
 }
 
 impl SimDeck {
-    fn new(deck_id: DeckId, track_index: usize, track_id: u32) -> Self {
+    fn new(library: &SimLibrary, deck_id: DeckId, track_index: usize, track_id: u32) -> Self {
         Self {
             deck_id,
             play_state: PlayState::Cued,
-            track: Some(build_sim_track(&SIM_TRACKS[track_index], track_id)),
+            track: Some(library.track(track_index, track_id)),
             playhead_ms: 0.0,
             track_index,
             pitch_phase: f64::from(deck_id) * 2.1,
@@ -214,15 +214,16 @@ impl Engine for SimEngine {
 /// state is shared across threads — only the reports leaving through the
 /// handle are.
 async fn run(deck_count: u8, handle: Arc<EngineHandle>) {
+    let library = SimLibrary::from_env();
     let mut next_track_id = FIRST_TRACK_ID;
-    // Rolling index into `SIM_TRACKS` so decks pick distinct tracks.
+    // Rolling index into the library so decks pick distinct tracks.
     let mut track_cursor = 0usize;
     let mut decks: Vec<SimDeck> = (1..=deck_count)
         .map(|deck_id| {
-            let track_index = track_cursor % SIM_TRACKS.len();
+            let track_index = track_cursor;
             track_cursor += 1;
             next_track_id += 1;
-            SimDeck::new(deck_id, track_index, next_track_id - 1)
+            SimDeck::new(&library, deck_id, track_index, next_track_id - 1)
         })
         .collect();
 
@@ -264,6 +265,7 @@ async fn run(deck_count: u8, handle: Arc<EngineHandle>) {
                         apply_scheduled(
                             &mut decks[index],
                             action,
+                            &library,
                             &mut track_cursor,
                             &mut next_track_id,
                             &handle,
@@ -275,6 +277,7 @@ async fn run(deck_count: u8, handle: Arc<EngineHandle>) {
                     apply_scheduled(
                         &mut decks[index],
                         action,
+                        &library,
                         &mut track_cursor,
                         &mut next_track_id,
                         &handle,
@@ -301,6 +304,7 @@ async fn run(deck_count: u8, handle: Arc<EngineHandle>) {
 fn apply_scheduled(
     deck: &mut SimDeck,
     action: Scheduled,
+    library: &SimLibrary,
     track_cursor: &mut usize,
     next_track_id: &mut u32,
     handle: &EngineHandle,
@@ -318,7 +322,7 @@ fn apply_scheduled(
             deck.resume();
         }
         Scheduled::UnloadTrack => {
-            deck.track_index = *track_cursor % SIM_TRACKS.len();
+            deck.track_index = *track_cursor;
             *track_cursor += 1;
             deck.play_state = PlayState::Loading;
             deck.track = None;
@@ -327,7 +331,7 @@ fn apply_scheduled(
             deck.schedule(TRACK_LOAD_DELAY, Scheduled::LoadNextTrack);
         }
         Scheduled::LoadNextTrack => {
-            let track = build_sim_track(&SIM_TRACKS[deck.track_index], *next_track_id);
+            let track = library.track(deck.track_index, *next_track_id);
             *next_track_id += 1;
             deck.track = Some(track.clone());
             deck.play_state = PlayState::Cued;
@@ -444,7 +448,7 @@ mod tests {
     use crate::engine::EngineEvent;
 
     fn deck() -> SimDeck {
-        SimDeck::new(1, 0, FIRST_TRACK_ID)
+        SimDeck::new(&SimLibrary::generated(), 1, 0, FIRST_TRACK_ID)
     }
 
     #[test]
@@ -473,6 +477,7 @@ mod tests {
         apply_scheduled(
             &mut deck,
             Scheduled::LandScratch { origin_ms: -2000.0 },
+            &SimLibrary::generated(),
             &mut 0,
             &mut 0,
             &EngineHandle::new(),
@@ -490,6 +495,7 @@ mod tests {
         apply_scheduled(
             &mut deck,
             Scheduled::LandSpin { target_ms: -5000.0 },
+            &SimLibrary::generated(),
             &mut 0,
             &mut 0,
             &EngineHandle::new(),

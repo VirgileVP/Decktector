@@ -955,6 +955,7 @@ dependencies = [
  "async-trait",
  "rand 0.9.5",
  "serde",
+ "serde_json",
  "tokio",
  "tracing",
  "ts-rs",
@@ -3241,6 +3242,8 @@ dependencies = [
  "decktective-net",
  "prolink",
  "rekordcrate",
+ "serde",
+ "serde_json",
  "tokio",
  "tracing",
 ]

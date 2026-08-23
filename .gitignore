@@ -36,3 +36,6 @@ capture/
 # A Wireshark capture of a booth network holds the same library metadata as
 # the tools' own sessions, and the runbook asks for one every time.
 *.pcapng
+# Simulator track fixtures built from a capture (`sim-fixtures`): same real
+# library metadata as the capture they come from, and rebuildable from it.
+crates/decktective-core/fixtures/
