@@ -85,9 +85,30 @@ pub struct FetchRequest {
 pub struct MetadataFetcher {
     presence: Arc<Presence>,
     bind_ip: Ipv4Addr,
-    connections: Mutex<HashMap<DeckId, Arc<AsyncMutex<Connection>>>>,
-    nfs_failures: Mutex<HashMap<DeckId, Instant>>,
-    dbserver_failures: Mutex<HashMap<DeckId, Instant>>,
+    /// Pooled dbserver connections, keyed by the player whose media is
+    /// being read — [`FetchRequest::source_device`], never [`DeckId`].
+    /// A deck-keyed pool is wrong on exactly the network this whole module
+    /// exists for: on a linked booth a deck plays off *another* player's
+    /// stick, so the first fetch pools a socket to that player, and the
+    /// next track from a different stick reuses it — a live connection to
+    /// the wrong host, carrying a query that correctly names the right
+    /// device number, which the player answers with an empty menu. No
+    /// timeout, no error, just silently missing metadata.
+    ///
+    /// Seen on the 2026-08-21 booth capture: deck 3 played off player 4's
+    /// USB all night and kept asking player 3 about it, because an earlier
+    /// track off player 3's own stick had pooled that connection first.
+    ///
+    /// The address is half the key so a pooled socket can never be handed
+    /// out for a host it was not opened to, whatever renumbering happens
+    /// on the network underneath.
+    connections: Mutex<HashMap<(u8, Ipv4Addr), Arc<AsyncMutex<Connection>>>>,
+    /// Per-route failure records, keyed by the media's player for the same
+    /// reason as [`Self::connections`]: a stick with no NFS export must not
+    /// stop the deck reading its *next* track off a stick that has one,
+    /// and a deck is not what either route talks to.
+    nfs_failures: Mutex<HashMap<u8, Instant>>,
+    dbserver_failures: Mutex<HashMap<u8, Instant>>,
     /// The track id `crate::engine::run_reporting` most recently saw for
     /// each deck — updated by [`Self::note_current_track`] from that same
     /// single-threaded task, read by a spawned fetch task after its network
@@ -117,15 +138,20 @@ impl MetadataFetcher {
         self.lock(&self.current_track).insert(deck_id, track_id);
     }
 
-    /// Drops a deck's dbserver connection and both routes' failure records
-    /// and tracked track id — call when its device leaves the network, so
-    /// nothing stale lingers for whatever player is later assigned the
-    /// same number.
-    pub fn forget_device(&self, deck_id: DeckId) {
-        self.lock(&self.connections).remove(&deck_id);
-        self.lock(&self.nfs_failures).remove(&deck_id);
-        self.lock(&self.dbserver_failures).remove(&deck_id);
-        self.lock(&self.current_track).remove(&deck_id);
+    /// Drops everything held for a device that just left the network: its
+    /// pooled dbserver connections, both routes' failure records, and — a
+    /// departing player being a deck as well as a possible media source —
+    /// the track id tracked for the deck of the same number. Nothing stale
+    /// must linger for whatever player is later assigned that number.
+    ///
+    /// The connection sweep is a `retain` rather than a `remove` because
+    /// the pool is keyed by device *and* address: one device can hold more
+    /// than one entry if it reappeared on a new address.
+    pub fn forget_device(&self, device: u8) {
+        self.lock(&self.connections).retain(|(pooled_device, _), _| *pooled_device != device);
+        self.lock(&self.nfs_failures).remove(&device);
+        self.lock(&self.dbserver_failures).remove(&device);
+        self.lock(&self.current_track).remove(&device);
     }
 
     /// Spawns the fetch in the background — never blocks the caller
@@ -151,20 +177,22 @@ impl MetadataFetcher {
         mutex.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn is_failing(&self, failures: &Mutex<HashMap<DeckId, Instant>>, deck_id: DeckId) -> bool {
+    /// `source_device` is the player holding the media, not the deck — see
+    /// [`Self::nfs_failures`].
+    fn is_failing(&self, failures: &Mutex<HashMap<u8, Instant>>, source_device: u8) -> bool {
         let mut failures = self.lock(failures);
-        match failures.get(&deck_id) {
+        match failures.get(&source_device) {
             Some(&failed_at) if failed_at.elapsed() < RETRY_FAILED_SOURCE_AFTER => true,
             Some(_) => {
-                failures.remove(&deck_id);
+                failures.remove(&source_device);
                 false
             }
             None => false,
         }
     }
 
-    fn mark_failed(&self, failures: &Mutex<HashMap<DeckId, Instant>>, deck_id: DeckId) {
-        self.lock(failures).insert(deck_id, Instant::now());
+    fn mark_failed(&self, failures: &Mutex<HashMap<u8, Instant>>, source_device: u8) {
+        self.lock(failures).insert(source_device, Instant::now());
     }
 
     fn is_superseded(&self, deck_id: DeckId, track_id: u32) -> bool {
@@ -174,9 +202,13 @@ impl MetadataFetcher {
     async fn fetch_and_report(self: Arc<Self>, handle: Arc<EngineHandle>, request: FetchRequest) {
         let FetchRequest { deck_id, source_device, player_ip, slot, track_type, track_id, status_bpm } = request;
 
-        let track_info = match self.try_nfs(deck_id, player_ip, slot, track_id, status_bpm).await {
+        // Neither route takes `deck_id`: everything they key on — the
+        // connection pool, both failure caches, every query field — belongs
+        // to the player holding the media. Keeping the deck out of scope
+        // there is what stops the two `u8`s being swapped again.
+        let track_info = match self.try_nfs(source_device, player_ip, slot, track_id, status_bpm).await {
             Some(track_info) => Some(track_info),
-            None => self.try_dbserver(deck_id, source_device, player_ip, slot, track_type, track_id, status_bpm).await,
+            None => self.try_dbserver(source_device, player_ip, slot, track_type, track_id, status_bpm).await,
         };
 
         let Some(track_info) = track_info else {
@@ -193,8 +225,8 @@ impl MetadataFetcher {
     /// `export.pdb`, a known, accepted inefficiency for this pass rather
     /// than added caching complexity before the basic flow is even
     /// hardware-validated — see this module's doc comment.
-    async fn try_nfs(&self, deck_id: DeckId, player_ip: Ipv4Addr, slot: MediaSlot, track_id: u32, status_bpm: Option<f64>) -> Option<TrackInfo> {
-        if self.is_failing(&self.nfs_failures, deck_id) {
+    async fn try_nfs(&self, source_device: u8, player_ip: Ipv4Addr, slot: MediaSlot, track_id: u32, status_bpm: Option<f64>) -> Option<TrackInfo> {
+        if self.is_failing(&self.nfs_failures, source_device) {
             return None;
         }
         let fetch = nfs::fetch_track_info(player_ip, self.bind_ip, slot, track_id, status_bpm);
@@ -202,13 +234,13 @@ impl MetadataFetcher {
             Ok(Ok(Some(track_info))) => Some(track_info),
             Ok(Ok(None)) => None, // Connected fine; this track just isn't in this media's database.
             Ok(Err(error)) => {
-                tracing::debug!(deck_id, %error, "NFS metadata fetch failed");
-                self.mark_failed(&self.nfs_failures, deck_id);
+                tracing::debug!(source_device, %error, "NFS metadata fetch failed");
+                self.mark_failed(&self.nfs_failures, source_device);
                 None
             }
             Err(_) => {
-                tracing::debug!(deck_id, "NFS metadata fetch timed out");
-                self.mark_failed(&self.nfs_failures, deck_id);
+                tracing::debug!(source_device, "NFS metadata fetch timed out");
+                self.mark_failed(&self.nfs_failures, source_device);
                 None
             }
         }
@@ -216,7 +248,6 @@ impl MetadataFetcher {
 
     async fn try_dbserver(
         &self,
-        deck_id: DeckId,
         source_device: u8,
         player_ip: Ipv4Addr,
         slot: MediaSlot,
@@ -224,10 +255,10 @@ impl MetadataFetcher {
         track_id: u32,
         status_bpm: Option<f64>,
     ) -> Option<TrackInfo> {
-        if self.is_failing(&self.dbserver_failures, deck_id) {
+        if self.is_failing(&self.dbserver_failures, source_device) {
             return None;
         }
-        let connection = self.connection_for(deck_id, player_ip).await?;
+        let connection = self.connection_for(source_device, player_ip).await?;
         let slot = slot.to_byte();
 
         let mut connection = connection.lock().await;
@@ -242,8 +273,8 @@ impl MetadataFetcher {
             Ok(Ok(items)) if !items.is_empty() => items,
             Ok(Ok(_)) => return None, // The player answered: this track has no metadata.
             _ => {
-                self.mark_failed(&self.dbserver_failures, deck_id);
-                self.lock(&self.connections).remove(&deck_id);
+                self.mark_failed(&self.dbserver_failures, source_device);
+                self.lock(&self.connections).remove(&(source_device, player_ip));
                 return None;
             }
         };
@@ -272,10 +303,13 @@ impl MetadataFetcher {
         Some(assemble_dbserver_track_info(track_id, &items, status_bpm, beat_grid_blob.as_deref(), waveform_blob.as_deref()))
     }
 
-    /// The deck's pooled dbserver connection, opening a fresh one (bounded
-    /// by [`CONNECT_TIMEOUT`]) if there isn't one yet.
-    async fn connection_for(&self, deck_id: DeckId, player_ip: Ipv4Addr) -> Option<Arc<AsyncMutex<Connection>>> {
-        if let Some(existing) = self.lock(&self.connections).get(&deck_id).cloned() {
+    /// The pooled dbserver connection to the player holding the media,
+    /// opening a fresh one (bounded by [`CONNECT_TIMEOUT`]) if there isn't
+    /// one yet. Keyed by device *and* address — see [`Self::connections`]
+    /// for why the deck is not part of this.
+    async fn connection_for(&self, source_device: u8, player_ip: Ipv4Addr) -> Option<Arc<AsyncMutex<Connection>>> {
+        let key = (source_device, player_ip);
+        if let Some(existing) = self.lock(&self.connections).get(&key).cloned() {
             return Some(existing);
         }
 
@@ -284,15 +318,15 @@ impl MetadataFetcher {
         match opened {
             Ok(Ok(connection)) => {
                 let wrapped = Arc::new(AsyncMutex::new(connection));
-                self.lock(&self.connections).insert(deck_id, Arc::clone(&wrapped));
+                self.lock(&self.connections).insert(key, Arc::clone(&wrapped));
                 Some(wrapped)
             }
             Ok(Err(error)) => {
-                tracing::debug!(deck_id, %error, "failed to open a dbserver connection");
+                tracing::debug!(source_device, %player_ip, %error, "failed to open a dbserver connection");
                 None
             }
             Err(_) => {
-                tracing::debug!(deck_id, "timed out opening a dbserver connection");
+                tracing::debug!(source_device, %player_ip, "timed out opening a dbserver connection");
                 None
             }
         }
@@ -410,6 +444,20 @@ mod tests {
         let fetcher = fetcher();
         fetcher.mark_failed(&fetcher.dbserver_failures, 2);
         assert!(!fetcher.is_failing(&fetcher.dbserver_failures, 3));
+    }
+
+    /// The 2026-08-21 booth capture's shape, at the cache level: deck 3
+    /// played off player 4's USB, whose NFS export answered `NOENT`, while
+    /// player 2's stick served NFS all night. Keying the cache by the media
+    /// -holding player rather than the deck is what keeps player 4's
+    /// failure from also blacking out the next track the same deck loads
+    /// off player 2.
+    #[test]
+    fn an_nfs_failure_against_one_media_player_leaves_another_players_media_alone() {
+        let fetcher = fetcher();
+        fetcher.mark_failed(&fetcher.nfs_failures, 4);
+        assert!(fetcher.is_failing(&fetcher.nfs_failures, 4));
+        assert!(!fetcher.is_failing(&fetcher.nfs_failures, 2));
     }
 
     /// The reason there are two separate maps at all: a device failing on
