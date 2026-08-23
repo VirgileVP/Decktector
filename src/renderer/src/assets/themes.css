@@ -191,3 +191,34 @@
   --flag-text: #0a0f1c;
   --wave-soften-target: 235;
 }
+
+/* No hue anywhere — every state reads through brightness/contrast alone. */
+[data-theme='monochrome'] {
+  color-scheme: dark;
+  --bg: #0c0c0c;
+  --bg-panel: #131313;
+  --bg-inset: #0f0f0f;
+  --bg-idle-panel: #0f0f0f;
+  --border: #2b2b2b;
+  --border-strong: #444444;
+  --text: #f0f0f0;
+  --text-muted: #9c9c9c;
+  --text-faint: #616161;
+  --onair-rgb: 255, 255, 255;
+  --ok-rgb: 150, 150, 150;
+  --warn: #d9d9d9;
+  --master: #ffffff;
+  --sync: #bdbdbd;
+  --row-highlight: rgba(255, 255, 255, 0.08);
+  --logo-glow: rgba(255, 255, 255, 0.35);
+  --waveform-idle-filter: grayscale(1) brightness(0.4);
+  --wave-empty: rgba(255, 255, 255, 0.05);
+  --wave-played: rgba(170, 170, 170, 0.15);
+  --wave-unplayed: rgba(230, 230, 230, 0.9);
+  --playhead: #ffffff;
+  --grid-downbeat: rgba(255, 255, 255, 0.55);
+  --grid-beat: rgba(255, 255, 255, 0.18);
+  --overlay-text: rgba(255, 255, 255, 0.35);
+  --flag-text: #0c0c0c;
+  --wave-soften-target: 220;
+}

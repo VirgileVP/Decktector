@@ -3,7 +3,7 @@
  * as `THEMES` below; the active choice is held by the settings store.
  */
 
-export type ThemeId = 'neon' | 'dark' | 'light' | 'contrast' | 'amber' | 'midnight'
+export type ThemeId = 'neon' | 'dark' | 'light' | 'contrast' | 'amber' | 'midnight' | 'monochrome'
 
 export interface ThemeOption {
   id: ThemeId
@@ -17,7 +17,8 @@ export const THEMES: readonly ThemeOption[] = [
   { id: 'light', label: 'Light', description: 'For bright rooms and daylight setups' },
   { id: 'contrast', label: 'High contrast', description: 'Pure black and saturated accents' },
   { id: 'amber', label: 'Amber CRT', description: 'Monochrome amber, vintage hardware' },
-  { id: 'midnight', label: 'Midnight', description: 'Deep blue, easy on long sessions' }
+  { id: 'midnight', label: 'Midnight', description: 'Deep blue, easy on long sessions' },
+  { id: 'monochrome', label: 'Monochrome', description: 'Pure greyscale, no hue anywhere' }
 ] as const
 
 export const DEFAULT_THEME: ThemeId = 'neon'
