@@ -13,8 +13,8 @@ use super::xdr::{XdrDecoder, XdrEncoder};
 
 pub const NFS_PROGRAM: u32 = 100_003;
 pub const NFS_VERSION: u32 = 2;
-const NFSPROC_LOOKUP: u32 = 4;
-const NFSPROC_READ: u32 = 6;
+pub const NFSPROC_LOOKUP: u32 = 4;
+pub const NFSPROC_READ: u32 = 6;
 
 const NFS_OK: u32 = 0;
 /// `ftype` value for a regular file (RFC 1094 §2.3.4) — what every file
@@ -41,6 +41,25 @@ pub fn build_lookup_call(xid: u32, dir: FileHandle, name: &str) -> Vec<u8> {
     args.write_opaque_fixed(&dir);
     args.write_string_utf16le(name);
     rpc::build_call(xid, NFS_PROGRAM, NFS_VERSION, NFSPROC_LOOKUP, &args.into_bytes())
+}
+
+/// The arguments of a `LOOKUP` call, as read back off the wire.
+///
+/// The client never needs this — it built the call itself. Reading a
+/// recorded capture does: a reply carries only the handle it resolved to,
+/// so the name that handle stands for is knowable only from the matching
+/// call (see [`super::extract`]).
+#[derive(Debug, Clone, PartialEq)]
+pub struct LookupArgs {
+    pub dir: FileHandle,
+    pub name: String,
+}
+
+pub fn parse_lookup_call(args: &[u8]) -> Option<LookupArgs> {
+    let mut decoder = XdrDecoder::new(args);
+    let dir: FileHandle = decoder.read_opaque_fixed(FILE_HANDLE_LEN)?.try_into().ok()?;
+    let name = decoder.read_string_utf16le()?;
+    Some(LookupArgs { dir, name })
 }
 
 pub fn parse_lookup_reply(data: &[u8], expected_xid: u32) -> Option<LookupResult> {
@@ -72,6 +91,22 @@ pub fn build_read_call(xid: u32, file: FileHandle, offset: u32, count: u32) -> V
     args.write_u32(count);
     args.write_u32(0); // `totalcount`: present for historical reasons, unused by any server.
     rpc::build_call(xid, NFS_PROGRAM, NFS_VERSION, NFSPROC_READ, &args.into_bytes())
+}
+
+/// The arguments of a `READ` call, as read back off the wire — the file and
+/// the offset a recorded reply's bytes belong at. See [`LookupArgs`] for why
+/// only a capture reader needs this.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ReadArgs {
+    pub file: FileHandle,
+    pub offset: u32,
+    pub count: u32,
+}
+
+pub fn parse_read_call(args: &[u8]) -> Option<ReadArgs> {
+    let mut decoder = XdrDecoder::new(args);
+    let file: FileHandle = decoder.read_opaque_fixed(FILE_HANDLE_LEN)?.try_into().ok()?;
+    Some(ReadArgs { file, offset: decoder.read_u32()?, count: decoder.read_u32()? })
 }
 
 #[derive(Debug, Clone, PartialEq)]

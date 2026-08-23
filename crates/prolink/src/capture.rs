@@ -43,6 +43,10 @@ const NFS_DIR: &str = "nfs";
 const DBSERVER_DIR: &str = "dbserver";
 const ANALYSIS_DIR: &str = "analysis";
 const ARTWORK_DIR: &str = "artwork";
+/// Suffix on the per-player directory holding files rebuilt out of a
+/// recorded NFS conversation, keeping them distinct from what a live pull
+/// wrote (`nfs/<ip>-<slot>/`).
+const RECOVERED_SUFFIX: &str = "recovered";
 
 const NOTES_TEMPLATE: &str = "\
 # Session notes
@@ -269,12 +273,54 @@ impl CaptureWriter {
         Ok(dir)
     }
 
+    /// Ensures the parent directories exist for a file recovered out of a
+    /// recorded NFS conversation, and returns where to write it:
+    /// `nfs/<player_ip>-recovered/<path>`.
+    ///
+    /// `path` comes off the wire — it is whatever names a capture's `LOOKUP`
+    /// calls happened to carry — so it is sanitised here rather than
+    /// trusted: a segment that is `..`, empty, or holds a separator or a
+    /// character no filesystem accepts would otherwise let a crafted or
+    /// corrupt capture write outside the session directory.
+    pub fn nfs_recovered_path(&self, player_ip: Ipv4Addr, path: &str) -> io::Result<PathBuf> {
+        let mut file_path = self.session_dir.join(NFS_DIR).join(format!("{player_ip}-{RECOVERED_SUFFIX}"));
+        let segments: Vec<&str> = path.split('/').filter(|segment| !segment.is_empty()).collect();
+        if segments.is_empty() {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, format!("recovered file has no usable path: {path:?}")));
+        }
+        for segment in segments {
+            file_path.push(sanitize_path_segment(segment));
+        }
+        if let Some(parent) = file_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        Ok(file_path)
+    }
+
     /// Ensures `dbserver/<player_ip>/` exists and returns its path.
     pub fn dbserver_capture_dir(&self, player_ip: Ipv4Addr) -> io::Result<PathBuf> {
         let dir = self.session_dir.join(DBSERVER_DIR).join(player_ip.to_string());
         fs::create_dir_all(&dir)?;
         Ok(dir)
     }
+}
+
+/// Replaces anything a path segment read off the wire must not contain: the
+/// parent-directory reference, path separators, and the characters Windows
+/// rejects outright. Kept deliberately strict — a recovered file's name is
+/// evidence, not a filename the code needs to round-trip.
+fn sanitize_path_segment(segment: &str) -> String {
+    if segment == ".." || segment == "." {
+        return "_".to_string();
+    }
+    segment
+        .chars()
+        .map(|character| match character {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+            control if control.is_control() => '_',
+            other => other,
+        })
+        .collect()
 }
 
 fn timestamp_label(time: SystemTime) -> String {

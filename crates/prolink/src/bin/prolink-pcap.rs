@@ -22,7 +22,7 @@
 //! Usage:
 //!   prolink-pcap --in FILE.pcapng [--out DIR] [--ports 50000,50001,50002]
 //!                [--all-ports] [--from-sec N] [--to-sec N] [--max-packets N]
-//!                [--dry-run]
+//!                [--no-nfs] [--dry-run]
 
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -31,7 +31,8 @@ use std::net::IpAddr;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use prolink::capture::{CaptureWriter, UdpRecord};
+use prolink::capture::{write_raw_file, CaptureWriter, UdpRecord};
+use prolink::nfs::extract::{ExtractStats, NfsExtractor};
 use prolink::pcap::{Datagram, PcapngReader, PcapngStats};
 use prolink::{ANNOUNCE_PORT, BEAT_PORT, STATUS_PORT};
 use serde::Serialize;
@@ -58,6 +59,8 @@ struct Config {
     from_sec: Option<f64>,
     to_sec: Option<f64>,
     max_packets: Option<u64>,
+    /// Rebuild the files the capture's NFS traffic carried.
+    extract_nfs: bool,
     /// Walk and summarise without writing a session directory.
     dry_run: bool,
 }
@@ -71,6 +74,7 @@ impl Default for Config {
             from_sec: None,
             to_sec: None,
             max_packets: None,
+            extract_nfs: true,
             dry_run: false,
         }
     }
@@ -188,6 +192,7 @@ fn import(config: Config, file: File) -> anyhow::Result<()> {
 
     let mut reader = PcapngReader::new(BufReader::new(file));
     let mut summary = ImportSummary::default();
+    let mut nfs = config.extract_nfs.then(NfsExtractor::new);
     // Bounds are given relative to the first packet in the file, which is
     // only known once it has been read.
     let mut capture_start_micros: Option<i64> = None;
@@ -199,12 +204,15 @@ fn import(config: Config, file: File) -> anyhow::Result<()> {
         if config.to_sec.is_some_and(|to| offset_sec > to) {
             break;
         }
-        if config.from_sec.is_some_and(|from| offset_sec < from) || !keeps_port(&config, datagram.dst_port) {
+        if config.from_sec.is_some_and(|from| offset_sec < from) || !keeps(&config, &datagram) {
             summary.filtered_out += 1;
             continue;
         }
 
         summary.record(&datagram);
+        if let Some(nfs) = &mut nfs {
+            feed_nfs(nfs, &datagram);
+        }
         if let Some(writer) = &writer {
             let record = UdpRecord::at(datagram.time_micros, datagram.dst_port, IpAddr::V4(datagram.src), &datagram.payload);
             // One unwritable record must not end an import that may have
@@ -227,11 +235,75 @@ fn import(config: Config, file: File) -> anyhow::Result<()> {
         writer.write_session_info(&session_info(&config, &summary))?;
     }
     print_summary(&summary, stats);
+    if let Some(nfs) = nfs {
+        write_recovered_files(nfs, writer.as_ref());
+    }
     Ok(())
 }
 
-fn keeps_port(config: &Config, port: u16) -> bool {
-    config.ports.is_empty() || config.ports.contains(&port)
+/// Both ports are tested, not just the destination: a server answers from
+/// its well-known port to an ephemeral one, so filtering on the destination
+/// alone would keep every NFS call and drop every reply — the half that
+/// carries the bytes.
+fn keeps(config: &Config, datagram: &Datagram) -> bool {
+    config.ports.is_empty() || config.ports.contains(&datagram.dst_port) || config.ports.contains(&datagram.src_port)
+}
+
+/// Routes one datagram to the extractor by direction: anything addressed to
+/// the NFS port is a client's call, anything sent *from* it is a server's
+/// reply — and the server's own address is what the recovered files are
+/// filed under.
+fn feed_nfs(extractor: &mut NfsExtractor, datagram: &Datagram) {
+    if datagram.dst_port == NFS_PORT {
+        extractor.observe_call(&datagram.payload);
+    } else if datagram.src_port == NFS_PORT {
+        extractor.observe_reply(datagram.src, &datagram.payload);
+    }
+}
+
+/// Writes every file the NFS traffic carried, and reports what came back
+/// short. An incomplete file is written anyway — partial analysis bytes are
+/// still worth parsing offline — but never silently: a file handed to a
+/// parser as if it were whole is exactly the mistake this reports against.
+fn write_recovered_files(extractor: NfsExtractor, writer: Option<&CaptureWriter>) {
+    let stats = extractor.stats();
+    let files = extractor.into_files();
+    print_nfs_summary(stats, files.len());
+    let Some(writer) = writer else {
+        for file in &files {
+            println!("  {} {} ({} bytes{})", file.server, file.path, file.bytes.len(), completeness(file.is_complete()));
+        }
+        return;
+    };
+    for file in &files {
+        match writer.nfs_recovered_path(file.server, &file.path).and_then(|path| {
+            write_raw_file(&path, &file.bytes)?;
+            Ok(path)
+        }) {
+            Ok(path) => println!("  {} ({} bytes{})", path.display(), file.bytes.len(), completeness(file.is_complete())),
+            Err(error) => eprintln!("  failed to write {} from {}: {error}", file.path, file.server),
+        }
+    }
+}
+
+fn completeness(complete: bool) -> &'static str {
+    if complete {
+        ""
+    } else {
+        ", INCOMPLETE"
+    }
+}
+
+fn print_nfs_summary(stats: ExtractStats, file_count: usize) {
+    println!();
+    println!("NFS traffic: {} lookups, {} reads, {} read replies", stats.lookup_calls, stats.read_calls, stats.read_replies);
+    if stats.replies_without_a_call > 0 {
+        println!("  replies with no matching call in the capture: {}", stats.replies_without_a_call);
+    }
+    if stats.undecodable > 0 {
+        println!("  undecodable RPC datagrams: {}", stats.undecodable);
+    }
+    println!("Recovered {file_count} files:");
 }
 
 fn session_info(config: &Config, summary: &ImportSummary) -> SessionInfo {
@@ -282,6 +354,7 @@ fn parse_args() -> Result<Config, String> {
             "--from-sec" => config.from_sec = Some(parse_number(&mut args, "--from-sec")?),
             "--to-sec" => config.to_sec = Some(parse_number(&mut args, "--to-sec")?),
             "--max-packets" => config.max_packets = Some(parse_number(&mut args, "--max-packets")?),
+            "--no-nfs" => config.extract_nfs = false,
             "--dry-run" => config.dry_run = true,
             "--help" | "-h" => {
                 print_usage();
@@ -326,5 +399,6 @@ fn print_usage() {
     eprintln!("  --from-sec N       skip the first N seconds of the capture");
     eprintln!("  --to-sec N         stop after N seconds of the capture");
     eprintln!("  --max-packets N    stop after importing N datagrams");
+    eprintln!("  --no-nfs           skip rebuilding the files the NFS traffic carried");
     eprintln!("  --dry-run          walk and summarise without writing anything");
 }

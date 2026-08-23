@@ -13,6 +13,7 @@
 //! module in this crate already uses.
 
 pub mod client;
+pub mod extract;
 pub mod mount;
 pub mod pdb;
 pub mod portmap;
