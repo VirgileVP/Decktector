@@ -69,7 +69,8 @@ export function WaveformDetail({
       const centerX = width / 2
       const msPerPx = (windowSecRef.current * 1000) / width
       const midY = FLAG_STRIP + (height - FLAG_STRIP - TICK_STRIP) / 2
-      const halfMax = (height - FLAG_STRIP - TICK_STRIP) / 2 - 2
+      const baselineY = height - TICK_STRIP
+      const peakMax = height - FLAG_STRIP - TICK_STRIP - 2
 
       const waveform = track?.waveform
       const deck = useDecktectiveStore.getState().decks[deckId]
@@ -107,13 +108,13 @@ export function WaveformDetail({
         const segB = detail[i0 + 1] ?? segA
         const frac = idx - i0
         const height = segA.height + (segB.height - segA.height) * frac
-        const half = Math.max(1, height * halfMax)
+        const peak = Math.max(1, height * peakMax)
         const r = segA.color[0] + (segB.color[0] - segA.color[0]) * frac
         const g = segA.color[1] + (segB.color[1] - segA.color[1]) * frac
         const b = segA.color[2] + (segB.color[2] - segA.color[2]) * frac
         ctx.globalAlpha = x < centerX ? PLAYED_DIM_ALPHA : 0.95
         ctx.fillStyle = `rgb(${soften(r, ink, wash)},${soften(g, ink, wash)},${soften(b, ink, wash)})`
-        ctx.fillRect(x, midY - half, 1, half * 2)
+        ctx.fillRect(x, baselineY - peak, 1, peak)
       }
       ctx.globalAlpha = 1
 
