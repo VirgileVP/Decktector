@@ -16,6 +16,7 @@ pub mod capture;
 pub mod dbserver;
 pub mod discovery;
 pub mod nfs;
+pub mod pcap;
 pub mod presence;
 pub mod status;
 

@@ -85,7 +85,15 @@ pub struct UdpRecord {
 
 impl UdpRecord {
     pub fn new(port: u16, src: IpAddr, payload: &[u8]) -> Self {
-        Self { t: now_micros(), port, src: src.to_string(), len: payload.len(), hex: encode_hex(payload) }
+        Self::at(now_micros(), port, src, payload)
+    }
+
+    /// Same record with the timestamp supplied rather than read from the
+    /// clock — for an importer replaying datagrams out of a file, where the
+    /// only meaningful time is the one the capture recorded (see
+    /// `bin/prolink-pcap.rs`).
+    pub fn at(time_micros: i64, port: u16, src: IpAddr, payload: &[u8]) -> Self {
+        Self { t: time_micros, port, src: src.to_string(), len: payload.len(), hex: encode_hex(payload) }
     }
 
     /// Decodes [`Self::hex`] back to raw bytes; `None` if it isn't valid hex
