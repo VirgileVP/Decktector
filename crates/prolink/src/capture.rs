@@ -179,6 +179,29 @@ pub struct JsonlRead<T> {
 /// point. A malformed line anywhere *else* is a genuine data problem and
 /// still errors — the leniency this function offers is specifically for the
 /// one failure mode an interrupted capture actually produces.
+/// Reads a JSONL file one record at a time, holding a single line in memory
+/// rather than the whole file.
+///
+/// [`read_jsonl`] is the right tool for a capture a test walks in full; this
+/// one exists for `udp.jsonl`, which for an evening's traffic runs to
+/// hundreds of megabytes across close to a million records — enough that
+/// collecting it costs gigabytes before the first packet is replayed.
+///
+/// A line that fails to parse yields an `Err` item and the iterator carries
+/// on: unlike a test, a replay would rather drop one packet than stop. The
+/// last line of a capture cut off mid-write is exactly such a line.
+pub fn stream_jsonl<T: DeserializeOwned>(path: &Path) -> io::Result<impl Iterator<Item = io::Result<T>>> {
+    let lines = BufReader::new(File::open(path)?).lines();
+    Ok(lines.filter_map(|line| match line {
+        Err(error) => Some(Err(error)),
+        Ok(line) if line.trim().is_empty() => None,
+        Ok(line) => Some(
+            serde_json::from_str::<T>(&line)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, format!("malformed JSONL record: {error}"))),
+        ),
+    }))
+}
+
 pub fn read_jsonl<T: DeserializeOwned>(path: &Path) -> io::Result<JsonlRead<T>> {
     let lines: Vec<String> = BufReader::new(File::open(path)?).lines().collect::<io::Result<_>>()?;
     let last_index = lines.len().checked_sub(1);

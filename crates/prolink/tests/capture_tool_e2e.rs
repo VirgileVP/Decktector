@@ -25,7 +25,7 @@
 mod support;
 
 use std::collections::HashMap;
-use std::net::Ipv4Addr;
+use std::net::{IpAddr, Ipv4Addr};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
@@ -83,6 +83,66 @@ fn session_dir(out_dir: &Path) -> PathBuf {
         .map(|entry| entry.path())
         .find(|path| path.is_dir() && path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("capture-")))
         .unwrap_or_else(|| panic!("no capture-* session directory under {}", out_dir.display()))
+}
+
+// ---------------------------------------------------------------------
+// cdj-sim replay
+// ---------------------------------------------------------------------
+
+/// Replay is what lets a recorded evening drive the real parsing path, so
+/// the two things it promises are pinned here: the bytes come back out
+/// unchanged, and they come back out with the spacing they were recorded
+/// with. A replay that fired everything at once would look like a working
+/// network and behave like nothing that has ever happened in a booth.
+#[tokio::test]
+async fn cdj_sim_replays_a_recorded_session_with_its_original_timing() {
+    let _ports = SHARED_NETWORK_PORTS.lock().await;
+    let session = tempfile::tempdir().expect("temp session dir");
+
+    let first = build_status(1, RawPlayState::Playing, true, false, true, 0.0, Some(128.0), Some(64), Some(1), Some(100));
+    let second = build_status(2, RawPlayState::Playing, false, true, false, 0.0, Some(130.0), Some(32), Some(3), Some(200));
+    // 400 ms apart, at timestamps far from now: replay must anchor on the
+    // first record's own time, not on the wall clock it happens to run at.
+    let recorded_at = 1_700_000_000_000_000i64;
+    let records = [
+        UdpRecord::at(recorded_at, STATUS_PORT, IpAddr::V4(Ipv4Addr::new(169, 254, 7, 50)), &first),
+        UdpRecord::at(recorded_at + 400_000, STATUS_PORT, IpAddr::V4(Ipv4Addr::new(169, 254, 6, 92)), &second),
+    ];
+    let lines: Vec<String> = records.iter().map(|record| serde_json::to_string(record).expect("serialise")).collect();
+    std::fs::write(session.path().join("udp.jsonl"), lines.join("
+")).expect("write udp.jsonl");
+
+    let listener = UdpSocket::bind((Ipv4Addr::LOCALHOST, STATUS_PORT)).await.expect("bind the status port");
+
+    let mut sim = Command::new(cdj_sim_binary())
+        .args(["--replay", &session.path().display().to_string()])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+        .expect("spawn cdj-sim");
+
+    let mut received: Vec<(Vec<u8>, Duration)> = Vec::new();
+    let started_at = std::time::Instant::now();
+    for _ in 0..records.len() {
+        let mut buf = vec![0u8; 2048];
+        let (len, _) = timeout(Duration::from_secs(10), listener.recv_from(&mut buf))
+            .await
+            .expect("a replayed datagram should arrive within 10s")
+            .expect("receive");
+        buf.truncate(len);
+        received.push((buf, started_at.elapsed()));
+    }
+    let _ = sim.kill().await;
+
+    assert_eq!(received[0].0, first, "the first datagram should be replayed byte for byte");
+    assert_eq!(received[1].0, second, "the second datagram should be replayed byte for byte");
+
+    let gap = received[1].1.saturating_sub(received[0].1);
+    assert!(
+        gap >= Duration::from_millis(250),
+        "the recorded 400ms gap should be preserved, got {gap:?}"
+    );
 }
 
 // ---------------------------------------------------------------------
