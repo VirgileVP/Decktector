@@ -13,6 +13,7 @@
     "dev": "tauri dev",
     "dev:sim": "cross-env DECKTECTIVE_SIM=1 tauri dev",
     "dev:sim4": "cross-env DECKTECTIVE_SIM=1 DECKTECTIVE_SIM_DECKS=4 tauri dev",
+    "dev:sim:recorded": "cross-env DECKTECTIVE_SIM=1 DECKTECTIVE_SIM_DECKS=4 DECKTECTIVE_SIM_TRACKS=crates/decktective-core/fixtures/sim-tracks.json tauri dev",
     "build": "npm run typecheck && npm run test && tauri build",
     "tauri": "tauri",
     "test": "vitest run",

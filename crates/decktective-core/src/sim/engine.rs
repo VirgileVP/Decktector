@@ -166,14 +166,25 @@ impl SimDeck {
 pub struct SimEngine {
     handle: Arc<EngineHandle>,
     deck_count: u8,
+    library: Arc<SimLibrary>,
     task: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl SimEngine {
+    /// Draws its tracks from [`SimLibrary::from_env`]: recorded ones when
+    /// the environment names a fixture file, generated ones otherwise.
     pub fn new(deck_count: u8) -> Self {
+        Self::with_library(deck_count, SimLibrary::from_env())
+    }
+
+    /// Same, with the track source given outright — for a caller that has
+    /// one already, and for tests, which cannot use an environment variable
+    /// without racing every other test in the process.
+    pub fn with_library(deck_count: u8, library: SimLibrary) -> Self {
         Self {
             handle: Arc::new(EngineHandle::new()),
             deck_count: deck_count.clamp(1, MAX_DECKS),
+            library: Arc::new(library),
             task: Mutex::new(None),
         }
     }
@@ -191,8 +202,9 @@ impl Engine for SimEngine {
         self.handle.set_network_state(NetworkState::Searching);
 
         let handle = Arc::clone(&self.handle);
+        let library = Arc::clone(&self.library);
         let deck_count = self.deck_count;
-        *self.task_slot() = Some(tokio::spawn(async move { run(deck_count, handle).await }));
+        *self.task_slot() = Some(tokio::spawn(async move { run(deck_count, library, handle).await }));
 
         Ok(())
     }
@@ -213,8 +225,7 @@ impl Engine for SimEngine {
 /// Drives every simulated deck. The task owns the decks outright, so no deck
 /// state is shared across threads — only the reports leaving through the
 /// handle are.
-async fn run(deck_count: u8, handle: Arc<EngineHandle>) {
-    let library = SimLibrary::from_env();
+async fn run(deck_count: u8, library: Arc<SimLibrary>, handle: Arc<EngineHandle>) {
     let mut next_track_id = FIRST_TRACK_ID;
     // Rolling index into the library so decks pick distinct tracks.
     let mut track_cursor = 0usize;
@@ -446,6 +457,7 @@ fn epoch_ms() -> f64 {
 mod tests {
     use super::*;
     use crate::engine::EngineEvent;
+    use crate::model::TrackInfo;
 
     fn deck() -> SimDeck {
         SimDeck::new(&SimLibrary::generated(), 1, 0, FIRST_TRACK_ID)
@@ -570,6 +582,47 @@ mod tests {
         assert!(!state.is_master);
         assert!(!state.is_on_air);
         assert_eq!(state.beat_in_measure, None);
+    }
+
+    /// The point of a recorded library: what reaches the UI is the track a
+    /// player actually served, waveform and all, not something reshaped on
+    /// the way through.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn a_recorded_library_reaches_the_decks_untouched() {
+        let recorded = TrackInfo {
+            track_id: 4242,
+            title: "Recorded Track".to_owned(),
+            artist: Some("Recorded Artist".to_owned()),
+            album: None,
+            genre: None,
+            key: Some("8A".to_owned()),
+            label: None,
+            comment: None,
+            duration_ms: 300_000.0,
+            bpm: Some(126.5),
+            artwork: None,
+            beat_grid: None,
+            waveform: None,
+            cues: Vec::new(),
+            events: Vec::new(),
+        };
+        let engine = SimEngine::with_library(1, SimLibrary::from_tracks(vec![recorded.clone()]));
+        let mut events = engine.handle().subscribe();
+        engine.start().await.expect("engine started");
+
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+        let mut loaded = None;
+        while tokio::time::Instant::now() < deadline && loaded.is_none() {
+            match tokio::time::timeout(Duration::from_secs(3), events.recv()).await {
+                Ok(Ok(EngineEvent::DeckTrack(deck_track))) => loaded = deck_track.track.clone(),
+                Ok(Ok(_)) => {}
+                Ok(Err(error)) => panic!("event stream ended: {error}"),
+                Err(_) => break,
+            }
+        }
+
+        let loaded = loaded.expect("the deck should report a loaded track");
+        assert_eq!(loaded, recorded, "a recorded track should reach the deck exactly as recorded");
     }
 
     /// Exercises the path the renderer actually depends on: a started engine

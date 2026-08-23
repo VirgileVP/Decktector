@@ -82,6 +82,41 @@ npm run lint:rust    # clippy, warnings as errors
 npm run typecheck    # renderer
 ```
 
+### Simulating from a recording
+
+The simulated decks generate their tracks by default: a shaped energy envelope,
+an exactly regular beat grid, cues placed by rule. Plausible, but nothing a
+real track looks like. A recording of a real booth network can replace them.
+
+On a linked booth the players read each other's media over NFS, so a Wireshark
+capture of the segment already holds `export.pdb` and the `.DAT`/`.EXT` files
+carrying each track's beat grid, cues and HD waveform. Two commands turn one
+into simulator input:
+
+```sh
+# Import a Wireshark recording, rebuilding the files its NFS traffic carried
+cargo run -p prolink --bin prolink-pcap -- --in booth.pcapng
+
+# Turn the recovered database and analysis files into track fixtures
+cargo run -p prolink-engine --bin sim-fixtures -- --session capture/capture-YYYYMMDD-HHMMSS
+
+# Run the simulation on them
+npm run dev:sim:recorded
+```
+
+`prolink-capture` sessions work as input to `sim-fixtures` just as well; the
+`.pcapng` route exists because a Wireshark recording survives the capture tool
+itself being wrong, and sees traffic no single listener socket is ever sent.
+
+To exercise the real parsing path instead of the simulated engine, replay the
+recorded packets with their original timing and run the app normally:
+
+```sh
+cargo run -p prolink --bin cdj-sim -- --replay capture/capture-YYYYMMDD-HHMMSS
+```
+
+Captures and fixtures hold a real DJ's library metadata and are gitignored.
+
 ## Building
 
 ```sh

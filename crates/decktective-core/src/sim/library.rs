@@ -66,6 +66,13 @@ impl SimLibrary {
         Self { source: Source::Generated }
     }
 
+    /// A library of tracks already in hand — what
+    /// [`Self::from_fixture_file`] produces once the file is read, and what
+    /// a test builds directly.
+    pub fn from_tracks(tracks: Vec<TrackInfo>) -> Self {
+        Self { source: Source::Recorded(tracks) }
+    }
+
     /// Reads a JSON array of [`TrackInfo`], as `sim-fixtures` writes it.
     pub fn from_fixture_file(path: &Path) -> anyhow::Result<Self> {
         let bytes = std::fs::read(path)?;
@@ -73,7 +80,7 @@ impl SimLibrary {
         if tracks.is_empty() {
             anyhow::bail!("fixture file holds no tracks");
         }
-        Ok(Self { source: Source::Recorded(tracks) })
+        Ok(Self::from_tracks(tracks))
     }
 
     /// How many distinct tracks exist — what the engine takes its rolling
@@ -125,7 +132,7 @@ mod tests {
 
     #[test]
     fn a_recorded_track_keeps_the_id_it_was_recorded_with() {
-        let recorded = SimLibrary { source: Source::Recorded(vec![track_named("Recorded", 4242)]) };
+        let recorded = SimLibrary::from_tracks(vec![track_named("Recorded", 4242)]);
 
         let loaded = library_track_ignoring_engine_id(&recorded);
         assert_eq!(loaded.track_id, 4242);

@@ -58,7 +58,7 @@ fn main() -> ExitCode {
     };
 
     match build(&config) {
-        Ok(count) if count == 0 => {
+        Ok(0) => {
             eprintln!("no track in {} had its analysis files in the capture", config.session.display());
             ExitCode::FAILURE
         }
