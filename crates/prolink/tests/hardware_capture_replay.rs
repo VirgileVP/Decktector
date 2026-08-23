@@ -43,24 +43,31 @@ fn capture_sessions() -> Vec<PathBuf> {
         .collect()
 }
 
-/// Every file directly under `session/nfs/*/` (one player-slot directory
-/// per subfolder) whose name matches `predicate` — used to find
-/// `export.pdb` and `analysis/*.EXT` files without hard-coding which
-/// player-slot directories exist.
-fn find_files(session: &Path, relative_glob_dir: &str, predicate: impl Fn(&Path) -> bool) -> Vec<PathBuf> {
-    let nfs_dir = session.join("nfs");
-    let Ok(player_dirs) = std::fs::read_dir(&nfs_dir) else { return Vec::new() };
-
-    let mut found = Vec::new();
-    for player_dir in player_dirs.filter_map(|entry| entry.ok()).map(|entry| entry.path()) {
-        let search_dir = if relative_glob_dir.is_empty() { player_dir } else { player_dir.join(relative_glob_dir) };
-        let Ok(files) = std::fs::read_dir(&search_dir) else { continue };
-        for file in files.filter_map(|entry| entry.ok()).map(|entry| entry.path()) {
-            if file.is_file() && predicate(&file) {
-                found.push(file);
+/// Every file anywhere under `session/nfs/` whose name matches `predicate`
+/// — used to find `export.pdb` and `.EXT` files without hard-coding where
+/// they sit.
+///
+/// The search is recursive because the two tools that fill this directory
+/// lay it out differently: a live pull writes a flat `nfs/<ip>-<slot>/`
+/// with an `analysis/` subfolder, while `prolink-pcap` rebuilds a
+/// recording's NFS transfers under the paths the player itself used
+/// (`PIONEER/rekordbox/export.pdb`, `PIONEER/USBANLZ/…/ANLZ0000.EXT`).
+/// Both should replay through the same parsers.
+fn find_files(session: &Path, predicate: impl Fn(&Path) -> bool + Copy) -> Vec<PathBuf> {
+    fn walk(dir: &Path, predicate: impl Fn(&Path) -> bool + Copy, found: &mut Vec<PathBuf>) {
+        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        for path in entries.filter_map(|entry| entry.ok()).map(|entry| entry.path()) {
+            if path.is_dir() {
+                walk(&path, predicate, found);
+            } else if predicate(&path) {
+                found.push(path);
             }
         }
     }
+
+    let mut found = Vec::new();
+    walk(&session.join("nfs"), predicate, &mut found);
+    found.sort();
     found
 }
 
@@ -124,7 +131,7 @@ fn export_pdb_fixtures_parse_with_resolved_cross_references() {
 
     let mut checked_any = false;
     for session in &sessions {
-        for pdb_path in find_files(session, "", |file| file.file_name().and_then(|n| n.to_str()) == Some("export.pdb")) {
+        for pdb_path in find_files(session, |file| file.file_name().and_then(|name| name.to_str()) == Some("export.pdb")) {
             checked_any = true;
             let bytes = std::fs::read(&pdb_path).unwrap_or_else(|error| panic!("failed to read {}: {error}", pdb_path.display()));
             let parsed = pdb::parse(&bytes).unwrap_or_else(|| panic!("{} did not parse — tables should resolve against a real export.pdb", pdb_path.display()));
@@ -224,7 +231,7 @@ fn analysis_fixtures_yield_a_beat_grid_and_a_waveform() {
     let (mut checked_any, mut saw_beat_grid, mut saw_waveform, mut saw_cues) = (false, false, false, false);
     for session in &sessions {
         let is_analysis = |file: &Path| matches!(file.extension().and_then(|e| e.to_str()), Some("EXT" | "DAT"));
-        for ext_path in find_files(session, "analysis", is_analysis) {
+        for ext_path in find_files(session, is_analysis) {
             checked_any = true;
             let bytes = std::fs::read(&ext_path).unwrap_or_else(|error| panic!("failed to read {}: {error}", ext_path.display()));
             let sections = read_sections_leniently(&bytes);

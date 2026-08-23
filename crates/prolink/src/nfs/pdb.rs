@@ -351,26 +351,79 @@ fn read_u32_le(data: &[u8], offset: usize) -> Option<u32> {
     data.get(offset..offset + 4).map(|bytes| u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
 }
 
-/// `DeviceSQLString` — the string encoding this database uses throughout.
-/// **Short form only** (a single length-and-flag byte followed by raw
-/// ASCII/Latin-1 bytes): `byte0 & 1 == 1` marks short form, and `byte0 >>
-/// 1` is the *total* length including that header byte, so the string
-/// itself is `(byte0 >> 1) - 1` bytes. The long form (`byte0 == 0x40`,
-/// used for strings over ~127 bytes or containing non-Latin-1 characters,
-/// encoded UTF-16LE) is **not implemented** — reads as `None` rather than
-/// misreading it, consistent with this file's overall confidence level;
-/// most track titles/names fit comfortably in the short form, so this
-/// covers the common case without risking a silent misparse of the rest.
+/// `DeviceSQLString` — the string encoding this database uses throughout,
+/// in the three forms a real library turns out to contain.
+///
+/// The **short form** is marked by `byte0 & 1 == 1`, where `byte0 >> 1` is
+/// the *total* length including that header byte, so the text is
+/// `(byte0 >> 1) - 1` bytes of Latin-1.
+///
+/// The two **long forms** share a four-byte header — the marker, a
+/// little-endian total length covering the header itself, and one byte
+/// whose meaning is unknown — followed by `length - 4` bytes of text:
+/// Latin-1 under marker `0x40`, UTF-16**LE** under `0x90`. The endianness
+/// is worth stating because Deep Symmetry's `crate-digger` names the same
+/// case `utf16be`: against the two real `export.pdb` databases recovered
+/// from the 2026-08-19 Cabaret Vert capture, every long string decodes as
+/// little-endian and none as big-endian, matching the UTF-16LE filenames
+/// this crate's [`super::xdr`] already documents Pioneer using elsewhere.
+///
+/// Both long forms were previously read as `None`. That left 50 of the
+/// 1,864 tracks across those two databases — long titles, and any title
+/// carrying a character outside Latin-1 — with an empty title, which is
+/// what surfaced them.
 mod device_sql_string {
+    /// Long form holding Latin-1 text: used once a string outgrows the
+    /// seven-bit length the short form's single header byte can express.
+    const KIND_LONG_LATIN1: u8 = 0x40;
+    /// Long form holding UTF-16LE text: used for anything Latin-1 cannot
+    /// represent, whatever its length.
+    const KIND_LONG_UTF16LE: u8 = 0x90;
+    /// Marker, little-endian total length, one unknown byte.
+    const LONG_HEADER_LEN: usize = 4;
+
     pub fn read(data: &[u8], offset: usize) -> Option<(String, usize)> {
         let marker = *data.get(offset)?;
-        if marker & 1 != 1 {
-            return None; // Long form — not implemented, see this module's doc comment.
+        if marker & 1 == 1 {
+            return read_short(data, offset, marker);
         }
-        let total_len = (marker >> 1) as usize;
-        let text_len = total_len.checked_sub(1)?;
+        match marker {
+            KIND_LONG_LATIN1 | KIND_LONG_UTF16LE => read_long(data, offset, marker),
+            // Anything else is not a string this format defines; reading on
+            // would silently misalign every field after it.
+            _ => None,
+        }
+    }
+
+    fn read_short(data: &[u8], offset: usize, marker: u8) -> Option<(String, usize)> {
+        let text_len = usize::from(marker >> 1).checked_sub(1)?;
         let bytes = data.get(offset + 1..offset + 1 + text_len)?;
-        Some((bytes.iter().map(|&byte| byte as char).collect(), 1 + text_len))
+        Some((latin1(bytes), 1 + text_len))
+    }
+
+    fn read_long(data: &[u8], offset: usize, marker: u8) -> Option<(String, usize)> {
+        let length = usize::from(u16::from_le_bytes([*data.get(offset + 1)?, *data.get(offset + 2)?]));
+        let text_len = length.checked_sub(LONG_HEADER_LEN)?;
+        let bytes = data.get(offset + LONG_HEADER_LEN..offset + LONG_HEADER_LEN + text_len)?;
+        let text = match marker {
+            KIND_LONG_UTF16LE => utf16le(bytes)?,
+            _ => latin1(bytes),
+        };
+        Some((text, length))
+    }
+
+    fn latin1(bytes: &[u8]) -> String {
+        bytes.iter().map(|&byte| byte as char).collect()
+    }
+
+    /// `None` on an odd byte count: that is a misread offset rather than a
+    /// string, and half a code unit would decode to nonsense.
+    fn utf16le(bytes: &[u8]) -> Option<String> {
+        if !bytes.len().is_multiple_of(2) {
+            return None;
+        }
+        let units: Vec<u16> = bytes.chunks_exact(2).map(|pair| u16::from_le_bytes([pair[0], pair[1]])).collect();
+        Some(String::from_utf16_lossy(&units))
     }
 }
 
@@ -393,8 +446,48 @@ mod tests {
     }
 
     #[test]
-    fn a_long_form_marker_is_not_misread() {
-        let bytes = [0x40, 0, 0, 0];
+    fn a_long_latin1_device_sql_string_round_trips() {
+        // Marker, little-endian total length (header included), one unknown
+        // byte, then the text — the shape every long string in a real
+        // `export.pdb` has.
+        let text = "House, Techno (Peak Time / Driving), Trance (Main Floor)";
+        let mut bytes = vec![0x40];
+        bytes.extend_from_slice(&((text.len() + 4) as u16).to_le_bytes());
+        bytes.push(0);
+        bytes.extend_from_slice(text.as_bytes());
+
+        let (parsed, consumed) = device_sql_string::read(&bytes, 0).expect("should parse");
+        assert_eq!(parsed, text);
+        assert_eq!(consumed, bytes.len(), "a long string consumes its whole declared length");
+    }
+
+    /// A title carrying anything outside Latin-1 switches to UTF-16, which
+    /// this database writes little-endian.
+    #[test]
+    fn a_long_utf16_device_sql_string_round_trips() {
+        let text = "Gabriel Muñoz – Lost";
+        let encoded: Vec<u8> = text.encode_utf16().flat_map(u16::to_le_bytes).collect();
+        let mut bytes = vec![0x90];
+        bytes.extend_from_slice(&((encoded.len() + 4) as u16).to_le_bytes());
+        bytes.push(0);
+        bytes.extend_from_slice(&encoded);
+
+        let (parsed, consumed) = device_sql_string::read(&bytes, 0).expect("should parse");
+        assert_eq!(parsed, text);
+        assert_eq!(consumed, bytes.len());
+    }
+
+    /// A marker this format does not define means the offset is wrong;
+    /// reading on from it would misalign every field that follows.
+    #[test]
+    fn an_unknown_marker_is_rejected() {
+        assert!(device_sql_string::read(&[0x42, 0, 0, 0], 0).is_none());
+    }
+
+    /// Half a UTF-16 code unit is a misread offset, not a string.
+    #[test]
+    fn an_odd_length_utf16_string_is_rejected() {
+        let bytes = [0x90, 7, 0, 0, b'a', b'b', b'c'];
         assert!(device_sql_string::read(&bytes, 0).is_none());
     }
 
