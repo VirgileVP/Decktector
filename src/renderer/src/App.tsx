@@ -7,7 +7,7 @@ import { DeckPanel } from './components/DeckPanel'
 import { HeaderBlock } from './components/HeaderBlock'
 import { RemoteLinkBanner } from './components/RemoteLinkBanner'
 import { SettingsDialog, type SettingsTab } from './components/SettingsDialog'
-import { deckColor } from './lib/deck-colors'
+import { DECK_ACCENT_COLOR } from './lib/deck-colors'
 import { remoteFocusedDeck } from './lib/remote-url'
 import { connectMainWindowCloseCascade } from './panels/close-panel-windows-on-exit'
 import { restorePanelWindows } from './panels/restore-panel-windows'
@@ -15,7 +15,6 @@ import { connectDevicesToEngine, useDevicesStore } from './state/devices'
 import { connectPanelWindowRegistry } from './state/panel-windows'
 import { connectRemoteToEngine } from './state/remote'
 import { connectSettingsBroadcast } from './state/settings-broadcast'
-import { useSettings } from './state/settings'
 import { connectSettingsToApp } from './state/settings-sync'
 import { connectStoreToEngine, useDecktectiveStore } from './state/store'
 import { connectTimecodeToEngine } from './state/timecode'
@@ -72,7 +71,6 @@ function App(): React.JSX.Element {
   }
 
   const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null)
-  const deckColors = useSettings((s) => s.deckColors)
 
   const networkState = useDecktectiveStore((s) => s.networkState)
   const lastDeviceSeenAt = useDevicesStore((s) => s.lastSeenAt)
@@ -197,7 +195,7 @@ function App(): React.JSX.Element {
           </div>
         ) : (
           visibleDeckIds.map((deckId) => (
-            <DeckPanel key={deckId} deckId={deckId} accentColor={deckColor(deckId, deckColors)} />
+            <DeckPanel key={deckId} deckId={deckId} accentColor={DECK_ACCENT_COLOR} />
           ))
         )}
       </main>

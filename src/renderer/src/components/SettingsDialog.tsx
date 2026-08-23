@@ -1,7 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { useEffect, useRef, useState } from 'react'
 
-import { DECK_NUMBERS, DEFAULT_DECK_COLORS, deckColor } from '../lib/deck-colors'
 import { THEMES } from '../lib/theme'
 import type { NetworkInterfaceInfo } from '../model'
 import { useRemoteStore } from '../state/remote'
@@ -210,35 +209,6 @@ export function SettingsDialog({
                   checked={settings.dimIdleDecks}
                   onChange={update('dimIdleDecks')}
                 />
-              </section>
-
-              <section className="settings-section">
-                <div className="settings-section-head">
-                  <h3>Deck colors</h3>
-                  <button
-                    type="button"
-                    className="settings-reset"
-                    onClick={settings.resetDeckColors}
-                  >
-                    Reset
-                  </button>
-                </div>
-                <div className="deck-color-row">
-                  {DECK_NUMBERS.map((deckId) => (
-                    <label key={deckId} className="deck-color">
-                      <input
-                        type="color"
-                        value={deckColor(deckId, settings.deckColors)}
-                        onChange={(event) => settings.setDeckColor(deckId, event.target.value)}
-                      />
-                      <span>{deckId}</span>
-                    </label>
-                  ))}
-                </div>
-                <p className="setting-hint">
-                  Player accents, used by the playheads and the deck badges. Defaults:{' '}
-                  {DECK_NUMBERS.map((deckId) => DEFAULT_DECK_COLORS[deckId]).join(', ')}.
-                </p>
               </section>
 
               {IS_TAURI && (

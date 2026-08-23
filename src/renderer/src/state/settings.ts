@@ -139,8 +139,6 @@ export interface Settings {
   uiScale: number
   /** Whether the header shows the whole running order or only what is around now. */
   lineupView: LineupView
-  /** Accent color overrides keyed by player number; absent means the default. */
-  deckColors: Record<number, string>
   /** Keep the window above every other application. */
   alwaysOnTop: boolean
   /** Hold off the screen saver while a set is running. */
@@ -196,7 +194,6 @@ export const DEFAULT_SETTINGS: Settings = {
   dimIdleDecks: true,
   uiScale: 1,
   lineupView: 'full',
-  deckColors: {},
   alwaysOnTop: false,
   preventSleep: false,
   timecodeProtocol: 'off',
@@ -223,8 +220,6 @@ export const DEFAULT_SETTINGS: Settings = {
 
 interface SettingsActions {
   update<K extends keyof Settings>(key: K, value: Settings[K]): void
-  setDeckColor(deckId: number, color: string): void
-  resetDeckColors(): void
   resetAll(): void
   applyDeckViewPreset(preset: DeckViewPreset): void
 }
@@ -240,9 +235,6 @@ export const useSettings = create<Settings & SettingsActions>()(
     (set) => ({
       ...DEFAULT_SETTINGS,
       update: (key, value) => set({ [key]: value } as Partial<Settings>),
-      setDeckColor: (deckId, color) =>
-        set((state) => ({ deckColors: { ...state.deckColors, [deckId]: color } })),
-      resetDeckColors: () => set({ deckColors: {} }),
       resetAll: () => set({ ...DEFAULT_SETTINGS }),
       applyDeckViewPreset: (preset) => set({ ...DECK_VIEW_PRESETS[preset].values })
     }),
@@ -261,7 +253,6 @@ function pickSettings(state: Settings): Settings {
     dimIdleDecks,
     uiScale,
     lineupView,
-    deckColors,
     alwaysOnTop,
     preventSleep,
     timecodeProtocol,
@@ -291,7 +282,6 @@ function pickSettings(state: Settings): Settings {
     dimIdleDecks,
     uiScale,
     lineupView,
-    deckColors,
     alwaysOnTop,
     preventSleep,
     timecodeProtocol,
