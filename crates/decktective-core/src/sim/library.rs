@@ -56,7 +56,17 @@ impl SimLibrary {
                 library
             }
             Err(error) => {
-                tracing::warn!(path = %path.display(), %error, "could not read {SIM_TRACKS_ENV}; using generated tracks");
+                // The working directory goes in the message because a
+                // relative path is the failure that actually happens here:
+                // `tauri dev` runs the binary from `src-tauri`, not from
+                // the workspace root the path was written against.
+                let working_dir = std::env::current_dir().unwrap_or_default();
+                tracing::warn!(
+                    path = %path.display(),
+                    working_dir = %working_dir.display(),
+                    %error,
+                    "could not read {SIM_TRACKS_ENV}; using generated tracks"
+                );
                 Self::generated()
             }
         }
