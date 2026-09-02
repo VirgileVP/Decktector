@@ -52,9 +52,11 @@ pub fn parse_color_waveform_detail(blob: &[u8]) -> Vec<DbWaveformColumn> {
         return Vec::new();
     }
     blob[LEADING_JUNK_BYTES..]
-        .chunks_exact(COLUMN_LEN)
+        .as_chunks::<COLUMN_LEN>()
+        .0
+        .iter()
         .map(|column| {
-            let bits = u16::from_be_bytes([column[0], column[1]]);
+            let bits = u16::from_be_bytes(*column);
             let height = f32::from((bits >> 2) & 0x1f) / 31.0;
             let scale_channel =
                 |shift: u16| (f32::from((bits >> shift) & 0x7) / 7.0 * 255.0).round() as u8;

@@ -37,7 +37,9 @@ pub fn parse_beat_grid(blob: &[u8]) -> Vec<DbBeatGridEntry> {
         return Vec::new();
     }
     blob[HEADER_LEN..]
-        .chunks_exact(ENTRY_LEN)
+        .as_chunks::<ENTRY_LEN>()
+        .0
+        .iter()
         .map(|entry| DbBeatGridEntry {
             beat_in_bar: u16::from_le_bytes([entry[0], entry[1]]) as u8,
             tempo_centibpm: u16::from_le_bytes([entry[2], entry[3]]),
