@@ -7,6 +7,7 @@ members = [
     "crates/decktective-timecode",
     "crates/prolink",
     "crates/prolink-engine",
+    "crates/sim-audio",
     "src-tauri",
 ]
 
@@ -40,6 +41,9 @@ rekordcrate = { version = "0.3", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 socket2 = "0.6"
+# MP3 decoding + ID3 tags for the `sim-audio` fixture builder, pure Rust and
+# used by that dev tool alone — never linked into the app itself.
+symphonia = { version = "0.5", features = ["mp3"] }
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util"] }
 tracing = "0.1"

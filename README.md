@@ -25,8 +25,8 @@ Primary targets: **XDJ-XZ** and **XDJ-1000MK2** (works with 2 to 4 CDJ-2000-era 
 > connecting.
 >
 > **Known gap**: hot cues and memory cues are not read on either route — see
-> [Porting status](#porting-status). The Electron implementation remains on the
-> `master` branch; see [Architecture](#architecture).
+> [Porting status](#porting-status). See [Architecture](#architecture) for how
+> the Rust core, Tauri shell and React UI fit together.
 
 ## Requirements
 
@@ -104,6 +104,22 @@ cargo run -p prolink-engine --bin sim-fixtures -- --session capture/capture-YYYY
 npm run dev:sim:recorded
 ```
 
+### Simulating from audio files
+
+Without a booth to record, a folder of audio files gets most of the way there.
+Drop them in `capture/audio/` and build the same fixtures:
+
+```sh
+cargo run -p sim-audio -- --input capture/audio
+npm run dev:sim:recorded
+```
+
+The waveform, the duration, the artwork and the tags come from the files
+themselves. The tempo, the beat grid and the downbeat are detected, so the grid
+is exactly regular where a real one drifts, and a track whose tags carry no BPM
+can land an octave off. The cues are derived from each track's own section
+analysis, since no cue a DJ set is ever stored in an audio file.
+
 `prolink-capture` sessions work as input to `sim-fixtures` just as well; the
 `.pcapng` route exists because a Wireshark recording survives the capture tool
 itself being wrong, and sees traffic no single listener socket is ever sent.
@@ -115,7 +131,8 @@ recorded packets with their original timing and run the app normally:
 cargo run -p prolink --bin cdj-sim -- --replay capture/capture-YYYYMMDD-HHMMSS
 ```
 
-Captures and fixtures hold a real DJ's library metadata and are gitignored.
+Captures and fixtures hold a real DJ's library metadata, and audio files are
+someone's work; `capture/` and the fixtures built from it are gitignored.
 
 ## Building
 
