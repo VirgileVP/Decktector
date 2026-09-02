@@ -21,14 +21,8 @@
      the readout wobbling, especially once the fit-to-window panel scales it
      up several times over. */
   --clock-font-family:
-    ui-monospace,
-    'Cascadia Mono',
-    'Segoe UI Mono',
-    Consolas,
-    Menlo,
-    'SFMono-Regular',
-    'DejaVu Sans Mono',
-    monospace;
+    ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, Menlo, 'SFMono-Regular',
+    'DejaVu Sans Mono', monospace;
   font-family:
     Inter,
     'Segoe UI',
@@ -1201,6 +1195,10 @@ input[type='checkbox']:focus-visible {
 .deck-full {
   flex-direction: row;
   gap: 8px;
+  /* The deck bar's rail layout sizes itself off the deck's own height —
+     see the `deck` container queries under it. */
+  container-type: size;
+  container-name: deck;
 }
 
 .deck-stack {
@@ -1217,6 +1215,87 @@ input[type='checkbox']:focus-visible {
   align-items: center;
   gap: 12px;
   min-height: 40px;
+}
+
+/* With the deck number, artwork, title and tags all hidden, the bar has no
+   wide element left to justify a row of its own — it stands up as a rail
+   between the waveforms and the beat indicator instead.
+
+   It wraps: the readouts run top to bottom and spill into a second and third
+   column as the deck gets shorter, so a short deck costs the rail width —
+   which a booth screen has to spare — instead of costing readouts. Wrapping
+   goes off the room actually available, with no breakpoint to keep in step
+   with the readouts' own heights. `.deck-stats` goes `display: contents`
+   so TIME, PITCH and BPM wrap in their own right rather than as one block. */
+.deck-bar-rail {
+  flex-flow: column wrap;
+  align-content: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 0;
+  flex-shrink: 0;
+}
+
+.deck-bar-rail .deck-msync {
+  align-items: center;
+}
+
+.deck-bar-rail .deck-stats {
+  display: contents;
+}
+
+@container deck (max-height: 290px) {
+  .deck-bar-rail {
+    gap: 8px;
+  }
+}
+
+/* 280px of deck is where trading height for width stops paying: below it the
+   rail's second column would eat the waveform it sits next to (a phone on the
+   remote view, or a deck in a narrow window). So it stays one column, and the
+   readouts drop off instead, in reverse order of how much an operator needs
+   them at a glance: pitch first, then the transport glyph and the time
+   remaining, then the master/sync badges, and last the TC button — leaving
+   TIME and BPM, the two numbers the rail exists for. TC goes last because it
+   is a control rather than a readout, and only because `TimecodeSourceButtons`
+   in the header selects the same source. */
+@container deck (max-width: 279.98px) {
+  .deck-bar-rail {
+    flex-wrap: nowrap;
+  }
+}
+
+@container deck (max-height: 235px) and (max-width: 279.98px) {
+  .deck-bar-rail .deck-stat-pitch {
+    display: none;
+  }
+}
+
+@container deck (max-height: 195px) and (max-width: 279.98px) {
+  .deck-bar-rail .deck-transport,
+  .deck-bar-rail .deck-stat-remain {
+    display: none;
+  }
+}
+
+@container deck (max-height: 155px) and (max-width: 279.98px) {
+  .deck-bar-rail .deck-msync {
+    display: none;
+  }
+}
+
+@container deck (max-height: 110px) and (max-width: 279.98px) {
+  .deck-bar-rail .deck-tc-button {
+    display: none;
+  }
+}
+
+/* Floor: below the height TIME and BPM themselves need, the rail is clipped
+   rather than allowed to paint over the neighbouring deck. */
+@container deck (max-height: 75px) {
+  .deck-bar-rail {
+    overflow: hidden;
+  }
 }
 
 .deck-no {

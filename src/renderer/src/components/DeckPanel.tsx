@@ -1,26 +1,18 @@
-import type { DeckId, PlayState } from '../model'
+import type { DeckId } from '../model'
 import { formatTimeMs } from '../lib/playhead'
+import { TRANSPORT_GLYPHS } from '../lib/transport'
 import { DECK_RAIL_WIDTH_RANGE, useSettings } from '../state/settings'
 import { useDecktectiveStore } from '../state/store'
-import { selectTimecodeSource, useTimecodeStore } from '../state/timecode'
 import { BeatIndicator } from './BeatIndicator'
 import { CueList } from './CueList'
+import { DeckBar } from './DeckBar'
+import { deckBarLayout, useDeckBarFields } from './DeckBarLayout'
 import { DeckStat } from './DeckStat'
 import { PanelResizeHandle } from './PanelResizeHandle'
 import { PopOutButton } from './PopOutButton'
 import { TrackEventList } from './TrackEventList'
 import { WaveformDetail } from './WaveformDetail'
 import { WaveformOverview } from './WaveformOverview'
-
-const TRANSPORT_GLYPHS: Record<PlayState, string> = {
-  empty: '—',
-  loading: '…',
-  cued: '●',
-  playing: '▶',
-  paused: '❙❙',
-  searching: '≫',
-  ended: '■'
-}
 
 interface DeckPanelProps {
   deckId: DeckId
@@ -36,37 +28,16 @@ export function DeckPanel({
 }: DeckPanelProps): React.JSX.Element {
   const deck = useDecktectiveStore((s) => s.decks[deckId])
   const track = useDecktectiveStore((s) => s.tracks[deckId] ?? null)
-  const isTimecodeSource = useTimecodeStore((s) => s.sourceDeckId === deckId)
-  const showNumber = useSettings((s) => s.showDeckNumber)
-  const showTrackInfo = useSettings((s) => s.showDeckTrackInfo)
-  const showTrackTags = useSettings((s) => s.showDeckTrackTags)
-  const showTcButton = useSettings((s) => s.showDeckTcButton)
-  const showTransport = useSettings((s) => s.showDeckTransport)
-  const showSyncBadges = useSettings((s) => s.showDeckSyncBadges)
-  const showTime = useSettings((s) => s.showDeckTime)
-  const showPitch = useSettings((s) => s.showDeckPitch)
-  const showTimeRemaining = useSettings((s) => s.showDeckTimeRemaining)
-  const showBpm = useSettings((s) => s.showDeckBpm)
+  const barFields = useDeckBarFields()
   const showCueList = useSettings((s) => s.showDeckCueList)
   const showEventList = useSettings((s) => s.showDeckEventList)
-  const showArtwork = useSettings((s) => s.showDeckArtwork)
   const showWaveformOverview = useSettings((s) => s.showDeckWaveformOverview)
   const showWaveformDetail = useSettings((s) => s.showDeckWaveformDetail)
   const cueListWidth = useSettings((s) => s.deckCueListWidth)
   const eventListWidth = useSettings((s) => s.deckEventListWidth)
   const updateSetting = useSettings((s) => s.update)
   const showTimeline = showWaveformOverview || showWaveformDetail
-  const showBar =
-    showNumber ||
-    showArtwork ||
-    showTrackInfo ||
-    showTrackTags ||
-    showTcButton ||
-    showTransport ||
-    showSyncBadges ||
-    showTime ||
-    showPitch ||
-    showBpm
+  const barLayout = deckBarLayout(barFields)
 
   // The engine resolves artwork to a data: URL, so it drops straight into
   // an <img> with nothing to allocate or revoke.
@@ -119,92 +90,8 @@ export function DeckPanel({
         title={`Open deck ${deckId} in its own window`}
       />
       <div className="deck-stack">
-        {showBar && (
-          <div className="deck-bar">
-            {showNumber && <div className="deck-no">{deckId}</div>}
-
-            {showArtwork && (
-              <div className="deck-art">
-                {artworkUrl ? <img src={artworkUrl} alt="" /> : <span>♪</span>}
-              </div>
-            )}
-
-            {showTrackInfo ? (
-              <div className="deck-info">
-                <div className="deck-title">{track?.title ?? 'No track loaded'}</div>
-                <div className="deck-sub">
-                  {track?.artist ?? '—'}
-                  {track?.album ? ` · ${track.album}` : ''}
-                </div>
-              </div>
-            ) : (
-              // Keeps a flex-growing element in the bar so the rest doesn't
-              // collapse leftward once the title/artist block is hidden.
-              <div className="deck-info-spacer" />
-            )}
-
-            {showTrackTags && (
-              <div className="deck-props">
-                {track?.key && <span className="prop">{track.key}</span>}
-                {track?.genre && <span className="prop prop-muted">{track.genre}</span>}
-              </div>
-            )}
-
-            {showTcButton && (
-              <button
-                type="button"
-                className={`deck-tc-button${isTimecodeSource ? ' active' : ''}`}
-                title={
-                  isTimecodeSource
-                    ? 'Stop sending timecode from this deck'
-                    : 'Send timecode from this deck'
-                }
-                aria-pressed={isTimecodeSource}
-                onClick={() => selectTimecodeSource(isTimecodeSource ? null : deckId)}
-              >
-                TC
-              </button>
-            )}
-
-            {showTransport && (
-              <div className={`deck-transport state-${playState}`}>
-                {TRANSPORT_GLYPHS[playState]}
-              </div>
-            )}
-
-            {showSyncBadges && (
-              <div className="deck-msync">
-                <span className={isOnAir ? 'lit lit-onair' : ''}>ON AIR</span>
-                <span className={deck?.isMaster ? 'lit lit-master' : ''}>MASTER</span>
-                <span className={deck?.isSynced ? 'lit lit-sync' : ''}>SYNC</span>
-              </div>
-            )}
-
-            <div className="deck-stats">
-              {showTime && (
-                <DeckStat
-                  className="deck-stat-time"
-                  label="TIME"
-                  value={playhead !== null ? formatTimeMs(playhead) : '--:--'}
-                  sub={
-                    showTimeRemaining && (
-                      <span className="deck-stat-remain">
-                        {remaining !== null ? `-${formatTimeMs(remaining)}` : ''}
-                      </span>
-                    )
-                  }
-                />
-              )}
-              {showPitch && (
-                <DeckStat
-                  className="deck-stat-pitch"
-                  label="PITCH"
-                  value={deck ? `${deck.pitch >= 0 ? '+' : ''}${deck.pitch.toFixed(2)}%` : '--.--%'}
-                />
-              )}
-              {showBpm && <DeckStat className="deck-stat-bpm" label="BPM" value={bpmText} />}
-            </div>
-          </div>
+        {barLayout === 'bar' && (
+          <DeckBar deckId={deckId} track={track} fields={barFields} layout="bar" />
         )}
 
         <div className="deck-body">
@@ -250,6 +137,9 @@ export function DeckPanel({
           )}
         </div>
       </div>
+      {barLayout === 'rail' && (
+        <DeckBar deckId={deckId} track={track} fields={barFields} layout="rail" />
+      )}
       <BeatIndicator deckId={deckId} track={track} />
     </section>
   )
