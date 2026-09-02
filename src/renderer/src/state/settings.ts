@@ -50,14 +50,20 @@ export const NO_MIDI_PORT = ''
 /** Placeholder LTC output device name meaning "nothing picked yet". */
 export const NO_LTC_DEVICE = ''
 
-/** The Deck view tab's nine visibility toggles, grouped as one preset-able unit. */
+/** The Deck view tab's fifteen visibility toggles, grouped as one preset-able unit. */
 export type DeckViewToggles = Pick<
   Settings,
+  | 'showDeckNumber'
   | 'showDeckArtwork'
+  | 'showDeckTrackInfo'
   | 'showDeckTrackTags'
+  | 'showDeckTcButton'
+  | 'showDeckTransport'
   | 'showDeckSyncBadges'
+  | 'showDeckTime'
   | 'showDeckPitch'
   | 'showDeckTimeRemaining'
+  | 'showDeckBpm'
   | 'showDeckCueList'
   | 'showDeckEventList'
   | 'showDeckWaveformOverview'
@@ -65,11 +71,17 @@ export type DeckViewToggles = Pick<
 >
 
 const DECK_VIEW_TOGGLE_KEYS = [
+  'showDeckNumber',
   'showDeckArtwork',
+  'showDeckTrackInfo',
   'showDeckTrackTags',
+  'showDeckTcButton',
+  'showDeckTransport',
   'showDeckSyncBadges',
+  'showDeckTime',
   'showDeckPitch',
   'showDeckTimeRemaining',
+  'showDeckBpm',
   'showDeckCueList',
   'showDeckEventList',
   'showDeckWaveformOverview',
@@ -78,7 +90,7 @@ const DECK_VIEW_TOGGLE_KEYS = [
 
 export type DeckViewPreset = 'keying' | 'full'
 
-/** Named starting points for the Deck view tab's nine independent toggles —
+/** Named starting points for the Deck view tab's fifteen independent toggles —
  *  still fully overridable below, this is a fast path, not a new mode. */
 export const DECK_VIEW_PRESETS: Record<
   DeckViewPreset,
@@ -88,11 +100,17 @@ export const DECK_VIEW_PRESETS: Record<
     label: 'Keying',
     hint: 'Clean composite for a transparent panel window — art, on-air state, waveform shape',
     values: {
+      showDeckNumber: false,
       showDeckArtwork: true,
+      showDeckTrackInfo: false,
       showDeckTrackTags: false,
+      showDeckTcButton: false,
+      showDeckTransport: false,
       showDeckSyncBadges: true,
+      showDeckTime: false,
       showDeckPitch: false,
       showDeckTimeRemaining: true,
+      showDeckBpm: false,
       showDeckCueList: false,
       showDeckEventList: false,
       showDeckWaveformOverview: true,
@@ -103,11 +121,17 @@ export const DECK_VIEW_PRESETS: Record<
     label: 'Full',
     hint: 'Everything a booth screen shows',
     values: {
+      showDeckNumber: true,
       showDeckArtwork: true,
+      showDeckTrackInfo: true,
       showDeckTrackTags: true,
+      showDeckTcButton: true,
+      showDeckTransport: true,
       showDeckSyncBadges: true,
+      showDeckTime: true,
       showDeckPitch: true,
       showDeckTimeRemaining: true,
+      showDeckBpm: true,
       showDeckCueList: true,
       showDeckEventList: true,
       showDeckWaveformOverview: true,
@@ -164,14 +188,26 @@ export interface Settings {
   /** Name of the network adapter the remote server binds to — picked from
    *  `list_network_interfaces`, not typed in. Empty means every interface. */
   remoteInterface: string
+  /** Whether the deck bar shows the deck number badge. */
+  showDeckNumber: boolean
+  /** Whether the deck bar shows the track title and artist. */
+  showDeckTrackInfo: boolean
   /** Whether the deck bar shows the key/genre tags. */
   showDeckTrackTags: boolean
+  /** Whether the deck bar shows the timecode-source (TC) button. */
+  showDeckTcButton: boolean
+  /** Whether the deck bar shows the play/pause transport glyph. */
+  showDeckTransport: boolean
   /** Whether the deck bar shows the ON AIR / MASTER / SYNC badges. */
   showDeckSyncBadges: boolean
-  /** Whether the time block shows the pitch percentage. */
+  /** Whether the stats row shows the elapsed time. */
+  showDeckTime: boolean
+  /** Whether the stats row shows the pitch percentage. */
   showDeckPitch: boolean
-  /** Whether the time block shows the time remaining. */
+  /** Whether the time stat shows the time remaining underneath. */
   showDeckTimeRemaining: boolean
+  /** Whether the stats row shows the BPM. */
+  showDeckBpm: boolean
   /** Whether each deck shows its cue list. */
   showDeckCueList: boolean
   /** Whether each deck shows the analysed structure of its track. */
@@ -205,10 +241,16 @@ export const DEFAULT_SETTINGS: Settings = {
   remoteEnabled: false,
   remotePort: REMOTE_DEFAULT_PORT,
   remoteInterface: NO_NETWORK_INTERFACE,
+  showDeckNumber: true,
+  showDeckTrackInfo: true,
   showDeckTrackTags: true,
+  showDeckTcButton: true,
+  showDeckTransport: true,
   showDeckSyncBadges: true,
+  showDeckTime: true,
   showDeckPitch: true,
   showDeckTimeRemaining: true,
+  showDeckBpm: true,
   showDeckCueList: true,
   showDeckEventList: true,
   showDeckArtwork: true,
@@ -264,10 +306,16 @@ function pickSettings(state: Settings): Settings {
     remoteEnabled,
     remotePort,
     remoteInterface,
+    showDeckNumber,
+    showDeckTrackInfo,
     showDeckTrackTags,
+    showDeckTcButton,
+    showDeckTransport,
     showDeckSyncBadges,
+    showDeckTime,
     showDeckPitch,
     showDeckTimeRemaining,
+    showDeckBpm,
     showDeckCueList,
     showDeckEventList,
     showDeckArtwork,
@@ -293,10 +341,16 @@ function pickSettings(state: Settings): Settings {
     remoteEnabled,
     remotePort,
     remoteInterface,
+    showDeckNumber,
+    showDeckTrackInfo,
     showDeckTrackTags,
+    showDeckTcButton,
+    showDeckTransport,
     showDeckSyncBadges,
+    showDeckTime,
     showDeckPitch,
     showDeckTimeRemaining,
+    showDeckBpm,
     showDeckCueList,
     showDeckEventList,
     showDeckArtwork,

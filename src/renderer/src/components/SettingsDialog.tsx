@@ -93,12 +93,18 @@ export function SettingsDialog({
   }, [])
 
   useEffect(() => {
+    // The panel takes focus so Escape works without clicking inside first.
+    // Mount-only: re-running this on every `onClose` identity change would
+    // steal focus back from whatever field the user is typing into.
+    panelRef.current?.focus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKeyDown)
-    // The panel takes focus so Escape works without clicking inside first.
-    panelRef.current?.focus()
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
@@ -238,7 +244,7 @@ export function SettingsDialog({
                 <span className="setting-text">
                   <span className="setting-label">What this deck view is for</span>
                   <span className="setting-hint">
-                    A starting point for the nine toggles below — pick one, then fine-tune.
+                    A starting point for the fifteen toggles below — pick one, then fine-tune.
                   </span>
                 </span>
                 <div className="setting-choice" role="group" aria-label="Deck view preset">
@@ -262,10 +268,22 @@ export function SettingsDialog({
 
                 <h3>Deck bar</h3>
                 <ToggleRow
+                  label="Deck number"
+                  hint="The deck's number badge"
+                  checked={settings.showDeckNumber}
+                  onChange={update('showDeckNumber')}
+                />
+                <ToggleRow
                   label="Artwork"
                   hint="Album art thumbnail next to the deck number"
                   checked={settings.showDeckArtwork}
                   onChange={update('showDeckArtwork')}
+                />
+                <ToggleRow
+                  label="Track title & artist"
+                  hint="The track's title, artist and album"
+                  checked={settings.showDeckTrackInfo}
+                  onChange={update('showDeckTrackInfo')}
                 />
                 <ToggleRow
                   label="Track tags"
@@ -274,22 +292,46 @@ export function SettingsDialog({
                   onChange={update('showDeckTrackTags')}
                 />
                 <ToggleRow
+                  label="TC button"
+                  hint="Button to send timecode from this deck"
+                  checked={settings.showDeckTcButton}
+                  onChange={update('showDeckTcButton')}
+                />
+                <ToggleRow
+                  label="Play/pause button"
+                  hint="The transport state glyph"
+                  checked={settings.showDeckTransport}
+                  onChange={update('showDeckTransport')}
+                />
+                <ToggleRow
                   label="Sync badges"
                   hint="ON AIR, MASTER and SYNC indicators"
                   checked={settings.showDeckSyncBadges}
                   onChange={update('showDeckSyncBadges')}
                 />
                 <ToggleRow
+                  label="Time"
+                  hint="Elapsed time, as its own column next to pitch and BPM"
+                  checked={settings.showDeckTime}
+                  onChange={update('showDeckTime')}
+                />
+                <ToggleRow
                   label="Pitch"
-                  hint="Pitch percentage next to the BPM"
+                  hint="Pitch percentage as its own column, next to time and BPM"
                   checked={settings.showDeckPitch}
                   onChange={update('showDeckPitch')}
                 />
                 <ToggleRow
                   label="Time remaining"
-                  hint="Countdown next to the BPM and pitch"
+                  hint="Countdown under the elapsed time readout"
                   checked={settings.showDeckTimeRemaining}
                   onChange={update('showDeckTimeRemaining')}
+                />
+                <ToggleRow
+                  label="BPM"
+                  hint="BPM as its own column, next to time and pitch"
+                  checked={settings.showDeckBpm}
+                  onChange={update('showDeckBpm')}
                 />
 
                 <h3>Deck body</h3>

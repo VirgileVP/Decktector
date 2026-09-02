@@ -1196,6 +1196,22 @@ input[type='checkbox']:focus-visible {
     box-shadow 0.2s ease;
 }
 
+/* The full deck lays its bar and body out in a column, with the beat
+   indicator alongside them so it spans the whole section. */
+.deck-full {
+  flex-direction: row;
+  gap: 8px;
+}
+
+.deck-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
 .deck-bar {
   display: flex;
   align-items: center;
@@ -1241,8 +1257,39 @@ input[type='checkbox']:focus-visible {
   border-color: var(--border);
 }
 
-.deck-idle .deck-bar {
+.deck-idle .deck-bar,
+.deck-idle .deck-beats {
   opacity: var(--idle-bar-opacity);
+}
+
+/* Beat of the bar, as four bars running the full height of the deck down its
+   right edge. The lit one is the beat playing now; all four stay dark when
+   nothing plays. */
+.deck-beats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 5px;
+  flex-shrink: 0;
+}
+
+.deck-beat {
+  flex: 1;
+  border-radius: 2px;
+  background: var(--border-strong);
+  transition:
+    background 0.08s linear,
+    box-shadow 0.08s linear;
+}
+
+.deck-beat.lit {
+  background: var(--deck-color);
+  box-shadow: 0 0 6px var(--deck-color);
+}
+
+/* The downbeat reads louder than the three beats after it. */
+.deck-beat:first-child.lit {
+  box-shadow: 0 0 10px var(--deck-color);
 }
 
 .deck-art {
@@ -1272,6 +1319,11 @@ input[type='checkbox']:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.deck-info-spacer {
+  flex: 1;
+  min-width: 0;
 }
 
 .deck-title {
@@ -1408,43 +1460,62 @@ input[type='checkbox']:focus-visible {
   box-shadow: 0 0 8px rgba(57, 255, 20, 0.35);
 }
 
-/* ---------- Time block ---------- */
+/* ---------- Deck stats: TIME / PITCH / BPM, label above value ---------- */
 
-.deck-time {
+.deck-stats {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.deck-stat {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
   gap: 2px;
-  flex-shrink: 0;
-  min-width: 132px;
 }
 
-.time-main {
-  font-size: 15px;
+.deck-stat-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--text-faint);
+}
+
+.deck-stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--text);
+}
+
+.deck-stat-bpm {
+  min-width: 46px;
+}
+
+.deck-stat-bpm .deck-stat-value {
+  font-size: 18px;
+}
+
+.deck-stat-pitch {
+  min-width: 58px;
+}
+
+.deck-stat-time {
+  min-width: 50px;
+}
+
+.deck-stat-remain {
+  font-size: 10px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-}
-
-.time-sep {
-  color: var(--text-faint);
-  font-weight: 400;
-}
-
-.time-sub {
-  display: flex;
-  gap: 8px;
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-muted);
-}
-
-.time-pitch {
-  color: var(--text-faint);
-}
-
-.time-remain {
   color: var(--onair);
+}
+
+.view-quad .deck-stat-pitch {
+  display: none;
 }
 
 /* ---------- Deck body: cue list + waveforms ---------- */
@@ -2263,6 +2334,18 @@ html[data-transparent='on'] .panel-chrome-bar {
   color: var(--text-muted);
 }
 
+.deck-compact-bpm {
+  gap: 1px;
+}
+
+.deck-compact-bpm .deck-stat-label {
+  font-size: 8px;
+}
+
+.deck-compact-bpm .deck-stat-value {
+  font-size: 13px;
+}
+
 /* ---------- Pop-out buttons ---------- */
 
 .pop-out-button {
@@ -2342,7 +2425,7 @@ html[data-transparent='on'] .panel-chrome-bar {
   cursor: pointer;
 }
 
-/* The deck bar is packed edge to edge (see `.deck-time`, `.deck-props`) —
+/* The deck bar is packed edge to edge (see `.deck-stats`, `.deck-props`) —
    any spot inside it is already occupied, which is why the button used to
    render invisibly behind other content. The deck's own top-right corner,
    straddling its border into the gap the deck grid already leaves between
