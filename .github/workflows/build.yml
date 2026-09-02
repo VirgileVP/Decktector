@@ -23,11 +23,12 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      # Tauri's Linux build needs the system webview and its GTK stack.
-      - name: Install Linux webview dependencies
+      # Tauri's Linux build needs the system webview and its GTK stack, and
+      # cpal needs the ALSA headers.
+      - name: Install Linux system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
 
       - name: Install dependencies
         run: npm ci
@@ -76,11 +77,11 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Install Linux webview dependencies
+      - name: Install Linux system dependencies
         if: matrix.platform == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
 
       - name: Install dependencies
         run: npm ci
