@@ -33,6 +33,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The app bundles `dist` as a Tauri resource, so its build script fails
+      # until the renderer has been built once.
+      - name: Build the renderer
+        run: npm run build:renderer
+
       # Also regenerates the renderer's model types, so the typecheck below
       # fails if the Rust model and the committed bindings have drifted.
       - name: Rust tests
