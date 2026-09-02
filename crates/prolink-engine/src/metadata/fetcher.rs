@@ -55,6 +55,11 @@ const NFS_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const NFS_FILE_TIMEOUT: Duration = Duration::from_secs(20);
 const RETRY_FAILED_SOURCE_AFTER: Duration = Duration::from_secs(60);
 
+/// Pooled dbserver connections, keyed by the player holding the media and
+/// its address - see [`MetadataFetcher::connections`] for why both halves
+/// of the key matter.
+type ConnectionPool = HashMap<(u8, Ipv4Addr), Arc<AsyncMutex<Connection>>>;
+
 /// What one status packet supplies about the track it names — everything
 /// [`MetadataFetcher::spawn_fetch`] needs beyond what it already tracks
 /// itself (the pooled dbserver connection, the failure caches).
@@ -102,7 +107,7 @@ pub struct MetadataFetcher {
     /// The address is half the key so a pooled socket can never be handed
     /// out for a host it was not opened to, whatever renumbering happens
     /// on the network underneath.
-    connections: Mutex<HashMap<(u8, Ipv4Addr), Arc<AsyncMutex<Connection>>>>,
+    connections: Mutex<ConnectionPool>,
     /// Per-route failure records, keyed by the media's player for the same
     /// reason as [`Self::connections`]: a stick with no NFS export must not
     /// stop the deck reading its *next* track off a stick that has one,
@@ -148,7 +153,8 @@ impl MetadataFetcher {
     /// the pool is keyed by device *and* address: one device can hold more
     /// than one entry if it reappeared on a new address.
     pub fn forget_device(&self, device: u8) {
-        self.lock(&self.connections).retain(|(pooled_device, _), _| *pooled_device != device);
+        self.lock(&self.connections)
+            .retain(|(pooled_device, _), _| *pooled_device != device);
         self.lock(&self.nfs_failures).remove(&device);
         self.lock(&self.dbserver_failures).remove(&device);
         self.lock(&self.current_track).remove(&device);
@@ -200,15 +206,36 @@ impl MetadataFetcher {
     }
 
     async fn fetch_and_report(self: Arc<Self>, handle: Arc<EngineHandle>, request: FetchRequest) {
-        let FetchRequest { deck_id, source_device, player_ip, slot, track_type, track_id, status_bpm } = request;
+        let FetchRequest {
+            deck_id,
+            source_device,
+            player_ip,
+            slot,
+            track_type,
+            track_id,
+            status_bpm,
+        } = request;
 
         // Neither route takes `deck_id`: everything they key on — the
         // connection pool, both failure caches, every query field — belongs
         // to the player holding the media. Keeping the deck out of scope
         // there is what stops the two `u8`s being swapped again.
-        let track_info = match self.try_nfs(source_device, player_ip, slot, track_id, status_bpm).await {
+        let track_info = match self
+            .try_nfs(source_device, player_ip, slot, track_id, status_bpm)
+            .await
+        {
             Some(track_info) => Some(track_info),
-            None => self.try_dbserver(source_device, player_ip, slot, track_type, track_id, status_bpm).await,
+            None => {
+                self.try_dbserver(
+                    source_device,
+                    player_ip,
+                    slot,
+                    track_type,
+                    track_id,
+                    status_bpm,
+                )
+                .await
+            }
         };
 
         let Some(track_info) = track_info else {
@@ -225,7 +252,14 @@ impl MetadataFetcher {
     /// `export.pdb`, a known, accepted inefficiency for this pass rather
     /// than added caching complexity before the basic flow is even
     /// hardware-validated — see this module's doc comment.
-    async fn try_nfs(&self, source_device: u8, player_ip: Ipv4Addr, slot: MediaSlot, track_id: u32, status_bpm: Option<f64>) -> Option<TrackInfo> {
+    async fn try_nfs(
+        &self,
+        source_device: u8,
+        player_ip: Ipv4Addr,
+        slot: MediaSlot,
+        track_id: u32,
+        status_bpm: Option<f64>,
+    ) -> Option<TrackInfo> {
         if self.is_failing(&self.nfs_failures, source_device) {
             return None;
         }
@@ -269,21 +303,30 @@ impl MetadataFetcher {
         // there gets an empty menu back from real hardware.
         self.presence.device_number()?;
 
-        let items = match timeout(METADATA_TIMEOUT, connection.fetch_metadata(source_device, slot, track_type, track_id)).await {
+        let items = match timeout(
+            METADATA_TIMEOUT,
+            connection.fetch_metadata(source_device, slot, track_type, track_id),
+        )
+        .await
+        {
             Ok(Ok(items)) if !items.is_empty() => items,
             Ok(Ok(_)) => return None, // The player answered: this track has no metadata.
             _ => {
                 self.mark_failed(&self.dbserver_failures, source_device);
-                self.lock(&self.connections).remove(&(source_device, player_ip));
+                self.lock(&self.connections)
+                    .remove(&(source_device, player_ip));
                 return None;
             }
         };
 
-        let beat_grid_blob = timeout(ASSET_TIMEOUT, connection.fetch_beat_grid(source_device, slot, track_type, track_id))
-            .await
-            .ok()
-            .and_then(Result::ok)
-            .flatten();
+        let beat_grid_blob = timeout(
+            ASSET_TIMEOUT,
+            connection.fetch_beat_grid(source_device, slot, track_type, track_id),
+        )
+        .await
+        .ok()
+        .and_then(Result::ok)
+        .flatten();
         let waveform_blob = timeout(
             ASSET_TIMEOUT,
             connection.fetch_anlz_tag(
@@ -300,25 +343,40 @@ impl MetadataFetcher {
         .and_then(Result::ok)
         .flatten();
 
-        Some(assemble_dbserver_track_info(track_id, &items, status_bpm, beat_grid_blob.as_deref(), waveform_blob.as_deref()))
+        Some(assemble_dbserver_track_info(
+            track_id,
+            &items,
+            status_bpm,
+            beat_grid_blob.as_deref(),
+            waveform_blob.as_deref(),
+        ))
     }
 
     /// The pooled dbserver connection to the player holding the media,
     /// opening a fresh one (bounded by [`CONNECT_TIMEOUT`]) if there isn't
     /// one yet. Keyed by device *and* address — see [`Self::connections`]
     /// for why the deck is not part of this.
-    async fn connection_for(&self, source_device: u8, player_ip: Ipv4Addr) -> Option<Arc<AsyncMutex<Connection>>> {
+    async fn connection_for(
+        &self,
+        source_device: u8,
+        player_ip: Ipv4Addr,
+    ) -> Option<Arc<AsyncMutex<Connection>>> {
         let key = (source_device, player_ip);
         if let Some(existing) = self.lock(&self.connections).get(&key).cloned() {
             return Some(existing);
         }
 
         let our_number = self.presence.device_number()?;
-        let opened = timeout(CONNECT_TIMEOUT, Connection::open(player_ip, self.bind_ip, our_number)).await;
+        let opened = timeout(
+            CONNECT_TIMEOUT,
+            Connection::open(player_ip, self.bind_ip, our_number),
+        )
+        .await;
         match opened {
             Ok(Ok(connection)) => {
                 let wrapped = Arc::new(AsyncMutex::new(connection));
-                self.lock(&self.connections).insert(key, Arc::clone(&wrapped));
+                self.lock(&self.connections)
+                    .insert(key, Arc::clone(&wrapped));
                 Some(wrapped)
             }
             Ok(Err(error)) => {
@@ -340,8 +398,10 @@ fn assemble_dbserver_track_info(
     beat_grid_blob: Option<&[u8]>,
     waveform_blob: Option<&[u8]>,
 ) -> TrackInfo {
-    let beat_grid = beat_grid_blob.map(|blob| normalize::beat_grid(&beatgrid::parse_beat_grid(blob)));
-    let waveform = waveform_blob.and_then(|blob| normalize::waveform_data(&db_waveform::parse_color_waveform_detail(blob)));
+    let beat_grid =
+        beat_grid_blob.map(|blob| normalize::beat_grid(&beatgrid::parse_beat_grid(blob)));
+    let waveform = waveform_blob
+        .and_then(|blob| normalize::waveform_data(&db_waveform::parse_color_waveform_detail(blob)));
     let duration_ms = normalize::duration_ms(items);
     let cues = Vec::new(); // Cue-list wire format not yet confirmed — see prolink::dbserver::cues.
 
@@ -390,12 +450,19 @@ mod tests {
     use prolink::dbserver::queries::MenuItemType;
 
     fn menu_item(item_type: MenuItemType, text: &str) -> TrackMenuItem {
-        TrackMenuItem { item_type, text: Some(text.to_string()), number: None }
+        TrackMenuItem {
+            item_type,
+            text: Some(text.to_string()),
+            number: None,
+        }
     }
 
     #[test]
     fn assembles_a_track_info_from_menu_items_alone() {
-        let items = vec![menu_item(MenuItemType::TrackTitle, "Strobe"), menu_item(MenuItemType::Artist, "deadmau5")];
+        let items = vec![
+            menu_item(MenuItemType::TrackTitle, "Strobe"),
+            menu_item(MenuItemType::Artist, "deadmau5"),
+        ];
         let track = assemble_dbserver_track_info(4207, &items, Some(128.0), None, None);
 
         assert_eq!(track.track_id, 4207);
@@ -404,7 +471,10 @@ mod tests {
         assert_eq!(track.bpm, Some(128.0));
         assert!(track.beat_grid.is_none());
         assert!(track.waveform.is_none());
-        assert!(track.events.is_empty(), "no beat grid/waveform means nothing to analyse");
+        assert!(
+            track.events.is_empty(),
+            "no beat grid/waveform means nothing to analyse"
+        );
     }
 
     #[test]
@@ -431,7 +501,10 @@ mod tests {
     #[test]
     fn a_failure_older_than_the_retry_window_is_no_longer_skipped() {
         let fetcher = fetcher();
-        fetcher.lock(&fetcher.dbserver_failures).insert(2, Instant::now() - RETRY_FAILED_SOURCE_AFTER - Duration::from_secs(1));
+        fetcher.lock(&fetcher.dbserver_failures).insert(
+            2,
+            Instant::now() - RETRY_FAILED_SOURCE_AFTER - Duration::from_secs(1),
+        );
         assert!(!fetcher.is_failing(&fetcher.dbserver_failures, 2));
     }
 
