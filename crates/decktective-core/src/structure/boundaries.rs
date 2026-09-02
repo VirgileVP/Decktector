@@ -96,11 +96,7 @@ fn mean(vectors: &[FeatureVector]) -> FeatureVector {
 /// Euclidean distance scaled back into 0-1, so the threshold stays meaningful
 /// if a feature is ever added.
 fn distance(left: &FeatureVector, right: &FeatureVector) -> f32 {
-    let squares: f32 = left
-        .iter()
-        .zip(right)
-        .map(|(a, b)| (a - b) * (a - b))
-        .sum();
+    let squares: f32 = left.iter().zip(right).map(|(a, b)| (a - b) * (a - b)).sum();
     (squares / FEATURE_COUNT as f32).sqrt()
 }
 
@@ -141,7 +137,10 @@ mod tests {
 
     #[test]
     fn a_flat_track_is_one_section() {
-        assert_eq!(find_boundaries(&novelty_curve(&flat(64, 0.5)), &[]), vec![0]);
+        assert_eq!(
+            find_boundaries(&novelty_curve(&flat(64, 0.5)), &[]),
+            vec![0]
+        );
     }
 
     #[test]
@@ -176,8 +175,6 @@ mod tests {
     fn no_boundary_lands_within_a_section_of_the_track_end() {
         let boundaries = find_boundaries(&novelty_curve(&step(64, 60)), &[]);
 
-        assert!(boundaries
-            .iter()
-            .all(|&bar| 64 - bar >= MIN_SECTION_BARS));
+        assert!(boundaries.iter().all(|&bar| 64 - bar >= MIN_SECTION_BARS));
     }
 }

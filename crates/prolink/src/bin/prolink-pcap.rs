@@ -187,7 +187,10 @@ fn import(config: Config, file: File) -> anyhow::Result<()> {
     if let Some(writer) = &writer {
         println!("Importing into {}", writer.session_dir().display());
     } else {
-        println!("Dry run: walking {} without writing a session", config.input.display());
+        println!(
+            "Dry run: walking {} without writing a session",
+            config.input.display()
+        );
     }
 
     let mut reader = PcapngReader::new(BufReader::new(file));
@@ -214,7 +217,12 @@ fn import(config: Config, file: File) -> anyhow::Result<()> {
             feed_nfs(nfs, &datagram);
         }
         if let Some(writer) = &writer {
-            let record = UdpRecord::at(datagram.time_micros, datagram.dst_port, IpAddr::V4(datagram.src), &datagram.payload);
+            let record = UdpRecord::at(
+                datagram.time_micros,
+                datagram.dst_port,
+                IpAddr::V4(datagram.src),
+                &datagram.payload,
+            );
             // One unwritable record must not end an import that may have
             // hours of traffic left; the count in the summary is what tells
             // the operator something went wrong.
@@ -223,7 +231,10 @@ fn import(config: Config, file: File) -> anyhow::Result<()> {
             }
         }
         if summary.kept % PROGRESS_EVERY == 0 {
-            eprintln!("  {} datagrams imported ({:.0}s of capture)", summary.kept, offset_sec);
+            eprintln!(
+                "  {} datagrams imported ({:.0}s of capture)",
+                summary.kept, offset_sec
+            );
         }
         if config.max_packets.is_some_and(|max| summary.kept >= max) {
             break;
@@ -246,7 +257,9 @@ fn import(config: Config, file: File) -> anyhow::Result<()> {
 /// alone would keep every NFS call and drop every reply — the half that
 /// carries the bytes.
 fn keeps(config: &Config, datagram: &Datagram) -> bool {
-    config.ports.is_empty() || config.ports.contains(&datagram.dst_port) || config.ports.contains(&datagram.src_port)
+    config.ports.is_empty()
+        || config.ports.contains(&datagram.dst_port)
+        || config.ports.contains(&datagram.src_port)
 }
 
 /// Routes one datagram to the extractor by direction: anything addressed to
@@ -271,17 +284,33 @@ fn write_recovered_files(extractor: NfsExtractor, writer: Option<&CaptureWriter>
     print_nfs_summary(stats, files.len());
     let Some(writer) = writer else {
         for file in &files {
-            println!("  {} {} ({} bytes{})", file.server, file.path, file.bytes.len(), completeness(file.is_complete()));
+            println!(
+                "  {} {} ({} bytes{})",
+                file.server,
+                file.path,
+                file.bytes.len(),
+                completeness(file.is_complete())
+            );
         }
         return;
     };
     for file in &files {
-        match writer.nfs_recovered_path(file.server, &file.path).and_then(|path| {
-            write_raw_file(&path, &file.bytes)?;
-            Ok(path)
-        }) {
-            Ok(path) => println!("  {} ({} bytes{})", path.display(), file.bytes.len(), completeness(file.is_complete())),
-            Err(error) => eprintln!("  failed to write {} from {}: {error}", file.path, file.server),
+        match writer
+            .nfs_recovered_path(file.server, &file.path)
+            .and_then(|path| {
+                write_raw_file(&path, &file.bytes)?;
+                Ok(path)
+            }) {
+            Ok(path) => println!(
+                "  {} ({} bytes{})",
+                path.display(),
+                file.bytes.len(),
+                completeness(file.is_complete())
+            ),
+            Err(error) => eprintln!(
+                "  failed to write {} from {}: {error}",
+                file.path, file.server
+            ),
         }
     }
 }
@@ -296,9 +325,15 @@ fn completeness(complete: bool) -> &'static str {
 
 fn print_nfs_summary(stats: ExtractStats, file_count: usize) {
     println!();
-    println!("NFS traffic: {} lookups, {} reads, {} read replies", stats.lookup_calls, stats.read_calls, stats.read_replies);
+    println!(
+        "NFS traffic: {} lookups, {} reads, {} read replies",
+        stats.lookup_calls, stats.read_calls, stats.read_replies
+    );
     if stats.replies_without_a_call > 0 {
-        println!("  replies with no matching call in the capture: {}", stats.replies_without_a_call);
+        println!(
+            "  replies with no matching call in the capture: {}",
+            stats.replies_without_a_call
+        );
     }
     if stats.undecodable > 0 {
         println!("  undecodable RPC datagrams: {}", stats.undecodable);
@@ -322,21 +357,40 @@ fn session_info(config: &Config, summary: &ImportSummary) -> SessionInfo {
 
 fn print_summary(summary: &ImportSummary, stats: PcapngStats) {
     println!();
-    println!("Imported {} datagrams over {:.1}s of capture", summary.kept, summary.duration_sec());
+    println!(
+        "Imported {} datagrams over {:.1}s of capture",
+        summary.kept,
+        summary.duration_sec()
+    );
     println!("  packets in file:      {}", stats.packets_seen);
     println!("  not UDP/IPv4:         {}", stats.packets_skipped);
     if stats.packets_unsupported_link > 0 {
-        println!("  unsupported link type: {} — this file is not an Ethernet capture", stats.packets_unsupported_link);
+        println!(
+            "  unsupported link type: {} — this file is not an Ethernet capture",
+            stats.packets_unsupported_link
+        );
     }
     println!("  filtered out by port/time: {}", summary.filtered_out);
     if stats.incomplete_datagrams > 0 {
-        println!("  fragmented datagrams never completed: {}", stats.incomplete_datagrams);
+        println!(
+            "  fragmented datagrams never completed: {}",
+            stats.incomplete_datagrams
+        );
     }
     println!();
     println!("Endpoints:");
     for endpoint in summary.endpoints() {
-        let ports: Vec<String> = endpoint.by_port.iter().map(|(port, count)| format!("{port}:{count}")).collect();
-        println!("  {:<16} {:>9} datagrams  [{}]", endpoint.src, endpoint.datagrams, ports.join(" "));
+        let ports: Vec<String> = endpoint
+            .by_port
+            .iter()
+            .map(|(port, count)| format!("{port}:{count}"))
+            .collect();
+        println!(
+            "  {:<16} {:>9} datagrams  [{}]",
+            endpoint.src,
+            endpoint.datagrams,
+            ports.join(" ")
+        );
     }
 }
 
@@ -377,14 +431,23 @@ fn next_value(args: &mut impl Iterator<Item = String>, flag: &str) -> Result<Str
     args.next().ok_or_else(|| format!("{flag} needs a value"))
 }
 
-fn parse_number<T: std::str::FromStr>(args: &mut impl Iterator<Item = String>, flag: &str) -> Result<T, String> {
-    next_value(args, flag)?.parse().map_err(|_| format!("{flag} needs a number"))
+fn parse_number<T: std::str::FromStr>(
+    args: &mut impl Iterator<Item = String>,
+    flag: &str,
+) -> Result<T, String> {
+    next_value(args, flag)?
+        .parse()
+        .map_err(|_| format!("{flag} needs a number"))
 }
 
 fn parse_ports(value: &str) -> Result<Vec<u16>, String> {
     value
         .split(',')
-        .map(|port| port.trim().parse().map_err(|_| format!("not a port number: {port}")))
+        .map(|port| {
+            port.trim()
+                .parse()
+                .map_err(|_| format!("not a port number: {port}"))
+        })
         .collect()
 }
 

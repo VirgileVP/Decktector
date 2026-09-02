@@ -124,9 +124,15 @@ impl Field {
     fn decode_value(tag: u8, data: &[u8]) -> Option<(Self, usize)> {
         match tag {
             0x0f => data.first().map(|&byte| (Self::U8(byte), 1)),
-            0x10 => (data.len() >= 2).then(|| (Self::U16(u16::from_be_bytes([data[0], data[1]])), 2)),
-            0x11 => (data.len() >= 4)
-                .then(|| (Self::U32(u32::from_be_bytes([data[0], data[1], data[2], data[3]])), 4)),
+            0x10 => {
+                (data.len() >= 2).then(|| (Self::U16(u16::from_be_bytes([data[0], data[1]])), 2))
+            }
+            0x11 => (data.len() >= 4).then(|| {
+                (
+                    Self::U32(u32::from_be_bytes([data[0], data[1], data[2], data[3]])),
+                    4,
+                )
+            }),
             0x14 => {
                 if data.len() < 4 {
                     return None;
@@ -193,7 +199,11 @@ pub struct Message {
 
 impl Message {
     pub fn new(transaction_id: u32, message_type: u16, arguments: Vec<Field>) -> Self {
-        Self { transaction_id, message_type, arguments }
+        Self {
+            transaction_id,
+            message_type,
+            arguments,
+        }
     }
 
     pub fn encode(&self) -> Vec<u8> {
@@ -280,7 +290,14 @@ impl Message {
             }
         }
 
-        Some((Self { transaction_id, message_type, arguments }, offset))
+        Some((
+            Self {
+                transaction_id,
+                message_type,
+                arguments,
+            },
+            offset,
+        ))
     }
 }
 
@@ -369,17 +386,37 @@ mod tests {
     #[test]
     fn a_players_short_no_data_response_decodes_only_leniently() {
         let reply = "11872349ae11000000031046020f05140000000506060603061100002204110000003211000000001100000000";
-        let bytes: Vec<u8> = (0..reply.len()).step_by(2).map(|i| u8::from_str_radix(&reply[i..i + 2], 16).expect("valid hex")).collect();
+        let bytes: Vec<u8> = (0..reply.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&reply[i..i + 2], 16).expect("valid hex"))
+            .collect();
 
         assert!(Message::decode(&bytes).is_none());
 
         let (message, consumed) = Message::decode_lenient(&bytes).expect("should decode leniently");
         assert_eq!(consumed, bytes.len());
-        assert_eq!(message.message_type, super::super::queries::BEAT_GRID_RESPONSE);
+        assert_eq!(
+            message.message_type,
+            super::super::queries::BEAT_GRID_RESPONSE
+        );
         // Four of the five: the request echo, a non-zero status code, and
         // two zeros where a real answer carries a length and its blob.
-        assert_eq!(message.arguments, vec![Field::U32(0x2204), Field::U32(50), Field::U32(0), Field::U32(0)]);
-        assert!(message.arguments.iter().all(|argument| argument.as_blob().is_none()), "no blob means no data, which is what the caller reports");
+        assert_eq!(
+            message.arguments,
+            vec![
+                Field::U32(0x2204),
+                Field::U32(50),
+                Field::U32(0),
+                Field::U32(0)
+            ]
+        );
+        assert!(
+            message
+                .arguments
+                .iter()
+                .all(|argument| argument.as_blob().is_none()),
+            "no blob means no data, which is what the caller reports"
+        );
     }
 
     /// The exact bytes a CDJ-3000 accepted as a connection's setup message
@@ -389,13 +426,28 @@ mod tests {
     /// happily and was rejected by the hardware without a reply.
     #[test]
     fn the_setup_exchange_matches_the_bytes_a_cdj_3000_accepted() {
-        let sent = Message::new(0xffff_fffe, super::super::queries::SETUP_REQ, vec![Field::U32(5)]);
-        let hex: String = sent.encode().iter().map(|byte| format!("{byte:02x}")).collect();
-        assert_eq!(hex, "11872349ae11fffffffe1000000f01140000000c0600000000000000000000001100000005");
+        let sent = Message::new(
+            0xffff_fffe,
+            super::super::queries::SETUP_REQ,
+            vec![Field::U32(5)],
+        );
+        let hex: String = sent
+            .encode()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        assert_eq!(
+            hex,
+            "11872349ae11fffffffe1000000f01140000000c0600000000000000000000001100000005"
+        );
 
         let reply = "11872349ae11fffffffe1040000f021400000002060611000000001100000003";
-        let bytes: Vec<u8> = (0..reply.len()).step_by(2).map(|i| u8::from_str_radix(&reply[i..i + 2], 16).expect("valid hex")).collect();
-        let (message, consumed) = Message::decode(&bytes).expect("the player's reply should decode");
+        let bytes: Vec<u8> = (0..reply.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&reply[i..i + 2], 16).expect("valid hex"))
+            .collect();
+        let (message, consumed) =
+            Message::decode(&bytes).expect("the player's reply should decode");
         assert_eq!(consumed, bytes.len());
         assert_eq!(message.transaction_id, 0xffff_fffe);
         assert_eq!(message.message_type, 0x4000);
@@ -412,7 +464,8 @@ mod tests {
 
         let (decoded_first, consumed) = Message::decode(&bytes).expect("first should decode");
         assert_eq!(decoded_first, first);
-        let (decoded_second, _) = Message::decode(&bytes[consumed..]).expect("second should decode");
+        let (decoded_second, _) =
+            Message::decode(&bytes[consumed..]).expect("second should decode");
         assert_eq!(decoded_second, second);
     }
 }

@@ -110,7 +110,9 @@ mod tests {
     fn approximates_from_beat_count_and_bpm_at_constant_tempo() {
         let tracker = PositionTracker::new();
         // 64 beats at 120 BPM (2 beats/sec) = 32 seconds in.
-        let estimate = tracker.estimate(1, &status(Some(64), Some(120.0)), 0.0).expect("should estimate");
+        let estimate = tracker
+            .estimate(1, &status(Some(64), Some(120.0)), 0.0)
+            .expect("should estimate");
         assert!((estimate - 32_000.0).abs() < 0.01);
     }
 
@@ -127,7 +129,11 @@ mod tests {
         let mut tracker = PositionTracker::new();
         tracker.record_precise_position(1, 50_000, 1_000.0);
         let estimate = tracker
-            .estimate(1, &status(Some(64), Some(120.0)), 1_000.0 + PRECISE_POSITION_FRESHNESS_MS + 1.0)
+            .estimate(
+                1,
+                &status(Some(64), Some(120.0)),
+                1_000.0 + PRECISE_POSITION_FRESHNESS_MS + 1.0,
+            )
             .expect("should fall back");
         assert!((estimate - 32_000.0).abs() < 0.01);
     }

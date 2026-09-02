@@ -21,7 +21,13 @@ pub fn build_getport_call(xid: u32, program: u32, version: u32) -> Vec<u8> {
     args.write_u32(version);
     args.write_u32(PROTOCOL_UDP);
     args.write_u32(0); // The `port` field is only meaningful when *registering*; 0 when asking.
-    rpc::build_call(xid, PMAP_PROGRAM, PMAP_VERSION, PMAP_PROC_GETPORT, &args.into_bytes())
+    rpc::build_call(
+        xid,
+        PMAP_PROGRAM,
+        PMAP_VERSION,
+        PMAP_PROC_GETPORT,
+        &args.into_bytes(),
+    )
 }
 
 /// The resolved port, or `None` if the reply doesn't match `expected_xid`,

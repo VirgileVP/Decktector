@@ -67,7 +67,14 @@ mod tests {
 
         let entries = parse_beat_grid(&blob);
         assert_eq!(entries.len(), 2);
-        assert_eq!(entries[0], DbBeatGridEntry { beat_in_bar: 1, tempo_centibpm: 12_800, time_ms: 0 });
+        assert_eq!(
+            entries[0],
+            DbBeatGridEntry {
+                beat_in_bar: 1,
+                tempo_centibpm: 12_800,
+                time_ms: 0
+            }
+        );
         assert_eq!(entries[1].time_ms, 469);
     }
 

@@ -78,7 +78,10 @@ async fn proxy_to_dev_server(client: DevServerClient, port: u16, mut request: Re
         Ok(uri) => uri,
         Err(error) => {
             tracing::error!(%error, port, "failed to build the Vite dev server URL");
-            return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "bad dev server URL")
+            return (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "bad dev server URL",
+            )
                 .into_response();
         }
     };
@@ -140,8 +143,11 @@ mod tests {
     #[tokio::test]
     async fn an_unknown_path_falls_back_to_index_html() {
         let directory = tempfile::tempdir().expect("temp dir creates");
-        std::fs::write(directory.path().join("index.html"), "<html>decktective</html>")
-            .expect("index.html writes");
+        std::fs::write(
+            directory.path().join("index.html"),
+            "<html>decktective</html>",
+        )
+        .expect("index.html writes");
 
         let router = asset_router(AssetSource::Directory(directory.path().to_path_buf()));
 

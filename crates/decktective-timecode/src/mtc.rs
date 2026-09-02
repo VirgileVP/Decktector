@@ -52,9 +52,9 @@ pub(crate) fn connect(port_name: &str) -> anyhow::Result<MidiOutputConnection> {
                 .unwrap_or(false)
         })
         .ok_or_else(|| anyhow::anyhow!("MIDI output port '{port_name}' not found"))?;
-    output
-        .connect(&port, CONNECTION_NAME)
-        .map_err(|error| anyhow::anyhow!("failed to connect to MIDI output port '{port_name}': {error}"))
+    output.connect(&port, CONNECTION_NAME).map_err(|error| {
+        anyhow::anyhow!("failed to connect to MIDI output port '{port_name}': {error}")
+    })
 }
 
 /// Sends raw MIDI bytes (a quarter-frame message or the Full Timecode SysEx)

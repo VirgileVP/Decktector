@@ -66,7 +66,13 @@ pub fn parse_call(data: &[u8]) -> Option<RpcCall<'_>> {
     let proc = decoder.read_u32()?;
     read_auth_none_ish(&mut decoder)?; // cred
     read_auth_none_ish(&mut decoder)?; // verf
-    Some(RpcCall { xid, prog, vers, proc, args: decoder.remaining() })
+    Some(RpcCall {
+        xid,
+        prog,
+        vers,
+        proc,
+        args: decoder.remaining(),
+    })
 }
 
 /// A parsed reply envelope. `results` is whatever bytes followed the
@@ -98,7 +104,11 @@ pub fn parse_reply(data: &[u8]) -> Option<RpcReply<'_>> {
     }
     read_auth_none_ish(&mut decoder)?; // verf — flavor/body not inspected, AUTH_NONE expected back.
     let accept_stat = decoder.read_u32()?;
-    Some(RpcReply { xid, accept_stat, results: decoder.remaining() })
+    Some(RpcReply {
+        xid,
+        accept_stat,
+        results: decoder.remaining(),
+    })
 }
 
 /// Builds a complete accepted-reply envelope followed by `results` —
@@ -147,7 +157,10 @@ mod tests {
         assert_eq!(reply.xid, 42);
         assert_eq!(reply.accept_stat, ACCEPT_STAT_SUCCESS);
         assert_eq!(reply.results, &[1, 2, 3, 4]);
-        assert!(call.len() > 24, "the call envelope plus args should be well past the bare header size");
+        assert!(
+            call.len() > 24,
+            "the call envelope plus args should be well past the bare header size"
+        );
     }
 
     #[test]

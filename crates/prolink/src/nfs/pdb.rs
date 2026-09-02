@@ -140,7 +140,13 @@ pub fn parse(bytes: &[u8]) -> Option<Pdb> {
         let last_page = read_u32_le(bytes, table_offset + 12)?;
         if !matches!(
             page_type,
-            page_type::TRACKS | page_type::GENRES | page_type::ARTISTS | page_type::ALBUMS | page_type::LABELS | page_type::KEYS | page_type::ARTWORK
+            page_type::TRACKS
+                | page_type::GENRES
+                | page_type::ARTISTS
+                | page_type::ALBUMS
+                | page_type::LABELS
+                | page_type::KEYS
+                | page_type::ARTWORK
         ) {
             continue; // Playlists, history, columns, ... — outside this parser's scope.
         }
@@ -158,7 +164,8 @@ pub fn parse(bytes: &[u8]) -> Option<Pdb> {
             // hard cap, since a corrupt file whose chain loops back on
             // itself would otherwise spin here forever.
             pages_visited += 1;
-            if page_index == last_page || page.next_page == page_index || pages_visited > max_pages {
+            if page_index == last_page || page.next_page == page_index || pages_visited > max_pages
+            {
                 break;
             }
             page_index = page.next_page;
@@ -215,22 +222,41 @@ fn read_page(bytes: &[u8], page_size: usize, page_index: u32) -> Option<Page> {
     // to the rest of the table — it just has no rows to read out of it.
     let page_type = read_u32_le(bytes, base + PAGE_TYPE_OFFSET)?;
     if bytes.get(base + PAGE_FLAGS_OFFSET)? & PAGE_FLAG_NOT_DATA != 0 {
-        return Some(Page { base, page_size, page_type, next_page, row_offsets: Vec::new() });
+        return Some(Page {
+            base,
+            page_size,
+            page_type,
+            next_page,
+            row_offsets: Vec::new(),
+        });
     }
 
     let num_rows_small = *bytes.get(base + NUM_ROWS_SMALL_OFFSET)?;
     let num_rows_large = read_u16_le(bytes, base + NUM_ROWS_LARGE_OFFSET)?;
-    let num_rows = if num_rows_large > u16::from(num_rows_small) && num_rows_large != NUM_ROWS_LARGE_SENTINEL {
+    let num_rows = if num_rows_large > u16::from(num_rows_small)
+        && num_rows_large != NUM_ROWS_LARGE_SENTINEL
+    {
         num_rows_large
     } else {
         u16::from(num_rows_small)
     };
 
     let row_offsets = read_row_group_offsets(bytes, base, page_size, num_rows)?;
-    Some(Page { base, page_size, page_type, next_page, row_offsets })
+    Some(Page {
+        base,
+        page_size,
+        page_type,
+        next_page,
+        row_offsets,
+    })
 }
 
-fn read_row_group_offsets(bytes: &[u8], page_base: usize, page_size: usize, num_rows: u16) -> Option<Vec<u16>> {
+fn read_row_group_offsets(
+    bytes: &[u8],
+    page_base: usize,
+    page_size: usize,
+    num_rows: u16,
+) -> Option<Vec<u16>> {
     let mut offsets = Vec::with_capacity(num_rows as usize);
     let mut remaining = num_rows as usize;
     let mut group_end = page_base + page_size;
@@ -281,8 +307,12 @@ fn apply_row(pdb: &mut Pdb, page_type: u32, row: &[u8]) {
 /// row's single [`DeviceSQLString`](mod@device_sql_string) — its name, or
 /// for artwork its file path — inline at a fixed offset.
 fn insert_inline_row(table: &mut HashMap<u32, String>, row: &[u8], name_offset: usize) {
-    let Some(id) = read_u32_le(row, 0) else { return };
-    let Some((name, _)) = device_sql_string::read(row, name_offset) else { return };
+    let Some(id) = read_u32_le(row, 0) else {
+        return;
+    };
+    let Some((name, _)) = device_sql_string::read(row, name_offset) else {
+        return;
+    };
     table.insert(id, name);
 }
 
@@ -296,10 +326,21 @@ fn insert_inline_row(table: &mut HashMap<u32, String>, row: &[u8], name_offset: 
 /// and a two-byte pointer would read as a plausible-but-wrong offset
 /// rather than as garbage, so the string parse below is what catches it:
 /// no valid string there, no row.)
-fn insert_indirect_row(table: &mut HashMap<u32, String>, row: &[u8], id_offset: usize, name_pointer_offset: usize) {
-    let Some(id) = read_u32_le(row, id_offset) else { return };
-    let Some(&name_offset) = row.get(name_pointer_offset) else { return };
-    let Some((name, _)) = device_sql_string::read(row, usize::from(name_offset)) else { return };
+fn insert_indirect_row(
+    table: &mut HashMap<u32, String>,
+    row: &[u8],
+    id_offset: usize,
+    name_pointer_offset: usize,
+) {
+    let Some(id) = read_u32_le(row, id_offset) else {
+        return;
+    };
+    let Some(&name_offset) = row.get(name_pointer_offset) else {
+        return;
+    };
+    let Some((name, _)) = device_sql_string::read(row, usize::from(name_offset)) else {
+        return;
+    };
     table.insert(id, name);
 }
 
@@ -337,18 +378,36 @@ fn parse_track_row(row: &[u8]) -> Option<Track> {
     // `device_sql_string`) costs that one field, not the whole row: a track
     // with an unreadable title still has an id, a tempo and a duration
     // worth having, and the dbserver route can fill the rest in.
-    let title = device_sql_string::read(row, string_offset(TITLE_INDEX)?).map(|(text, _)| text).unwrap_or_default();
-    let analyze_path = device_sql_string::read(row, string_offset(ANALYZE_PATH_INDEX)?).map(|(text, _)| text).unwrap_or_default();
+    let title = device_sql_string::read(row, string_offset(TITLE_INDEX)?)
+        .map(|(text, _)| text)
+        .unwrap_or_default();
+    let analyze_path = device_sql_string::read(row, string_offset(ANALYZE_PATH_INDEX)?)
+        .map(|(text, _)| text)
+        .unwrap_or_default();
 
-    Some(Track { id, title, artist_id, album_id, genre_id, key_id, label_id, artwork_id, duration_sec, tempo_centibpm, analyze_path })
+    Some(Track {
+        id,
+        title,
+        artist_id,
+        album_id,
+        genre_id,
+        key_id,
+        label_id,
+        artwork_id,
+        duration_sec,
+        tempo_centibpm,
+        analyze_path,
+    })
 }
 
 fn read_u16_le(data: &[u8], offset: usize) -> Option<u16> {
-    data.get(offset..offset + 2).map(|bytes| u16::from_le_bytes([bytes[0], bytes[1]]))
+    data.get(offset..offset + 2)
+        .map(|bytes| u16::from_le_bytes([bytes[0], bytes[1]]))
 }
 
 fn read_u32_le(data: &[u8], offset: usize) -> Option<u32> {
-    data.get(offset..offset + 4).map(|bytes| u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+    data.get(offset..offset + 4)
+        .map(|bytes| u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
 }
 
 /// `DeviceSQLString` — the string encoding this database uses throughout,
@@ -402,7 +461,10 @@ mod device_sql_string {
     }
 
     fn read_long(data: &[u8], offset: usize, marker: u8) -> Option<(String, usize)> {
-        let length = usize::from(u16::from_le_bytes([*data.get(offset + 1)?, *data.get(offset + 2)?]));
+        let length = usize::from(u16::from_le_bytes([
+            *data.get(offset + 1)?,
+            *data.get(offset + 2)?,
+        ]));
         let text_len = length.checked_sub(LONG_HEADER_LEN)?;
         let bytes = data.get(offset + LONG_HEADER_LEN..offset + LONG_HEADER_LEN + text_len)?;
         let text = match marker {
@@ -422,7 +484,10 @@ mod device_sql_string {
         if !bytes.len().is_multiple_of(2) {
             return None;
         }
-        let units: Vec<u16> = bytes.chunks_exact(2).map(|pair| u16::from_le_bytes([pair[0], pair[1]])).collect();
+        let units: Vec<u16> = bytes
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect();
         Some(String::from_utf16_lossy(&units))
     }
 }
@@ -458,7 +523,11 @@ mod tests {
 
         let (parsed, consumed) = device_sql_string::read(&bytes, 0).expect("should parse");
         assert_eq!(parsed, text);
-        assert_eq!(consumed, bytes.len(), "a long string consumes its whole declared length");
+        assert_eq!(
+            consumed,
+            bytes.len(),
+            "a long string consumes its whole declared length"
+        );
     }
 
     /// A title carrying anything outside Latin-1 switches to UTF-16, which

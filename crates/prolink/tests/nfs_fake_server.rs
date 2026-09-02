@@ -32,14 +32,20 @@ const PDB_HANDLE: FileHandle = [0xdd; 32];
 /// Starts the fake server on an ephemeral port and returns it. `payload` is
 /// what `"PIONEER/rekordbox/export.pdb"` resolves to.
 async fn start_fake_server(payload: Vec<u8>) -> u16 {
-    let socket = UdpSocket::bind((LOOPBACK, 0)).await.expect("bind an ephemeral port");
+    let socket = UdpSocket::bind((LOOPBACK, 0))
+        .await
+        .expect("bind an ephemeral port");
     let port = socket.local_addr().expect("local addr").port();
 
     tokio::spawn(async move {
         let mut buf = [0u8; 4096];
         loop {
-            let Ok((len, from)) = socket.recv_from(&mut buf).await else { break };
-            let Some(call) = rpc::parse_call(&buf[..len]) else { continue };
+            let Ok((len, from)) = socket.recv_from(&mut buf).await else {
+                break;
+            };
+            let Some(call) = rpc::parse_call(&buf[..len]) else {
+                continue;
+            };
             if let Some(reply) = handle_call(&call, port, &payload) {
                 let _ = socket.send_to(&reply, from).await;
             }
@@ -77,7 +83,10 @@ fn handle_lookup(call: &RpcCall<'_>, pdb_size: u32) -> Option<Vec<u8>> {
         (h, "export.pdb") if h == REKORDBOX_HANDLE => (PDB_HANDLE, pdb_size),
         _ => return None,
     };
-    let attributes = FileAttributes { file_type: procedures::FTYPE_REGULAR_FILE, size };
+    let attributes = FileAttributes {
+        file_type: procedures::FTYPE_REGULAR_FILE,
+        size,
+    };
     Some(procedures::build_lookup_reply(call.xid, handle, attributes))
 }
 
@@ -91,7 +100,10 @@ fn handle_read(call: &RpcCall<'_>, payload: &[u8]) -> Option<Vec<u8>> {
     let count = decoder.read_u32()? as usize;
     let end = (offset + count).min(payload.len());
     let chunk = payload.get(offset..end)?;
-    let attributes = FileAttributes { file_type: procedures::FTYPE_REGULAR_FILE, size: payload.len() as u32 };
+    let attributes = FileAttributes {
+        file_type: procedures::FTYPE_REGULAR_FILE,
+        size: payload.len() as u32,
+    };
     Some(procedures::build_read_reply(call.xid, attributes, chunk))
 }
 
@@ -105,7 +117,10 @@ async fn fetches_a_multi_chunk_file_via_lookup_chain_and_read_loop() {
     let mut client = NfsClient::open_with_portmap_port(LOOPBACK, LOOPBACK, MediaSlot::Usb, port)
         .await
         .expect("should open");
-    let bytes = client.read_file("PIONEER/rekordbox/export.pdb").await.expect("should fetch");
+    let bytes = client
+        .read_file("PIONEER/rekordbox/export.pdb")
+        .await
+        .expect("should fetch");
 
     assert_eq!(bytes, payload);
 }
@@ -117,13 +132,20 @@ async fn a_lookup_for_a_path_the_server_does_not_recognize_fails_cleanly() {
         .await
         .expect("should open");
 
-    let result = client.read_file("PIONEER/rekordbox/some-other-file.pdb").await;
-    assert!(result.is_err(), "a LOOKUP the server can't resolve should surface as an error, not a hang or a panic");
+    let result = client
+        .read_file("PIONEER/rekordbox/some-other-file.pdb")
+        .await;
+    assert!(
+        result.is_err(),
+        "a LOOKUP the server can't resolve should surface as an error, not a hang or a panic"
+    );
 }
 
 #[tokio::test]
 async fn a_server_that_never_answers_is_interrupted_by_a_timeout_rather_than_hanging_forever() {
-    let socket = UdpSocket::bind((LOOPBACK, 0)).await.expect("bind an ephemeral port");
+    let socket = UdpSocket::bind((LOOPBACK, 0))
+        .await
+        .expect("bind an ephemeral port");
     let port = socket.local_addr().expect("local addr").port();
     // Leaked deliberately: keeps the port bound (so the client's sends
     // don't immediately bounce as ICMP port-unreachable, which would give
@@ -134,11 +156,17 @@ async fn a_server_that_never_answers_is_interrupted_by_a_timeout_rather_than_han
     // The client's own retransmit-then-give-up loop (worst case ~3.75s per
     // RPC call, several calls in `open`) should finish well inside this —
     // this outer timeout is a test safety net, not the thing being tested.
-    let result = timeout(Duration::from_secs(20), NfsClient::open_with_portmap_port(LOOPBACK, LOOPBACK, MediaSlot::Usb, port)).await;
+    let result = timeout(
+        Duration::from_secs(20),
+        NfsClient::open_with_portmap_port(LOOPBACK, LOOPBACK, MediaSlot::Usb, port),
+    )
+    .await;
 
     match result {
         Ok(Err(_)) => {} // The client's own retry loop gave up — the expected, well-behaved outcome.
         Ok(Ok(_)) => panic!("open() should not succeed against a server that never answers"),
-        Err(_) => panic!("open() should give up on its own well within 20s, not need this test's outer timeout"),
+        Err(_) => panic!(
+            "open() should give up on its own well within 20s, not need this test's outer timeout"
+        ),
     }
 }

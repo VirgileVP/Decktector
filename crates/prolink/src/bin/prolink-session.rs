@@ -148,7 +148,12 @@ struct Config {
 
 impl Default for Config {
     fn default() -> Self {
-        Self { out_dir: PathBuf::from(DEFAULT_OUT_DIR), bind_ip: None, player_overrides: Vec::new(), slot_overrides: Vec::new() }
+        Self {
+            out_dir: PathBuf::from(DEFAULT_OUT_DIR),
+            bind_ip: None,
+            player_overrides: Vec::new(),
+            slot_overrides: Vec::new(),
+        }
     }
 }
 
@@ -157,10 +162,22 @@ fn parse_args() -> Config {
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
-            "--out" => config.out_dir = PathBuf::from(args.next().expect("--out needs a directory")),
-            "--bind" => config.bind_ip = Some(args.next().and_then(|value| value.parse().ok()).expect("--bind needs an IPv4 address")),
-            "--player" => config.player_overrides.push(args.next().expect("--player needs an IPv4 address")),
-            "--slot" => config.slot_overrides.push(args.next().expect("--slot needs usb, sd or cd")),
+            "--out" => {
+                config.out_dir = PathBuf::from(args.next().expect("--out needs a directory"))
+            }
+            "--bind" => {
+                config.bind_ip = Some(
+                    args.next()
+                        .and_then(|value| value.parse().ok())
+                        .expect("--bind needs an IPv4 address"),
+                )
+            }
+            "--player" => config
+                .player_overrides
+                .push(args.next().expect("--player needs an IPv4 address")),
+            "--slot" => config
+                .slot_overrides
+                .push(args.next().expect("--slot needs usb, sd or cd")),
             "--help" | "-h" => {
                 print_usage();
                 std::process::exit(0);
@@ -181,7 +198,9 @@ fn print_usage() {
     eprintln!("Options:");
     eprintln!("  --out DIR     session output directory (default {DEFAULT_OUT_DIR})");
     eprintln!("  --bind IP     local adapter IP (default: auto-detected, shown in preflight)");
-    eprintln!("  --player IP   explicit player for the metadata pull, pairs with --slot by position");
+    eprintln!(
+        "  --player IP   explicit player for the metadata pull, pairs with --slot by position"
+    );
     eprintln!("  --slot SLOT   usb, sd or cd — use when a player isn't being discovered");
     eprintln!();
     eprintln!("Everything else is prompted for. See RUNBOOK-HARDWARE-SESSION.md.");
@@ -198,7 +217,11 @@ async fn main() {
     let mut prompts = BufReader::new(tokio::io::stdin()).lines();
 
     println!();
-    prompt(&mut prompts, "Wireshark running on that interface as a backstop? ENTER when it is (or to skip)").await;
+    prompt(
+        &mut prompts,
+        "Wireshark running on that interface as a backstop? ENTER when it is (or to skip)",
+    )
+    .await;
 
     banner("RECORDING");
     let mut capture = match start_capture(&config, bind_ip) {
@@ -217,7 +240,10 @@ async fn main() {
         }
         None => {
             eprintln!("prolink-capture never printed a session directory.");
-            eprintln!("It may still be recording — leave it be and check {} by hand.", config.out_dir.display());
+            eprintln!(
+                "It may still be recording — leave it be and check {} by hand.",
+                config.out_dir.display()
+            );
             std::process::exit(1);
         }
     };
@@ -263,20 +289,48 @@ fn banner(title: &str) {
 /// Advisory checks only — each prints a line and never blocks the session.
 /// A booth is the wrong place to be argued with by a tool.
 fn run_preflight(config: &Config, bind_ip: Ipv4Addr) {
-    check("bind interface", true, &format!("{bind_ip} — must be the booth adapter, not Wi-Fi"));
+    check(
+        "bind interface",
+        true,
+        &format!("{bind_ip} — must be the booth adapter, not Wi-Fi"),
+    );
 
     let capture_binary = capture_binary_path();
-    check("prolink-capture", capture_binary.exists(), &capture_binary.display().to_string());
+    check(
+        "prolink-capture",
+        capture_binary.exists(),
+        &capture_binary.display().to_string(),
+    );
 
     match std::fs::create_dir_all(&config.out_dir) {
-        Ok(()) => check("output directory", true, &config.out_dir.display().to_string()),
-        Err(error) => check("output directory", false, &format!("{}: {error}", config.out_dir.display())),
+        Ok(()) => check(
+            "output directory",
+            true,
+            &config.out_dir.display().to_string(),
+        ),
+        Err(error) => check(
+            "output directory",
+            false,
+            &format!("{}: {error}", config.out_dir.display()),
+        ),
     }
 
     match competing_apps_running() {
-        Some(apps) if apps.is_empty() => check("competing apps", true, "no rekordbox or Decktective app running"),
-        Some(apps) => check("competing apps", false, &format!("{} RUNNING — quit it before recording", apps.join(", "))),
-        None => check("competing apps", true, "could not check — confirm by hand that rekordbox and the Decktective app are closed"),
+        Some(apps) if apps.is_empty() => check(
+            "competing apps",
+            true,
+            "no rekordbox or Decktective app running",
+        ),
+        Some(apps) => check(
+            "competing apps",
+            false,
+            &format!("{} RUNNING — quit it before recording", apps.join(", ")),
+        ),
+        None => check(
+            "competing apps",
+            true,
+            "could not check — confirm by hand that rekordbox and the Decktective app are closed",
+        ),
     }
 }
 
@@ -306,7 +360,10 @@ fn competing_apps_running() -> Option<Vec<String>> {
     let output = if cfg!(windows) {
         std::process::Command::new("tasklist").output().ok()?
     } else {
-        std::process::Command::new("ps").args(["-A", "-o", "comm="]).output().ok()?
+        std::process::Command::new("ps")
+            .args(["-A", "-o", "comm="])
+            .output()
+            .ok()?
     };
     if !output.status.success() {
         return None;
@@ -318,8 +375,16 @@ fn competing_apps_running() -> Option<Vec<String>> {
         // `tasklist` prints an image name followed by other columns; `ps
         // -o comm=` prints one path, which on macOS can itself contain
         // spaces ("…/MacOS/Google Chrome").
-        let command = if cfg!(windows) { line.split_whitespace().next().unwrap_or("") } else { line.trim() };
-        let executable = command.rsplit(['/', '\\']).next().unwrap_or("").trim_end_matches(".exe");
+        let command = if cfg!(windows) {
+            line.split_whitespace().next().unwrap_or("")
+        } else {
+            line.trim()
+        };
+        let executable = command
+            .rsplit(['/', '\\'])
+            .next()
+            .unwrap_or("")
+            .trim_end_matches(".exe");
         let app = match executable {
             name if name.contains("rekordbox") => "rekordbox",
             "decktective" => "the Decktective app",
@@ -417,7 +482,13 @@ async fn run_metadata_pull(config: &Config, bind_ip: Ipv4Addr) {
     println!("      pulling metadata ({METADATA_PULL_SECS}s) — leave the decks alone...");
 
     let mut command = Command::new(capture_binary_path());
-    command.arg("--out").arg(&config.out_dir).arg("--bind").arg(bind_ip.to_string()).arg("--duration-sec").arg(METADATA_PULL_SECS.to_string());
+    command
+        .arg("--out")
+        .arg(&config.out_dir)
+        .arg("--bind")
+        .arg(bind_ip.to_string())
+        .arg("--duration-sec")
+        .arg(METADATA_PULL_SECS.to_string());
     for player in &config.player_overrides {
         command.arg("--player").arg(player);
     }
@@ -425,10 +496,19 @@ async fn run_metadata_pull(config: &Config, bind_ip: Ipv4Addr) {
         command.arg("--slot").arg(slot);
     }
 
-    match command.stdout(Stdio::null()).stderr(Stdio::null()).status().await {
+    match command
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await
+    {
         Ok(status) if status.success() => println!("      metadata pull done"),
-        Ok(status) => println!("      metadata pull exited with {status} — the raw recording is unaffected"),
-        Err(error) => println!("      metadata pull could not run: {error} — the raw recording is unaffected"),
+        Ok(status) => {
+            println!("      metadata pull exited with {status} — the raw recording is unaffected")
+        }
+        Err(error) => {
+            println!("      metadata pull could not run: {error} — the raw recording is unaffected")
+        }
     }
 }
 
@@ -441,7 +521,9 @@ async fn stop_capture(mut capture: Child) {
         Ok(Ok(_)) => println!("Recording stopped cleanly."),
         Ok(Err(error)) => println!("Recording stopped, but waiting on it failed: {error}"),
         Err(_) => {
-            println!("Recording did not stop in time — killing it. Bytes already written are safe.");
+            println!(
+                "Recording did not stop in time — killing it. Bytes already written are safe."
+            );
             let _ = capture.kill().await;
         }
     }
@@ -461,7 +543,11 @@ fn note(session_dir: &Path, text: &str) {
 fn live_summary(session_dir: &Path) -> String {
     let mut players: Vec<u64> = read_json_lines(&session_dir.join("status-decoded.jsonl"))
         .iter()
-        .filter_map(|record| record.get("device_number").and_then(serde_json::Value::as_u64))
+        .filter_map(|record| {
+            record
+                .get("device_number")
+                .and_then(serde_json::Value::as_u64)
+        })
         .collect();
     players.sort_unstable();
     players.dedup();
@@ -469,7 +555,14 @@ fn live_summary(session_dir: &Path) -> String {
     if players.is_empty() {
         "(no players seen yet)".to_string()
     } else {
-        format!("players seen: {}", players.iter().map(u64::to_string).collect::<Vec<_>>().join(", "))
+        format!(
+            "players seen: {}",
+            players
+                .iter()
+                .map(u64::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     }
 }
 
@@ -479,7 +572,9 @@ fn live_summary(session_dir: &Path) -> String {
 /// still appending to them, so the trailing partial line `read_jsonl`
 /// forgives is the normal case here, not an anomaly.
 fn read_json_lines(path: &Path) -> Vec<serde_json::Value> {
-    read_jsonl::<serde_json::Value>(path).map(|read| read.records).unwrap_or_default()
+    read_jsonl::<serde_json::Value>(path)
+        .map(|read| read.records)
+        .unwrap_or_default()
 }
 
 /// The point of the whole exercise: say what landed on disk, in terms of
@@ -500,20 +595,41 @@ fn report(session_dir: &Path) {
     }
 
     let decoded = read_json_lines(&session_dir.join("status-decoded.jsonl"));
-    let failed = decoded.iter().filter(|record| record.get("outcome").and_then(serde_json::Value::as_str) != Some("decoded")).count();
+    let failed = decoded
+        .iter()
+        .filter(|record| {
+            record.get("outcome").and_then(serde_json::Value::as_str) != Some("decoded")
+        })
+        .count();
 
-    check("keep-alives (50000)", announce > 0, &format!("{announce} packets"));
+    check(
+        "keep-alives (50000)",
+        announce > 0,
+        &format!("{announce} packets"),
+    );
     check("beats (50001)", beat > 0, &format!("{beat} packets"));
     check("status (50002)", status > 0, &format!("{status} packets"));
-    check("status decoding", !decoded.is_empty() && failed == 0, &format!("{} decoded, {failed} failed", decoded.len() - failed));
+    check(
+        "status decoding",
+        !decoded.is_empty() && failed == 0,
+        &format!("{} decoded, {failed} failed", decoded.len() - failed),
+    );
     check("players seen", true, &live_summary(session_dir));
 
     let exports = find_exports(session_dir);
     let empty = exports.iter().filter(|(_, size)| *size == 0).count();
     if exports.is_empty() {
-        check("export.pdb", false, "NONE — pdb.rs stays unvalidated; recapture while the kit is here");
+        check(
+            "export.pdb",
+            false,
+            "NONE — pdb.rs stays unvalidated; recapture while the kit is here",
+        );
     } else {
-        check("export.pdb", empty == 0, &format!("{} file(s), {empty} empty", exports.len()));
+        check(
+            "export.pdb",
+            empty == 0,
+            &format!("{} file(s), {empty} empty", exports.len()),
+        );
         for (path, size) in &exports {
             println!("       {} ({size} bytes)", path.display());
         }
@@ -527,12 +643,17 @@ fn find_exports(session_dir: &Path) -> Vec<(PathBuf, u64)> {
     let mut found = Vec::new();
     let mut pending = vec![session_dir.join("nfs")];
     while let Some(dir) = pending.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
                 pending.push(path);
-            } else if path.file_name().is_some_and(|name| name.eq_ignore_ascii_case("export.pdb")) {
+            } else if path
+                .file_name()
+                .is_some_and(|name| name.eq_ignore_ascii_case("export.pdb"))
+            {
                 let size = entry.metadata().map(|metadata| metadata.len()).unwrap_or(0);
                 found.push((path, size));
             }

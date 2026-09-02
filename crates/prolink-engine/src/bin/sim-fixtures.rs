@@ -59,7 +59,10 @@ fn main() -> ExitCode {
 
     match build(&config) {
         Ok(0) => {
-            eprintln!("no track in {} had its analysis files in the capture", config.session.display());
+            eprintln!(
+                "no track in {} had its analysis files in the capture",
+                config.session.display()
+            );
             ExitCode::FAILURE
         }
         Ok(count) => {
@@ -75,7 +78,9 @@ fn main() -> ExitCode {
 
 fn build(config: &Config) -> anyhow::Result<usize> {
     let nfs_dir = config.session.join("nfs");
-    let databases = find_files(&nfs_dir, |path| path.file_name().and_then(|name| name.to_str()) == Some(EXPORT_PDB_FILE));
+    let databases = find_files(&nfs_dir, |path| {
+        path.file_name().and_then(|name| name.to_str()) == Some(EXPORT_PDB_FILE)
+    });
     if databases.is_empty() {
         anyhow::bail!("no {EXPORT_PDB_FILE} found under {}", nfs_dir.display());
     }
@@ -86,7 +91,11 @@ fn build(config: &Config) -> anyhow::Result<usize> {
     for database in &databases {
         // The analysis files sit under the same player directory as the
         // database that references them, by the paths the player used.
-        let Some(player_root) = database.parent().and_then(Path::parent).and_then(Path::parent) else {
+        let Some(player_root) = database
+            .parent()
+            .and_then(Path::parent)
+            .and_then(Path::parent)
+        else {
             continue;
         };
         let bytes = std::fs::read(database)?;
@@ -95,7 +104,11 @@ fn build(config: &Config) -> anyhow::Result<usize> {
             continue;
         };
         collect_tracks(&parsed, player_root, &mut tracks);
-        println!("{}: {} tracks in the database", database.display(), parsed.tracks.len());
+        println!(
+            "{}: {} tracks in the database",
+            database.display(),
+            parsed.tracks.len()
+        );
     }
 
     let selected: Vec<&TrackInfo> = tracks.values().take(config.max_tracks).collect();
@@ -103,7 +116,11 @@ fn build(config: &Config) -> anyhow::Result<usize> {
     // indentation on tens of thousands of waveform columns per track more
     // than doubles it for nothing.
     let json = serde_json::to_vec(&selected)?;
-    if let Some(parent) = config.out.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+    if let Some(parent) = config
+        .out
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
         std::fs::create_dir_all(parent)?;
     }
     std::fs::write(&config.out, json)?;
@@ -125,7 +142,10 @@ fn collect_tracks(pdb: &Pdb, player_root: &Path, tracks: &mut BTreeMap<String, T
         // Artwork is left out: a player only serves it when asked, so a
         // capture rarely holds it, and the simulator has never shown it.
         let info = build_track_info(pdb, track, analysis, None, None);
-        tracks.insert(format!("{} - {}", info.artist.as_deref().unwrap_or(""), info.title), info);
+        tracks.insert(
+            format!("{} - {}", info.artist.as_deref().unwrap_or(""), info.title),
+            info,
+        );
     }
 }
 
@@ -135,7 +155,9 @@ fn collect_tracks(pdb: &Pdb, player_root: &Path, tracks: &mut BTreeMap<String, T
 /// of it and report no beat at all.
 fn is_usable(analysis: &Analysis, track: &Track) -> bool {
     let (beat_grid, waveform, _) = analysis;
-    waveform.is_some() && beat_grid.as_ref().is_some_and(|beats| !beats.is_empty()) && track.tempo_centibpm > 0
+    waveform.is_some()
+        && beat_grid.as_ref().is_some_and(|beats| !beats.is_empty())
+        && track.tempo_centibpm > 0
 }
 
 /// Reads a track's `.DAT` and `.EXT` out of the recovered tree, `None` if
@@ -151,7 +173,12 @@ fn read_analysis(player_root: &Path, track: &Track) -> Option<(Vec<u8>, Vec<u8>)
 /// Maps a path as the player expressed it onto the recovered tree, which
 /// mirrors those same paths under the player's own directory.
 fn local_path(player_root: &Path, device_path: &str) -> PathBuf {
-    device_path.split('/').filter(|segment| !segment.is_empty()).fold(player_root.to_path_buf(), |path, segment| path.join(segment))
+    device_path
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .fold(player_root.to_path_buf(), |path, segment| {
+            path.join(segment)
+        })
 }
 
 fn find_files(dir: &Path, predicate: impl Fn(&Path) -> bool + Copy) -> Vec<PathBuf> {
@@ -159,7 +186,10 @@ fn find_files(dir: &Path, predicate: impl Fn(&Path) -> bool + Copy) -> Vec<PathB
         return Vec::new();
     };
     let mut found = Vec::new();
-    for path in entries.filter_map(|entry| entry.ok()).map(|entry| entry.path()) {
+    for path in entries
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+    {
         if path.is_dir() {
             found.extend(find_files(&path, predicate));
         } else if predicate(&path) {
@@ -180,7 +210,11 @@ fn parse_args() -> Result<Config, String> {
         match arg.as_str() {
             "--session" => session = Some(PathBuf::from(next_value(&mut args, "--session")?)),
             "--out" => out = PathBuf::from(next_value(&mut args, "--out")?),
-            "--max-tracks" => max_tracks = next_value(&mut args, "--max-tracks")?.parse().map_err(|_| "--max-tracks needs a number".to_string())?,
+            "--max-tracks" => {
+                max_tracks = next_value(&mut args, "--max-tracks")?
+                    .parse()
+                    .map_err(|_| "--max-tracks needs a number".to_string())?
+            }
             "--help" | "-h" => {
                 print_usage();
                 std::process::exit(0);
@@ -189,7 +223,11 @@ fn parse_args() -> Result<Config, String> {
         }
     }
 
-    Ok(Config { session: session.ok_or_else(|| "--session DIR is required".to_string())?, out, max_tracks })
+    Ok(Config {
+        session: session.ok_or_else(|| "--session DIR is required".to_string())?,
+        out,
+        max_tracks,
+    })
 }
 
 fn next_value(args: &mut impl Iterator<Item = String>, flag: &str) -> Result<String, String> {

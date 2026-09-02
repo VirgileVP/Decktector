@@ -38,15 +38,18 @@ async fn reports_a_playing_deck_from_simulated_wire_traffic() {
     let engine = ProlinkEngine::new(device_watcher);
     engine.start().await.expect("engine should start");
 
-    let deck = timeout(Duration::from_secs(10), wait_for_deck(&engine)).await.expect(
-        "no deck reported within 10s — is loopback broadcast blocked in this environment?",
-    );
+    let deck = timeout(Duration::from_secs(10), wait_for_deck(&engine))
+        .await
+        .expect("no deck reported within 10s — is loopback broadcast blocked in this environment?");
 
     assert_eq!(deck.deck_id, SIMULATED_DEVICE);
     assert_eq!(deck.play_state, PlayState::Playing);
     assert_eq!(deck.track_id, Some(SIMULATED_TRACK_ID));
     assert_eq!(deck.track_bpm, Some(SIMULATED_BPM));
-    assert!(deck.playhead_ms.is_some(), "a playing deck with a beat count should get a playhead estimate");
+    assert!(
+        deck.playhead_ms.is_some(),
+        "a playing deck with a beat count should get a playhead estimate"
+    );
 
     engine.stop().await.expect("engine should stop");
     broadcaster.abort();
@@ -54,12 +57,10 @@ async fn reports_a_playing_deck_from_simulated_wire_traffic() {
 
 async fn wait_for_deck(engine: &ProlinkEngine) -> decktective_core::model::DeckState {
     loop {
-        if let Some(deck) = engine
-            .handle()
-            .snapshot()
-            .decks
-            .into_iter()
-            .find(|deck| deck.deck_id == SIMULATED_DEVICE && deck.play_state == PlayState::Playing)
+        if let Some(deck) =
+            engine.handle().snapshot().decks.into_iter().find(|deck| {
+                deck.deck_id == SIMULATED_DEVICE && deck.play_state == PlayState::Playing
+            })
         {
             return deck;
         }
@@ -72,7 +73,9 @@ async fn wait_for_deck(engine: &ProlinkEngine) -> decktective_core::model::DeckS
 /// packet and beat packet at a realistic cadence, playing from the start
 /// (no cue delay — this test isn't exercising that transition).
 async fn broadcast_a_playing_deck() {
-    let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).await.expect("bind the fake device's socket");
+    let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0))
+        .await
+        .expect("bind the fake device's socket");
     socket.set_broadcast(true).expect("enable broadcast");
     let target = Ipv4Addr::new(255, 255, 255, 255);
 

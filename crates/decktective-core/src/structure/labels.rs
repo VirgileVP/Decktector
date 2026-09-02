@@ -50,7 +50,14 @@ pub fn label_sections(
         let previous = events.last().map(|event: &TrackEvent| event.kind);
         let next_energy = sections.get(index + 1).map(|next| next.energy);
         events.push(TrackEvent {
-            kind: classify(section, index, sections.len(), previous, next_energy, median),
+            kind: classify(
+                section,
+                index,
+                sections.len(),
+                previous,
+                next_energy,
+                median,
+            ),
             start_ms: section.start_ms,
             end_ms: section.end_ms,
             confidence: confidence(section, median),

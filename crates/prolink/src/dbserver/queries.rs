@@ -77,6 +77,9 @@ mod tests {
 
     #[test]
     fn an_unrecognized_item_type_is_preserved() {
-        assert_eq!(MenuItemType::from_raw(0x9999), MenuItemType::Unknown(0x9999));
+        assert_eq!(
+            MenuItemType::from_raw(0x9999),
+            MenuItemType::Unknown(0x9999)
+        );
     }
 }

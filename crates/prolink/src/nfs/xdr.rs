@@ -81,7 +81,9 @@ impl<'a> XdrDecoder<'a> {
     pub fn read_u32(&mut self) -> Option<u32> {
         let bytes = self.data.get(self.pos..self.pos + 4)?;
         self.pos += 4;
-        Some(u32::from_be_bytes(bytes.try_into().expect("slice is exactly 4 bytes")))
+        Some(u32::from_be_bytes(
+            bytes.try_into().expect("slice is exactly 4 bytes"),
+        ))
     }
 
     pub fn read_opaque_fixed(&mut self, len: usize) -> Option<&'a [u8]> {
@@ -101,7 +103,10 @@ impl<'a> XdrDecoder<'a> {
         if bytes.len() % 2 != 0 {
             return None;
         }
-        let units: Vec<u16> = bytes.chunks_exact(2).map(|pair| u16::from_le_bytes([pair[0], pair[1]])).collect();
+        let units: Vec<u16> = bytes
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect();
         Some(String::from_utf16_lossy(&units))
     }
 
@@ -153,7 +158,10 @@ mod tests {
         encoder.write_opaque_fixed(&handle);
         let bytes = encoder.into_bytes();
         assert_eq!(bytes.len(), 32);
-        assert_eq!(XdrDecoder::new(&bytes).read_opaque_fixed(32), Some(handle.as_slice()));
+        assert_eq!(
+            XdrDecoder::new(&bytes).read_opaque_fixed(32),
+            Some(handle.as_slice())
+        );
     }
 
     #[test]
@@ -163,7 +171,10 @@ mod tests {
         let bytes = encoder.into_bytes();
         // 4-byte length + 5 bytes of data + 3 bytes of padding = 12.
         assert_eq!(bytes.len(), 12);
-        assert_eq!(XdrDecoder::new(&bytes).read_opaque_var(), Some(&[1, 2, 3, 4, 5][..]));
+        assert_eq!(
+            XdrDecoder::new(&bytes).read_opaque_var(),
+            Some(&[1, 2, 3, 4, 5][..])
+        );
     }
 
     #[test]
@@ -171,7 +182,10 @@ mod tests {
         let mut encoder = XdrEncoder::new();
         encoder.write_string_utf16le("PIONEER");
         let bytes = encoder.into_bytes();
-        assert_eq!(XdrDecoder::new(&bytes).read_string_utf16le(), Some("PIONEER".to_string()));
+        assert_eq!(
+            XdrDecoder::new(&bytes).read_string_utf16le(),
+            Some("PIONEER".to_string())
+        );
     }
 
     #[test]

@@ -67,7 +67,5 @@ pub fn resolve_ipv4(interface_name: &str) -> anyhow::Result<Ipv4Addr> {
                 if_addrs::IfAddr::V6(_) => None,
             }
         })
-        .ok_or_else(|| {
-            anyhow::anyhow!("network interface '{interface_name}' has no IPv4 address")
-        })
+        .ok_or_else(|| anyhow::anyhow!("network interface '{interface_name}' has no IPv4 address"))
 }

@@ -73,14 +73,18 @@ impl SimLibrary {
     }
 
     pub fn generated() -> Self {
-        Self { source: Source::Generated }
+        Self {
+            source: Source::Generated,
+        }
     }
 
     /// A library of tracks already in hand — what
     /// [`Self::from_fixture_file`] produces once the file is read, and what
     /// a test builds directly.
     pub fn from_tracks(tracks: Vec<TrackInfo>) -> Self {
-        Self { source: Source::Recorded(tracks) }
+        Self {
+            source: Source::Recorded(tracks),
+        }
     }
 
     /// Reads a JSON array of [`TrackInfo`], as `sim-fixtures` writes it.

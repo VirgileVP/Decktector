@@ -179,7 +179,11 @@ impl LtcStream {
     /// blocking until the stream is confirmed playing (or has failed) so
     /// callers get the same synchronous success/failure signal as
     /// [`crate::mtc::connect`].
-    pub(crate) fn start(device_name: &str, initial_timecode: TimeCode, frame_rate: FrameRate) -> anyhow::Result<Self> {
+    pub(crate) fn start(
+        device_name: &str,
+        initial_timecode: TimeCode,
+        frame_rate: FrameRate,
+    ) -> anyhow::Result<Self> {
         let latch = Arc::new(Mutex::new(LtcLatch {
             start_timecode: initial_timecode,
             start_instant: Instant::now(),
@@ -193,12 +197,14 @@ impl LtcStream {
         let owned_device_name = device_name.to_string();
         let thread = thread::Builder::new()
             .name("decktective-ltc".into())
-            .spawn(move || run_audio_thread(&owned_device_name, thread_latch, thread_stop, ready_tx))
+            .spawn(move || {
+                run_audio_thread(&owned_device_name, thread_latch, thread_stop, ready_tx)
+            })
             .map_err(|error| anyhow::anyhow!("failed to spawn the LTC audio thread: {error}"))?;
 
-        ready_rx
-            .recv()
-            .map_err(|_| anyhow::anyhow!("the LTC audio thread exited before starting its stream"))??;
+        ready_rx.recv().map_err(|_| {
+            anyhow::anyhow!("the LTC audio thread exited before starting its stream")
+        })??;
 
         Ok(Self {
             latch,
@@ -271,7 +277,12 @@ fn build_stream(device_name: &str, latch: &Arc<Mutex<LtcLatch>>) -> anyhow::Resu
     let host = cpal::default_host();
     let device = host
         .output_devices()?
-        .find(|candidate| candidate.name().map(|name| name == device_name).unwrap_or(false))
+        .find(|candidate| {
+            candidate
+                .name()
+                .map(|name| name == device_name)
+                .unwrap_or(false)
+        })
         .ok_or_else(|| anyhow::anyhow!("LTC output device '{device_name}' not found"))?;
 
     let supported = device.default_output_config()?;
@@ -280,7 +291,9 @@ fn build_stream(device_name: &str, latch: &Arc<Mutex<LtcLatch>>) -> anyhow::Resu
     let sample_rate = stream_config.sample_rate.0;
     let channels = stream_config.channels as usize;
 
-    let initial = *latch.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let initial = *latch
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let mut frame_rate = initial.frame_rate;
     let mut timecode = initial.start_timecode;
     // The very first buffer has no prior polarity to continue from, so it's
@@ -316,10 +329,18 @@ fn build_stream(device_name: &str, latch: &Arc<Mutex<LtcLatch>>) -> anyhow::Resu
     };
 
     match sample_format {
-        cpal::SampleFormat::F32 => build_typed_stream::<f32>(&device, &stream_config, generator, channels),
-        cpal::SampleFormat::I16 => build_typed_stream::<i16>(&device, &stream_config, generator, channels),
-        cpal::SampleFormat::U16 => build_typed_stream::<u16>(&device, &stream_config, generator, channels),
-        other => Err(anyhow::anyhow!("unsupported LTC output sample format: {other:?}")),
+        cpal::SampleFormat::F32 => {
+            build_typed_stream::<f32>(&device, &stream_config, generator, channels)
+        }
+        cpal::SampleFormat::I16 => {
+            build_typed_stream::<i16>(&device, &stream_config, generator, channels)
+        }
+        cpal::SampleFormat::U16 => {
+            build_typed_stream::<u16>(&device, &stream_config, generator, channels)
+        }
+        other => Err(anyhow::anyhow!(
+            "unsupported LTC output sample format: {other:?}"
+        )),
     }
 }
 
@@ -384,7 +405,11 @@ mod tests {
         }
         for &user_bits_start in &[4usize, 12, 20, 28, 36, 44, 52, 60] {
             for i in 0..4 {
-                assert!(!bits[user_bits_start + i], "user bit {}", user_bits_start + i);
+                assert!(
+                    !bits[user_bits_start + i],
+                    "user bit {}",
+                    user_bits_start + i
+                );
             }
         }
 
@@ -410,7 +435,10 @@ mod tests {
             samples,
             vec![1.0, 1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0]
         );
-        assert_eq!(level, -1.0, "the returned level matches the last sample pushed");
+        assert_eq!(
+            level, -1.0,
+            "the returned level matches the last sample pushed"
+        );
     }
 
     #[test]

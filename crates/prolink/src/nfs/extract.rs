@@ -55,7 +55,10 @@ impl ExtractedFile {
     /// Whether every byte up to the reported size was recovered. A file the
     /// server never reported a size for can only be judged by its gaps.
     pub fn is_complete(&self) -> bool {
-        self.gaps.is_empty() && self.reported_size.is_none_or(|size| self.bytes.len() as u64 >= u64::from(size))
+        self.gaps.is_empty()
+            && self
+                .reported_size
+                .is_none_or(|size| self.bytes.len() as u64 >= u64::from(size))
     }
 }
 
@@ -217,7 +220,8 @@ impl NfsExtractor {
         let Some(result) = procedures::parse_lookup_reply(payload, xid) else {
             return;
         };
-        self.names.insert((server, result.handle), (args.dir, args.name.clone()));
+        self.names
+            .insert((server, result.handle), (args.dir, args.name.clone()));
     }
 
     fn record_read(&mut self, server: Ipv4Addr, args: ReadArgs, payload: &[u8], xid: u32) {
@@ -286,7 +290,10 @@ fn hex(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
     use crate::nfs::mount::FILE_HANDLE_LEN;
-    use crate::nfs::procedures::{build_lookup_call, build_lookup_reply, build_read_call, build_read_reply, FileAttributes, FTYPE_REGULAR_FILE};
+    use crate::nfs::procedures::{
+        build_lookup_call, build_lookup_reply, build_read_call, build_read_reply, FileAttributes,
+        FTYPE_REGULAR_FILE,
+    };
 
     const SERVER: Ipv4Addr = Ipv4Addr::new(169, 254, 7, 50);
     const ROOT: FileHandle = [0x00; FILE_HANDLE_LEN];
@@ -296,16 +303,32 @@ mod tests {
     }
 
     fn attributes(size: u32) -> FileAttributes {
-        FileAttributes { file_type: FTYPE_REGULAR_FILE, size }
+        FileAttributes {
+            file_type: FTYPE_REGULAR_FILE,
+            size,
+        }
     }
 
     /// Walks one path segment: the call names it, the reply resolves it.
-    fn lookup(extractor: &mut NfsExtractor, xid: u32, dir: FileHandle, name: &str, resolved: FileHandle) {
+    fn lookup(
+        extractor: &mut NfsExtractor,
+        xid: u32,
+        dir: FileHandle,
+        name: &str,
+        resolved: FileHandle,
+    ) {
         extractor.observe_call(&build_lookup_call(xid, dir, name));
         extractor.observe_reply(SERVER, &build_lookup_reply(xid, resolved, attributes(0)));
     }
 
-    fn read(extractor: &mut NfsExtractor, xid: u32, file: FileHandle, offset: u32, size: u32, data: &[u8]) {
+    fn read(
+        extractor: &mut NfsExtractor,
+        xid: u32,
+        file: FileHandle,
+        offset: u32,
+        size: u32,
+        data: &[u8],
+    ) {
         extractor.observe_call(&build_read_call(xid, file, offset, data.len() as u32));
         extractor.observe_reply(SERVER, &build_read_reply(xid, attributes(size), data));
     }
@@ -376,7 +399,11 @@ mod tests {
         read(&mut extractor, 1, handle(0xAB), 0, 4, b"data");
 
         let files = extractor.into_files();
-        assert!(files[0].path.starts_with("handle-ab"), "unexpected path {}", files[0].path);
+        assert!(
+            files[0].path.starts_with("handle-ab"),
+            "unexpected path {}",
+            files[0].path
+        );
         assert_eq!(files[0].bytes, b"data".to_vec());
     }
 
@@ -403,6 +430,9 @@ mod tests {
 
         let files = extractor.into_files();
         assert_eq!(files.len(), 2);
-        assert_eq!(files.iter().map(|file| file.server).collect::<Vec<_>>(), vec![other, SERVER]);
+        assert_eq!(
+            files.iter().map(|file| file.server).collect::<Vec<_>>(),
+            vec![other, SERVER]
+        );
     }
 }

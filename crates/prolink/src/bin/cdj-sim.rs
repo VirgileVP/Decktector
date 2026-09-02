@@ -87,8 +87,14 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             devices: vec![
-                SimulatedDevice { device_number: 1, name: "CDJ-2000".to_string() },
-                SimulatedDevice { device_number: 2, name: "CDJ-3000".to_string() },
+                SimulatedDevice {
+                    device_number: 1,
+                    name: "CDJ-2000".to_string(),
+                },
+                SimulatedDevice {
+                    device_number: 2,
+                    name: "CDJ-3000".to_string(),
+                },
             ],
             interval: Duration::from_millis(1500),
             broadcast_addr: Ipv4Addr::new(255, 255, 255, 255),
@@ -117,10 +123,15 @@ fn parse_args() -> Config {
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--count" => {
-                count = args.next().and_then(|v| v.parse().ok()).expect("--count needs a number");
+                count = args
+                    .next()
+                    .and_then(|v| v.parse().ok())
+                    .expect("--count needs a number");
             }
             "--names" => {
-                names = args.next().map(|v| v.split(',').map(str::to_string).collect());
+                names = args
+                    .next()
+                    .map(|v| v.split(',').map(str::to_string).collect());
             }
             "--mixer" => mixer = true,
             "--interval-ms" => {
@@ -137,17 +148,29 @@ fn parse_args() -> Config {
                     .expect("--broadcast needs an IPv4 address");
             }
             "--bpm" => {
-                bpm = args.next().and_then(|v| v.parse().ok()).expect("--bpm needs a number");
+                bpm = args
+                    .next()
+                    .and_then(|v| v.parse().ok())
+                    .expect("--bpm needs a number");
             }
             "--precise-position" => precise_position = true,
             "--replay" => {
-                replay_session = Some(PathBuf::from(args.next().expect("--replay needs a session directory")));
+                replay_session = Some(PathBuf::from(
+                    args.next().expect("--replay needs a session directory"),
+                ));
             }
             "--replay-target" => {
-                replay_target = args.next().and_then(|v| v.parse().ok()).expect("--replay-target needs an IPv4 address");
+                replay_target = args
+                    .next()
+                    .and_then(|v| v.parse().ok())
+                    .expect("--replay-target needs an IPv4 address");
             }
             "--speed" => {
-                speed = args.next().and_then(|v| v.parse().ok()).filter(|value: &f64| *value > 0.0).expect("--speed needs a positive number");
+                speed = args
+                    .next()
+                    .and_then(|v| v.parse().ok())
+                    .filter(|value: &f64| *value > 0.0)
+                    .expect("--speed needs a positive number");
             }
             "--loop" => repeat = true,
             "--help" | "-h" => {
@@ -166,7 +189,10 @@ fn parse_args() -> Config {
         Some(names) => names
             .into_iter()
             .enumerate()
-            .map(|(index, name)| SimulatedDevice { device_number: index as u8 + 1, name })
+            .map(|(index, name)| SimulatedDevice {
+                device_number: index as u8 + 1,
+                name,
+            })
             .collect(),
         None => (1..=count)
             .map(|device_number| SimulatedDevice {
@@ -176,11 +202,26 @@ fn parse_args() -> Config {
             .collect(),
     };
     if mixer {
-        devices.push(SimulatedDevice { device_number: 33, name: "DJM-900NXS2".to_string() });
+        devices.push(SimulatedDevice {
+            device_number: 33,
+            name: "DJM-900NXS2".to_string(),
+        });
     }
 
-    let replay = replay_session.map(|session| ReplayConfig { session, target: replay_target, speed, repeat });
-    Config { devices, interval, broadcast_addr, bpm, precise_position, replay }
+    let replay = replay_session.map(|session| ReplayConfig {
+        session,
+        target: replay_target,
+        speed,
+        repeat,
+    });
+    Config {
+        devices,
+        interval,
+        broadcast_addr,
+        bpm,
+        precise_position,
+        replay,
+    }
 }
 
 fn print_usage() {
@@ -242,7 +283,8 @@ async fn main() -> anyhow::Result<()> {
         if DeviceKind::from_device_number(device.device_number) != DeviceKind::Player {
             continue; // The mixer's status packets don't share the CDJ shape.
         }
-        let emit_precise_position = config.precise_position && first_player == Some(device.device_number);
+        let emit_precise_position =
+            config.precise_position && first_player == Some(device.device_number);
         tokio::spawn(simulate_deck(
             device.device_number,
             device.device_number == first_player.unwrap_or(device.device_number),
@@ -258,9 +300,16 @@ async fn main() -> anyhow::Result<()> {
         tick.tick().await;
         for device in &config.devices {
             let mac = [0x02, 0x00, 0x00, 0x00, 0x00, device.device_number];
-            let packet = build_keepalive(device.device_number, &device.name, mac, sim_ip, peer_count);
-            if let Err(error) = socket.send_to(&packet, (config.broadcast_addr, ANNOUNCE_PORT)).await {
-                eprintln!("failed to send keep-alive for device {}: {error}", device.device_number);
+            let packet =
+                build_keepalive(device.device_number, &device.name, mac, sim_ip, peer_count);
+            if let Err(error) = socket
+                .send_to(&packet, (config.broadcast_addr, ANNOUNCE_PORT))
+                .await
+            {
+                eprintln!(
+                    "failed to send keep-alive for device {}: {error}",
+                    device.device_number
+                );
             }
         }
     }
@@ -277,7 +326,12 @@ async fn main() -> anyhow::Result<()> {
 /// also what a congested network does.
 async fn replay_session(config: &ReplayConfig, socket: &UdpSocket) -> anyhow::Result<()> {
     let path = config.session.join(UDP_LOG);
-    println!("Replaying {} to {} at {}x", path.display(), config.target, config.speed);
+    println!(
+        "Replaying {} to {} at {}x",
+        path.display(),
+        config.target,
+        config.speed
+    );
     println!("Ctrl+C to stop.");
 
     loop {
@@ -304,14 +358,21 @@ async fn replay_session(config: &ReplayConfig, socket: &UdpSocket) -> anyhow::Re
 
             let base = *first_record_micros.get_or_insert(record.t);
             let elapsed_micros = (record.t - base).max(0) as f64 / config.speed;
-            time::sleep_until((started_at + Duration::from_micros(elapsed_micros as u64)).into()).await;
+            time::sleep_until((started_at + Duration::from_micros(elapsed_micros as u64)).into())
+                .await;
 
             if let Err(error) = socket.send_to(&payload, (config.target, record.port)).await {
-                eprintln!("failed to replay a datagram to port {}: {error}", record.port);
+                eprintln!(
+                    "failed to replay a datagram to port {}: {error}",
+                    record.port
+                );
             }
             sent += 1;
             if sent % REPLAY_PROGRESS_EVERY == 0 {
-                println!("  {sent} datagrams replayed ({:.0}s in)", started_at.elapsed().as_secs_f64());
+                println!(
+                    "  {sent} datagrams replayed ({:.0}s in)",
+                    started_at.elapsed().as_secs_f64()
+                );
             }
         }
 
@@ -326,10 +387,13 @@ async fn replay_session(config: &ReplayConfig, socket: &UdpSocket) -> anyhow::Re
 /// payload IP — mirrors `prolink-capture`'s `resolve_bind_ip`, kept
 /// separate because that one belongs to a different binary target.
 fn local_ipv4() -> Option<Ipv4Addr> {
-    if_addrs::get_if_addrs().ok()?.into_iter().find_map(|interface| match interface.ip() {
-        std::net::IpAddr::V4(ip) if !ip.is_loopback() => Some(ip),
-        _ => None,
-    })
+    if_addrs::get_if_addrs()
+        .ok()?
+        .into_iter()
+        .find_map(|interface| match interface.ip() {
+            std::net::IpAddr::V4(ip) if !ip.is_loopback() => Some(ip),
+            _ => None,
+        })
 }
 
 /// Runs one simulated deck's status/beat traffic for as long as the process

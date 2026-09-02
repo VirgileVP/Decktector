@@ -332,13 +332,24 @@ async fn track_artwork_handler(
     Path(track_id): Path<u32>,
 ) -> Response {
     let Some(artwork) = service.hub.track(track_id).and_then(|track| track.artwork) else {
-        return (axum::http::StatusCode::NOT_FOUND, "no artwork for this track").into_response();
+        return (
+            axum::http::StatusCode::NOT_FOUND,
+            "no artwork for this track",
+        )
+            .into_response();
     };
     match decode_data_url(&artwork) {
         Some((content_type, bytes)) => immutable_response(content_type, bytes),
         None => {
-            tracing::error!(track_id, "a track's artwork was not a well-formed data: URL");
-            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "malformed artwork").into_response()
+            tracing::error!(
+                track_id,
+                "a track's artwork was not a well-formed data: URL"
+            );
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "malformed artwork",
+            )
+                .into_response()
         }
     }
 }
@@ -348,7 +359,11 @@ async fn track_waveform_handler(
     Path(track_id): Path<u32>,
 ) -> Response {
     let Some(waveform) = service.hub.track(track_id).and_then(|track| track.waveform) else {
-        return (axum::http::StatusCode::NOT_FOUND, "no waveform for this track").into_response();
+        return (
+            axum::http::StatusCode::NOT_FOUND,
+            "no waveform for this track",
+        )
+            .into_response();
     };
     match serde_json::to_vec(&waveform) {
         Ok(body) => immutable_response("application/json".to_string(), body),
@@ -437,7 +452,11 @@ async fn require_token(
 ) -> Response {
     let token = resolve_token(&query, request.headers());
     if !service.token_matches(token.as_deref()) {
-        return (axum::http::StatusCode::UNAUTHORIZED, "invalid or missing token").into_response();
+        return (
+            axum::http::StatusCode::UNAUTHORIZED,
+            "invalid or missing token",
+        )
+            .into_response();
     }
     let mut response = next.run(request).await;
     if let Some(token) = query.token.as_deref() {
@@ -456,7 +475,11 @@ async fn ws_handler(
 ) -> Response {
     let token = resolve_token(&query, &headers);
     if !service.token_matches(token.as_deref()) {
-        return (axum::http::StatusCode::UNAUTHORIZED, "invalid or missing token").into_response();
+        return (
+            axum::http::StatusCode::UNAUTHORIZED,
+            "invalid or missing token",
+        )
+            .into_response();
     }
     upgrade.on_upgrade(move |socket| handle_socket(socket, service))
 }
@@ -476,7 +499,11 @@ async fn handle_socket(mut socket: WebSocket, service: Arc<RemoteService>) {
         }
     };
 
-    if socket.send(Message::Text(snapshot.to_string().into())).await.is_err() {
+    if socket
+        .send(Message::Text(snapshot.to_string().into()))
+        .await
+        .is_err()
+    {
         service.client_disconnected();
         return;
     }
@@ -556,7 +583,10 @@ mod tests {
             .expect("index.html writes");
 
         let engine: Arc<dyn Engine> = Arc::new(SimEngine::new(2));
-        let service = RemoteService::new(engine, AssetSource::Directory(directory.path().to_path_buf()));
+        let service = RemoteService::new(
+            engine,
+            AssetSource::Directory(directory.path().to_path_buf()),
+        );
         service
             .clone()
             .set_config(RemoteConfig {
@@ -566,7 +596,10 @@ mod tests {
             })
             .await
             .expect("bind succeeds");
-        let token = service.status().token.expect("a listening service has a token");
+        let token = service
+            .status()
+            .token
+            .expect("a listening service has a token");
 
         let page_load = build_router(service.clone())
             .oneshot(

@@ -103,7 +103,12 @@ pub fn parse_beat_message(data: &[u8]) -> Option<BeatMessage> {
 
 /// Builds a well-formed beat packet. Used by tests and by the `cdj-sim` dev
 /// tool.
-pub fn build_beat_packet(device_number: u8, pitch_percent: f64, bpm: Option<f64>, beat_in_bar: u8) -> Vec<u8> {
+pub fn build_beat_packet(
+    device_number: u8,
+    pitch_percent: f64,
+    bpm: Option<f64>,
+    beat_in_bar: u8,
+) -> Vec<u8> {
     let mut packet = vec![0u8; BEAT_PACKET_LEN];
     packet[..PROLINK_HEADER.len()].copy_from_slice(&PROLINK_HEADER);
     packet[PROLINK_HEADER.len()] = BEAT_PACKET_TYPE;
@@ -111,7 +116,11 @@ pub fn build_beat_packet(device_number: u8, pitch_percent: f64, bpm: Option<f64>
 
     let pitch_raw = ((pitch_percent / 100.0 + 1.0) * f64::from(0x0010_0000u32)) as u32;
     write_u32(&mut packet, BEAT_PITCH_OFFSET, pitch_raw);
-    write_u16(&mut packet, BEAT_BPM_OFFSET, bpm.map_or(0xffff, |bpm| (bpm * 100.0) as u16));
+    write_u16(
+        &mut packet,
+        BEAT_BPM_OFFSET,
+        bpm.map_or(0xffff, |bpm| (bpm * 100.0) as u16),
+    );
     packet[BEAT_IN_BAR_OFFSET] = beat_in_bar;
 
     packet
@@ -133,7 +142,12 @@ fn read_u16(data: &[u8], offset: usize) -> u16 {
 }
 
 fn read_u32(data: &[u8], offset: usize) -> u32 {
-    u32::from_be_bytes([data[offset], data[offset + 1], data[offset + 2], data[offset + 3]])
+    u32::from_be_bytes([
+        data[offset],
+        data[offset + 1],
+        data[offset + 2],
+        data[offset + 3],
+    ])
 }
 
 fn write_u16(data: &mut [u8], offset: usize, value: u16) {
@@ -230,7 +244,10 @@ mod tests {
     fn a_beat_with_no_bpm_reports_none() {
         let bytes = build_beat_packet(1, 0.0, None, 1);
         let message = parse_beat_message(&bytes).expect("should parse");
-        assert!(matches!(message, BeatMessage::Beat(BeatPacket { bpm: None, .. })));
+        assert!(matches!(
+            message,
+            BeatMessage::Beat(BeatPacket { bpm: None, .. })
+        ));
     }
 
     #[test]

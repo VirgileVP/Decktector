@@ -47,7 +47,12 @@ const SETUP_TRANSACTION_ID: u32 = 0xffff_fffe;
 /// 2026-08-19 — a CDJ-3000 answers a request shaped that way with a menu of
 /// zero items, if it answers at all.
 fn rmst_argument(target_device_number: u8, slot: u8, track_type: u8) -> u32 {
-    u32::from_be_bytes([target_device_number, queries::MENU_TARGET_MAIN, slot, track_type])
+    u32::from_be_bytes([
+        target_device_number,
+        queries::MENU_TARGET_MAIN,
+        slot,
+        track_type,
+    ])
 }
 
 /// TCP port every player's dbserver listens on for the initial port-lookup
@@ -102,8 +107,15 @@ fn extract_menu_item(message: &Message) -> Option<TrackMenuItem> {
         .and_then(Field::as_str)
         .filter(|text| !text.is_empty())
         .map(str::to_string);
-    let number = message.arguments.get(MENU_ITEM_VALUE_INDEX).and_then(Field::as_u32);
-    Some(TrackMenuItem { item_type, text, number })
+    let number = message
+        .arguments
+        .get(MENU_ITEM_VALUE_INDEX)
+        .and_then(Field::as_u32);
+    Some(TrackMenuItem {
+        item_type,
+        text,
+        number,
+    })
 }
 
 /// A connection to one player's dbserver, past the setup handshake and
@@ -122,7 +134,11 @@ impl Connection {
     /// leaves via the same interface presence already picked on a
     /// multi-homed machine, not whatever the OS default route happens to
     /// be.
-    pub async fn open(player_ip: Ipv4Addr, bind_ip: Ipv4Addr, our_device_number: u8) -> std::io::Result<Self> {
+    pub async fn open(
+        player_ip: Ipv4Addr,
+        bind_ip: Ipv4Addr,
+        our_device_number: u8,
+    ) -> std::io::Result<Self> {
         let query_port = discover_query_port(player_ip, bind_ip).await?;
         Self::connect(player_ip, bind_ip, query_port, our_device_number).await
     }
@@ -132,14 +148,29 @@ impl Connection {
     /// a fake server on an ephemeral port rather than the real, fixed
     /// discovery port, which would be unsafe to bind in a test running
     /// alongside anything else that might already own it).
-    pub async fn connect(player_ip: Ipv4Addr, bind_ip: Ipv4Addr, query_port: u16, our_device_number: u8) -> std::io::Result<Self> {
+    pub async fn connect(
+        player_ip: Ipv4Addr,
+        bind_ip: Ipv4Addr,
+        query_port: u16,
+        our_device_number: u8,
+    ) -> std::io::Result<Self> {
         let socket = bound_tcp_socket(bind_ip)?;
-        let stream = socket.connect(SocketAddr::from((player_ip, query_port))).await?;
+        let stream = socket
+            .connect(SocketAddr::from((player_ip, query_port)))
+            .await?;
 
-        let mut connection = Self { stream, read_buffer: Vec::new(), next_transaction_id: 1 };
+        let mut connection = Self {
+            stream,
+            read_buffer: Vec::new(),
+            next_transaction_id: 1,
+        };
         connection.greet().await?;
         connection
-            .request(SETUP_TRANSACTION_ID, queries::SETUP_REQ, vec![Field::U32(u32::from(our_device_number))])
+            .request(
+                SETUP_TRANSACTION_ID,
+                queries::SETUP_REQ,
+                vec![Field::U32(u32::from(our_device_number))],
+            )
             .await?;
         Ok(connection)
     }
@@ -158,7 +189,10 @@ impl Connection {
         self.stream.read_exact(&mut echoed).await?;
         match Field::decode_field(&echoed).map(|(field, _)| field.as_u32()) {
             Some(Some(GREETING)) => Ok(()),
-            _ => Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "dbserver did not echo the connection greeting")),
+            _ => Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "dbserver did not echo the connection greeting",
+            )),
         }
     }
 
@@ -182,7 +216,11 @@ impl Connection {
         track_id: u32,
     ) -> std::io::Result<Vec<TrackMenuItem>> {
         let rmst = |extra: Vec<Field>| -> Vec<Field> {
-            let mut args = vec![Field::U32(rmst_argument(target_device_number, slot, track_type))];
+            let mut args = vec![Field::U32(rmst_argument(
+                target_device_number,
+                slot,
+                track_type,
+            ))];
             args.extend(extra);
             args
         };
@@ -192,7 +230,11 @@ impl Connection {
             .await?;
         // The first argument echoes the request type; the item count is the
         // second. `find_map` would stop at the echo.
-        let item_count = available.arguments.get(1).and_then(Field::as_u32).unwrap_or(0);
+        let item_count = available
+            .arguments
+            .get(1)
+            .and_then(Field::as_u32)
+            .unwrap_or(0);
         if item_count == 0 {
             return Ok(Vec::new());
         }
@@ -236,15 +278,32 @@ impl Connection {
     /// shape. `None` means the player answered but had nothing to offer
     /// (the documented "if the length field is 0, there is no blob" case),
     /// not a failure.
-    async fn fetch_blob(&mut self, query: u16, args: Vec<Field>) -> std::io::Result<Option<Vec<u8>>> {
+    async fn fetch_blob(
+        &mut self,
+        query: u16,
+        args: Vec<Field>,
+    ) -> std::io::Result<Option<Vec<u8>>> {
         let response = self.simple_request(query, args).await?;
-        Ok(response.arguments.iter().find_map(Field::as_blob).map(<[u8]>::to_vec))
+        Ok(response
+            .arguments
+            .iter()
+            .find_map(Field::as_blob)
+            .map(<[u8]>::to_vec))
     }
 
-    pub async fn fetch_beat_grid(&mut self, target_device_number: u8, slot: u8, track_type: u8, track_id: u32) -> std::io::Result<Option<Vec<u8>>> {
+    pub async fn fetch_beat_grid(
+        &mut self,
+        target_device_number: u8,
+        slot: u8,
+        track_type: u8,
+        track_id: u32,
+    ) -> std::io::Result<Option<Vec<u8>>> {
         self.fetch_blob(
             queries::BEAT_GRID_REQ,
-            vec![Field::U32(rmst_argument(target_device_number, slot, track_type)), Field::U32(track_id)],
+            vec![
+                Field::U32(rmst_argument(target_device_number, slot, track_type)),
+                Field::U32(track_id),
+            ],
         )
         .await
     }
@@ -252,18 +311,36 @@ impl Connection {
     /// Tries the extended cue list first (color, comment, hot loops); the
     /// caller falls back to [`Self::fetch_cues_basic`] only if this comes
     /// back empty/unavailable.
-    pub async fn fetch_cues_extended(&mut self, target_device_number: u8, slot: u8, track_type: u8, track_id: u32) -> std::io::Result<Option<Vec<u8>>> {
+    pub async fn fetch_cues_extended(
+        &mut self,
+        target_device_number: u8,
+        slot: u8,
+        track_type: u8,
+        track_id: u32,
+    ) -> std::io::Result<Option<Vec<u8>>> {
         self.fetch_blob(
             queries::CUE_LIST_EXT_REQ,
-            vec![Field::U32(rmst_argument(target_device_number, slot, track_type)), Field::U32(track_id)],
+            vec![
+                Field::U32(rmst_argument(target_device_number, slot, track_type)),
+                Field::U32(track_id),
+            ],
         )
         .await
     }
 
-    pub async fn fetch_cues_basic(&mut self, target_device_number: u8, slot: u8, track_type: u8, track_id: u32) -> std::io::Result<Option<Vec<u8>>> {
+    pub async fn fetch_cues_basic(
+        &mut self,
+        target_device_number: u8,
+        slot: u8,
+        track_type: u8,
+        track_id: u32,
+    ) -> std::io::Result<Option<Vec<u8>>> {
         self.fetch_blob(
             queries::CUE_LIST_REQ,
-            vec![Field::U32(rmst_argument(target_device_number, slot, track_type)), Field::U32(track_id)],
+            vec![
+                Field::U32(rmst_argument(target_device_number, slot, track_type)),
+                Field::U32(track_id),
+            ],
         )
         .await
     }
@@ -271,7 +348,15 @@ impl Connection {
     /// `tag_fourcc` is the 4-byte ANLZ tag magic to request, byte-reversed
     /// for the wire (see `dbserver::waveform`'s doc comment for the
     /// concrete value this codebase asks for).
-    pub async fn fetch_anlz_tag(&mut self, target_device_number: u8, slot: u8, track_type: u8, track_id: u32, tag_fourcc: u32, file_extension: &str) -> std::io::Result<Option<Vec<u8>>> {
+    pub async fn fetch_anlz_tag(
+        &mut self,
+        target_device_number: u8,
+        slot: u8,
+        track_type: u8,
+        track_id: u32,
+        tag_fourcc: u32,
+        file_extension: &str,
+    ) -> std::io::Result<Option<Vec<u8>>> {
         self.fetch_blob(
             queries::ANLZ_TAG_REQ,
             vec![
@@ -284,20 +369,38 @@ impl Connection {
         .await
     }
 
-    pub async fn fetch_artwork(&mut self, target_device_number: u8, slot: u8, track_type: u8, artwork_id: u32) -> std::io::Result<Option<Vec<u8>>> {
+    pub async fn fetch_artwork(
+        &mut self,
+        target_device_number: u8,
+        slot: u8,
+        track_type: u8,
+        artwork_id: u32,
+    ) -> std::io::Result<Option<Vec<u8>>> {
         self.fetch_blob(
             queries::ARTWORK_REQ,
-            vec![Field::U32(rmst_argument(target_device_number, slot, track_type)), Field::U32(artwork_id)],
+            vec![
+                Field::U32(rmst_argument(target_device_number, slot, track_type)),
+                Field::U32(artwork_id),
+            ],
         )
         .await
     }
 
-    async fn simple_request(&mut self, message_type: u16, args: Vec<Field>) -> std::io::Result<Message> {
+    async fn simple_request(
+        &mut self,
+        message_type: u16,
+        args: Vec<Field>,
+    ) -> std::io::Result<Message> {
         let transaction_id = self.take_transaction_id();
         self.request(transaction_id, message_type, args).await
     }
 
-    async fn request(&mut self, transaction_id: u32, message_type: u16, args: Vec<Field>) -> std::io::Result<Message> {
+    async fn request(
+        &mut self,
+        transaction_id: u32,
+        message_type: u16,
+        args: Vec<Field>,
+    ) -> std::io::Result<Message> {
         let bytes = Message::new(transaction_id, message_type, args).encode();
         self.stream.write_all(&bytes).await?;
         self.read_message().await
@@ -337,7 +440,8 @@ impl Connection {
                 return Ok(message);
             }
             let mut chunk = [0u8; 4096];
-            let read = match tokio::time::timeout(READ_TIMEOUT, self.stream.read(&mut chunk)).await {
+            let read = match tokio::time::timeout(READ_TIMEOUT, self.stream.read(&mut chunk)).await
+            {
                 Ok(result) => result?,
                 Err(_) => {
                     // Quiet long enough that "still arriving" is no longer
@@ -351,12 +455,18 @@ impl Connection {
                     }
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::TimedOut,
-                        format!("dbserver went quiet with {} undecodable byte(s) buffered", self.read_buffer.len()),
+                        format!(
+                            "dbserver went quiet with {} undecodable byte(s) buffered",
+                            self.read_buffer.len()
+                        ),
                     ));
                 }
             };
             if read == 0 {
-                return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "dbserver closed the connection"));
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "dbserver closed the connection",
+                ));
             }
             self.read_buffer.extend_from_slice(&chunk[..read]);
         }
@@ -364,7 +474,10 @@ impl Connection {
 }
 
 fn unexpected_message(expected: &str, got_type: u16) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::InvalidData, format!("expected {expected}, got message type {got_type:#06x}"))
+    std::io::Error::new(
+        std::io::ErrorKind::InvalidData,
+        format!("expected {expected}, got message type {got_type:#06x}"),
+    )
 }
 
 fn bound_tcp_socket(bind_ip: Ipv4Addr) -> std::io::Result<TcpSocket> {
@@ -375,7 +488,9 @@ fn bound_tcp_socket(bind_ip: Ipv4Addr) -> std::io::Result<TcpSocket> {
 
 async fn discover_query_port(player_ip: Ipv4Addr, bind_ip: Ipv4Addr) -> std::io::Result<u16> {
     let socket = bound_tcp_socket(bind_ip)?;
-    let mut stream = socket.connect(SocketAddr::from((player_ip, PORT_DISCOVERY_PORT))).await?;
+    let mut stream = socket
+        .connect(SocketAddr::from((player_ip, PORT_DISCOVERY_PORT)))
+        .await?;
     stream.write_all(&port_discovery_request()).await?;
 
     let mut response = [0u8; 2];

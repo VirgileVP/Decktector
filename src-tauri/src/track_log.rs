@@ -103,6 +103,5 @@ async fn append_line(path: &Path, deck_id: DeckId, track: &TrackInfo) -> std::io
         .append(true)
         .open(path)
         .await?;
-    file.write_all(format_line(deck_id, track).as_bytes())
-        .await
+    file.write_all(format_line(deck_id, track).as_bytes()).await
 }

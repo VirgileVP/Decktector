@@ -60,7 +60,9 @@ impl ProlinkEngine {
     }
 
     fn tasks_slot(&self) -> MutexGuard<'_, Vec<JoinHandle<()>>> {
-        self.tasks.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.tasks
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 
@@ -77,16 +79,26 @@ impl Engine for ProlinkEngine {
         // `std::sync::MutexGuard` across an `.await` would make this
         // function's future `!Send`, which the `Engine` trait object
         // requires (see `#[async_trait]` on the trait definition).
-        let known_peer = wait_for_known_peer(&self.device_watcher, INTERFACE_DISCOVERY_TIMEOUT).await;
+        let known_peer =
+            wait_for_known_peer(&self.device_watcher, INTERFACE_DISCOVERY_TIMEOUT).await;
         let bind_ip = network::pick_interface(known_peer);
         // `MetadataFetcher` is built unconditionally, even if no interface
         // was resolved: without one, `presence` below never gets its `run`
         // task, so it never claims a number, and `MetadataFetcher`'s own
         // `device_number()` check already declines every fetch until one
         // exists — no separate degrade-gracefully path needed here.
-        let metadata_fetcher =
-            MetadataFetcher::new(Arc::clone(&presence), bind_ip.as_ref().ok().copied().unwrap_or(Ipv4Addr::UNSPECIFIED));
-        *self.metadata_fetcher.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Arc::clone(&metadata_fetcher));
+        let metadata_fetcher = MetadataFetcher::new(
+            Arc::clone(&presence),
+            bind_ip
+                .as_ref()
+                .ok()
+                .copied()
+                .unwrap_or(Ipv4Addr::UNSPECIFIED),
+        );
+        *self
+            .metadata_fetcher
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Arc::clone(&metadata_fetcher));
 
         let mut tasks = self.tasks_slot();
         tasks.push(tokio::spawn(Arc::clone(&status_watcher).run()));
@@ -101,7 +113,11 @@ impl Engine for ProlinkEngine {
 
         match bind_ip {
             Ok(bind_ip) => {
-                tasks.push(tokio::spawn(presence.run(Arc::clone(&self.device_watcher), DEVICE_NAME.to_string(), bind_ip)));
+                tasks.push(tokio::spawn(presence.run(
+                    Arc::clone(&self.device_watcher),
+                    DEVICE_NAME.to_string(),
+                    bind_ip,
+                )));
             }
             Err(error) => {
                 // We still listen for and report real players' status/beat
@@ -122,7 +138,12 @@ impl Engine for ProlinkEngine {
         for task in self.tasks_slot().drain(..) {
             task.abort();
         }
-        if let Some(fetcher) = self.metadata_fetcher.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).take() {
+        if let Some(fetcher) = self
+            .metadata_fetcher
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take()
+        {
             fetcher.abort_all();
         }
         self.handle.set_network_state(NetworkState::Offline);
@@ -138,7 +159,10 @@ impl Engine for ProlinkEngine {
 /// yet — used to pick which local network adapter shares the players'
 /// subnet (see [`crate::network`]). Never fails outright: `None` just means
 /// [`network::pick_interface`] falls back to its own default.
-async fn wait_for_known_peer(device_watcher: &DeviceWatcher, timeout: Duration) -> Option<Ipv4Addr> {
+async fn wait_for_known_peer(
+    device_watcher: &DeviceWatcher,
+    timeout: Duration,
+) -> Option<Ipv4Addr> {
     if let Some(ip) = first_peer_ip(&device_watcher.devices()) {
         return Some(ip);
     }
@@ -189,7 +213,13 @@ async fn run_reporting(
     // DeviceWatcher may already have been running a while (it's shared with
     // the diagnostics panel) — hydrate from what it already knows rather
     // than waiting for the next change.
-    sync_devices(&handle, &metadata_fetcher, &mut known_players, &mut position, &device_watcher.devices());
+    sync_devices(
+        &handle,
+        &metadata_fetcher,
+        &mut known_players,
+        &mut position,
+        &device_watcher.devices(),
+    );
 
     loop {
         tokio::select! {
@@ -253,8 +283,15 @@ fn handle_status(
     // deck plays off one stick, and asking a deck about a track it is only
     // streaming gets an empty answer (and, over NFS, a mount failure on an
     // empty slot).
-    let source_device = if status.track_source_device == 0 { deck_id } else { status.track_source_device };
-    let Some(player_ip) = known_players.get(&source_device).and_then(|player| player.ip.parse().ok()) else {
+    let source_device = if status.track_source_device == 0 {
+        deck_id
+    } else {
+        status.track_source_device
+    };
+    let Some(player_ip) = known_players
+        .get(&source_device)
+        .and_then(|player| player.ip.parse().ok())
+    else {
         // No address for that player yet. Status packets arrive every
         // ~200ms and keep-alives only every ~1.5s, so at startup this is
         // simply the normal order of events — and it is why the track id
@@ -293,7 +330,9 @@ fn sync_devices(
 ) {
     let current: HashMap<DeckId, DeviceInfo> = devices
         .iter()
-        .filter(|device| device.kind == DeviceKind::Player && !prolink::presence::is_own_broadcast(device))
+        .filter(|device| {
+            device.kind == DeviceKind::Player && !prolink::presence::is_own_broadcast(device)
+        })
         .map(|device| {
             (
                 device.device_number,
@@ -328,7 +367,9 @@ fn sync_devices(
 /// the way. An unset or unparseable value means no override, the same as
 /// before this env var existed.
 fn vcdj_id_override() -> Option<u8> {
-    std::env::var("DECKTECTIVE_VCDJ_ID").ok().and_then(|value| value.parse().ok())
+    std::env::var("DECKTECTIVE_VCDJ_ID")
+        .ok()
+        .and_then(|value| value.parse().ok())
 }
 
 fn now_ms() -> f64 {

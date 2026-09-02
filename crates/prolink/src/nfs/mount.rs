@@ -18,7 +18,13 @@ pub type FileHandle = [u8; FILE_HANDLE_LEN];
 pub fn build_mnt_call(xid: u32, dir_path: &str) -> Vec<u8> {
     let mut args = XdrEncoder::new();
     args.write_string_utf16le(dir_path);
-    rpc::build_call(xid, MOUNT_PROGRAM, MOUNT_VERSION, MOUNTPROC_MNT, &args.into_bytes())
+    rpc::build_call(
+        xid,
+        MOUNT_PROGRAM,
+        MOUNT_VERSION,
+        MOUNTPROC_MNT,
+        &args.into_bytes(),
+    )
 }
 
 /// The root file handle, or `None` if the reply doesn't match, wasn't

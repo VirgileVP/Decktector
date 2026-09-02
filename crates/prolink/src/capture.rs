@@ -72,7 +72,10 @@ scenarios worth exercising while recording.
 /// the guided driver annotates a session owned by a separate
 /// `prolink-capture` process, so it has the path but not the writer.
 pub fn append_note(session_dir: &Path, text: &str) -> io::Result<()> {
-    let mut file = fs::OpenOptions::new().create(true).append(true).open(session_dir.join(NOTES_FILE))?;
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(session_dir.join(NOTES_FILE))?;
     writeln!(file, "- {} — {}", Local::now().format("%H:%M:%S"), text)
 }
 
@@ -97,7 +100,13 @@ impl UdpRecord {
     /// only meaningful time is the one the capture recorded (see
     /// `bin/prolink-pcap.rs`).
     pub fn at(time_micros: i64, port: u16, src: IpAddr, payload: &[u8]) -> Self {
-        Self { t: time_micros, port, src: src.to_string(), len: payload.len(), hex: encode_hex(payload) }
+        Self {
+            t: time_micros,
+            port,
+            src: src.to_string(),
+            len: payload.len(),
+            hex: encode_hex(payload),
+        }
     }
 
     /// Decodes [`Self::hex`] back to raw bytes; `None` if it isn't valid hex
@@ -110,7 +119,10 @@ impl UdpRecord {
 }
 
 fn now_micros() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|elapsed| elapsed.as_micros() as i64).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_micros() as i64)
+        .unwrap_or(0)
 }
 
 fn encode_hex(bytes: &[u8]) -> String {
@@ -121,7 +133,10 @@ fn decode_hex(hex: &str) -> Option<Vec<u8>> {
     if !hex.len().is_multiple_of(2) {
         return None;
     }
-    (0..hex.len()).step_by(2).map(|i| u8::from_str_radix(&hex[i..i + 2], 16).ok()).collect()
+    (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).ok())
+        .collect()
 }
 
 /// A single JSONL log: one file, appended one flushed record at a time.
@@ -134,7 +149,9 @@ struct JsonlWriter {
 
 impl JsonlWriter {
     fn create(path: &Path) -> io::Result<Self> {
-        Ok(Self { file: Mutex::new(BufWriter::new(File::create(path)?)) })
+        Ok(Self {
+            file: Mutex::new(BufWriter::new(File::create(path)?)),
+        })
     }
 
     /// Serializes `record`, appends it as one line, and flushes — a panic
@@ -142,7 +159,10 @@ impl JsonlWriter {
     /// stop this log from accepting further records, so a poisoned mutex is
     /// recovered from rather than propagated.
     fn write<T: Serialize>(&self, record: &T) -> io::Result<()> {
-        let mut guard = self.file.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut guard = self
+            .file
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         serde_json::to_writer(&mut *guard, record)?;
         guard.write_all(b"\n")?;
         guard.flush()
@@ -190,20 +210,26 @@ pub struct JsonlRead<T> {
 /// A line that fails to parse yields an `Err` item and the iterator carries
 /// on: unlike a test, a replay would rather drop one packet than stop. The
 /// last line of a capture cut off mid-write is exactly such a line.
-pub fn stream_jsonl<T: DeserializeOwned>(path: &Path) -> io::Result<impl Iterator<Item = io::Result<T>>> {
+pub fn stream_jsonl<T: DeserializeOwned>(
+    path: &Path,
+) -> io::Result<impl Iterator<Item = io::Result<T>>> {
     let lines = BufReader::new(File::open(path)?).lines();
     Ok(lines.filter_map(|line| match line {
         Err(error) => Some(Err(error)),
         Ok(line) if line.trim().is_empty() => None,
-        Ok(line) => Some(
-            serde_json::from_str::<T>(&line)
-                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, format!("malformed JSONL record: {error}"))),
-        ),
+        Ok(line) => Some(serde_json::from_str::<T>(&line).map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("malformed JSONL record: {error}"),
+            )
+        })),
     }))
 }
 
 pub fn read_jsonl<T: DeserializeOwned>(path: &Path) -> io::Result<JsonlRead<T>> {
-    let lines: Vec<String> = BufReader::new(File::open(path)?).lines().collect::<io::Result<_>>()?;
+    let lines: Vec<String> = BufReader::new(File::open(path)?)
+        .lines()
+        .collect::<io::Result<_>>()?;
     let last_index = lines.len().checked_sub(1);
 
     let mut records = Vec::with_capacity(lines.len());
@@ -221,7 +247,10 @@ pub fn read_jsonl<T: DeserializeOwned>(path: &Path) -> io::Result<JsonlRead<T>> 
             Err(error) => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
-                    format!("malformed JSONL line {index} in {}: {error}", path.display()),
+                    format!(
+                        "malformed JSONL line {index} in {}: {error}",
+                        path.display()
+                    ),
                 ));
             }
         }
@@ -290,7 +319,10 @@ impl CaptureWriter {
     /// `artwork/` subdirectories exist, and returns the base path — call
     /// before writing anything into it.
     pub fn nfs_capture_dir(&self, player_ip: Ipv4Addr, slot_label: &str) -> io::Result<PathBuf> {
-        let dir = self.session_dir.join(NFS_DIR).join(format!("{player_ip}-{slot_label}"));
+        let dir = self
+            .session_dir
+            .join(NFS_DIR)
+            .join(format!("{player_ip}-{slot_label}"));
         fs::create_dir_all(dir.join(ANALYSIS_DIR))?;
         fs::create_dir_all(dir.join(ARTWORK_DIR))?;
         Ok(dir)
@@ -306,10 +338,19 @@ impl CaptureWriter {
     /// character no filesystem accepts would otherwise let a crafted or
     /// corrupt capture write outside the session directory.
     pub fn nfs_recovered_path(&self, player_ip: Ipv4Addr, path: &str) -> io::Result<PathBuf> {
-        let mut file_path = self.session_dir.join(NFS_DIR).join(format!("{player_ip}-{RECOVERED_SUFFIX}"));
-        let segments: Vec<&str> = path.split('/').filter(|segment| !segment.is_empty()).collect();
+        let mut file_path = self
+            .session_dir
+            .join(NFS_DIR)
+            .join(format!("{player_ip}-{RECOVERED_SUFFIX}"));
+        let segments: Vec<&str> = path
+            .split('/')
+            .filter(|segment| !segment.is_empty())
+            .collect();
         if segments.is_empty() {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, format!("recovered file has no usable path: {path:?}")));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("recovered file has no usable path: {path:?}"),
+            ));
         }
         for segment in segments {
             file_path.push(sanitize_path_segment(segment));
@@ -322,7 +363,10 @@ impl CaptureWriter {
 
     /// Ensures `dbserver/<player_ip>/` exists and returns its path.
     pub fn dbserver_capture_dir(&self, player_ip: Ipv4Addr) -> io::Result<PathBuf> {
-        let dir = self.session_dir.join(DBSERVER_DIR).join(player_ip.to_string());
+        let dir = self
+            .session_dir
+            .join(DBSERVER_DIR)
+            .join(player_ip.to_string());
         fs::create_dir_all(&dir)?;
         Ok(dir)
     }
@@ -347,10 +391,17 @@ fn sanitize_path_segment(segment: &str) -> String {
 }
 
 fn timestamp_label(time: SystemTime) -> String {
-    let total_secs = time.duration_since(UNIX_EPOCH).map(|elapsed| elapsed.as_secs()).unwrap_or(0);
+    let total_secs = time
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs())
+        .unwrap_or(0);
     let (year, month, day) = civil_from_days((total_secs / 86_400) as i64);
     let secs_of_day = total_secs % 86_400;
-    let (hour, minute, second) = (secs_of_day / 3600, (secs_of_day % 3600) / 60, secs_of_day % 60);
+    let (hour, minute, second) = (
+        secs_of_day / 3600,
+        (secs_of_day % 3600) / 60,
+        secs_of_day % 60,
+    );
     format!("{year:04}{month:02}{day:02}-{hour:02}{minute:02}{second:02}")
 }
 
@@ -411,7 +462,8 @@ mod tests {
         writer.write_udp(&record).expect("write udp record");
         writer.write_udp(&record).expect("write udp record");
 
-        let read: JsonlRead<UdpRecord> = read_jsonl(&writer.session_dir().join(UDP_LOG)).expect("read back");
+        let read: JsonlRead<UdpRecord> =
+            read_jsonl(&writer.session_dir().join(UDP_LOG)).expect("read back");
         assert_eq!(read.records, vec![record.clone(), record]);
         assert!(!read.truncated);
     }
@@ -426,7 +478,8 @@ mod tests {
         contents.push_str(r#"{"t":123,"port":5000"#); // Cut off mid-object, no closing brace.
         fs::write(&path, contents).expect("write truncated file");
 
-        let read: JsonlRead<UdpRecord> = read_jsonl(&path).expect("should read the complete records");
+        let read: JsonlRead<UdpRecord> =
+            read_jsonl(&path).expect("should read the complete records");
         assert_eq!(read.records, vec![complete]);
         assert!(read.truncated);
     }
@@ -436,11 +489,17 @@ mod tests {
         let dir = tempfile::tempdir().expect("temp dir");
         let path = dir.path().join("corrupt.jsonl");
         let complete = UdpRecord::new(50002, IpAddr::V4(Ipv4Addr::LOCALHOST), &[9, 9]);
-        let contents = format!("not valid json\n{}\n", serde_json::to_string(&complete).expect("serialize"));
+        let contents = format!(
+            "not valid json\n{}\n",
+            serde_json::to_string(&complete).expect("serialize")
+        );
         fs::write(&path, contents).expect("write corrupt file");
 
         let result: io::Result<JsonlRead<UdpRecord>> = read_jsonl(&path);
-        assert!(result.is_err(), "a corrupt line that isn't the last line should not be silently skipped");
+        assert!(
+            result.is_err(),
+            "a corrupt line that isn't the last line should not be silently skipped"
+        );
     }
 
     #[test]
@@ -449,7 +508,8 @@ mod tests {
         let first = CaptureWriter::new(dir.path()).expect("first creation");
         // Calling into the same already-existing session directory a second
         // time (e.g. a retry after a transient error) must not fail.
-        fs::create_dir_all(first.session_dir()).expect("re-creating an existing session dir is a no-op, not an error");
+        fs::create_dir_all(first.session_dir())
+            .expect("re-creating an existing session dir is a no-op, not an error");
         fs::create_dir_all(first.session_dir().join(NFS_DIR)).expect("re-creating nfs/ is a no-op");
     }
 
@@ -458,11 +518,15 @@ mod tests {
         let dir = tempfile::tempdir().expect("temp dir");
         let writer = CaptureWriter::new(dir.path()).expect("create capture writer");
 
-        let nfs_dir = writer.nfs_capture_dir(Ipv4Addr::new(192, 168, 1, 31), "usb").expect("create nfs dir");
+        let nfs_dir = writer
+            .nfs_capture_dir(Ipv4Addr::new(192, 168, 1, 31), "usb")
+            .expect("create nfs dir");
         assert!(nfs_dir.join(ANALYSIS_DIR).is_dir());
         assert!(nfs_dir.join(ARTWORK_DIR).is_dir());
 
-        let db_dir = writer.dbserver_capture_dir(Ipv4Addr::new(192, 168, 1, 31)).expect("create dbserver dir");
+        let db_dir = writer
+            .dbserver_capture_dir(Ipv4Addr::new(192, 168, 1, 31))
+            .expect("create dbserver dir");
         assert!(db_dir.is_dir());
     }
 

@@ -101,7 +101,10 @@ pub fn run() {
             // which only exists once the app handle is available — this is
             // the earliest point that is true, so the service is built here
             // rather than alongside `timecode` and `device_watcher` above.
-            let remote = RemoteService::new(Arc::clone(&engine), remote::resolve_asset_source(app.handle()));
+            let remote = RemoteService::new(
+                Arc::clone(&engine),
+                remote::resolve_asset_source(app.handle()),
+            );
             app.manage(Arc::clone(&remote));
 
             events::forward_to_renderer(app.handle().clone(), Arc::clone(&engine));

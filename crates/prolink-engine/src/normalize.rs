@@ -77,48 +77,109 @@ mod tests {
     #[test]
     fn playing_and_looping_both_read_as_playing() {
         for raw in [RawPlayState::Playing, RawPlayState::Looping] {
-            let deck = to_deck_state(&status(|mut status| { status.play_state = raw; status }), None, 1_000.0);
-            assert_eq!(deck.play_state, PlayState::Playing, "{raw:?} should read as Playing");
+            let deck = to_deck_state(
+                &status(|mut status| {
+                    status.play_state = raw;
+                    status
+                }),
+                None,
+                1_000.0,
+            );
+            assert_eq!(
+                deck.play_state,
+                PlayState::Playing,
+                "{raw:?} should read as Playing"
+            );
         }
     }
 
     #[test]
     fn paused_at_cue_and_cue_playing_both_read_as_cued() {
         for raw in [RawPlayState::PausedAtCue, RawPlayState::CuePlaying] {
-            let deck = to_deck_state(&status(|mut status| { status.play_state = raw; status }), None, 1_000.0);
-            assert_eq!(deck.play_state, PlayState::Cued, "{raw:?} should read as Cued");
+            let deck = to_deck_state(
+                &status(|mut status| {
+                    status.play_state = raw;
+                    status
+                }),
+                None,
+                1_000.0,
+            );
+            assert_eq!(
+                deck.play_state,
+                PlayState::Cued,
+                "{raw:?} should read as Cued"
+            );
         }
     }
 
     #[test]
     fn paused_away_and_cue_scratching_both_read_as_paused() {
         for raw in [RawPlayState::PausedAway, RawPlayState::CueScratching] {
-            let deck = to_deck_state(&status(|mut status| { status.play_state = raw; status }), None, 1_000.0);
-            assert_eq!(deck.play_state, PlayState::Paused, "{raw:?} should read as Paused");
+            let deck = to_deck_state(
+                &status(|mut status| {
+                    status.play_state = raw;
+                    status
+                }),
+                None,
+                1_000.0,
+            );
+            assert_eq!(
+                deck.play_state,
+                PlayState::Paused,
+                "{raw:?} should read as Paused"
+            );
         }
     }
 
     #[test]
     fn searching_and_spun_down_both_read_as_searching() {
         for raw in [RawPlayState::Searching, RawPlayState::SpunDown] {
-            let deck = to_deck_state(&status(|mut status| { status.play_state = raw; status }), None, 1_000.0);
-            assert_eq!(deck.play_state, PlayState::Searching, "{raw:?} should read as Searching");
+            let deck = to_deck_state(
+                &status(|mut status| {
+                    status.play_state = raw;
+                    status
+                }),
+                None,
+                1_000.0,
+            );
+            assert_eq!(
+                deck.play_state,
+                PlayState::Searching,
+                "{raw:?} should read as Searching"
+            );
         }
     }
 
     #[test]
     fn loading_and_ended_map_directly() {
-        let loading = to_deck_state(&status(|mut status| { status.play_state = RawPlayState::Loading; status }), None, 1_000.0);
+        let loading = to_deck_state(
+            &status(|mut status| {
+                status.play_state = RawPlayState::Loading;
+                status
+            }),
+            None,
+            1_000.0,
+        );
         assert_eq!(loading.play_state, PlayState::Loading);
 
-        let ended = to_deck_state(&status(|mut status| { status.play_state = RawPlayState::Ended; status }), None, 1_000.0);
+        let ended = to_deck_state(
+            &status(|mut status| {
+                status.play_state = RawPlayState::Ended;
+                status
+            }),
+            None,
+            1_000.0,
+        );
         assert_eq!(ended.play_state, PlayState::Ended);
     }
 
     #[test]
     fn an_unrecognized_play_state_falls_back_to_empty() {
         let deck = to_deck_state(
-            &status(|mut status| { status.play_state = RawPlayState::Unknown(0x7f); status }),
+            &status(|mut status| {
+                status.play_state = RawPlayState::Unknown(0x7f);
+                status
+            }),
             None,
             1_000.0,
         );

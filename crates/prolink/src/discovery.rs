@@ -252,7 +252,9 @@ impl DeviceWatcher {
     /// propagating the panic: a capture session losing its device table
     /// mid-set is worse than carrying on with whatever is in the map.
     fn seen(&self) -> std::sync::MutexGuard<'_, HashMap<u8, (DiscoveredDevice, Instant)>> {
-        self.seen.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        self.seen
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     fn snapshot(seen: &HashMap<u8, (DiscoveredDevice, Instant)>) -> Vec<DiscoveredDevice> {
@@ -282,7 +284,13 @@ impl DeviceWatcher {
 /// Encoding lives next to [`parse_keepalive`] so the wire format is defined
 /// once; used by [`crate::presence`], by the `prolink-capture` tool and by
 /// the `cdj-sim` dev tool that simulates fake devices on the network.
-pub fn build_keepalive(device_number: u8, name: &str, mac: [u8; 6], ip: Ipv4Addr, peer_count: u8) -> Vec<u8> {
+pub fn build_keepalive(
+    device_number: u8,
+    name: &str,
+    mac: [u8; 6],
+    ip: Ipv4Addr,
+    peer_count: u8,
+) -> Vec<u8> {
     let mut packet = vec![0u8; KEEPALIVE_PACKET_LEN];
     packet[..PROLINK_HEADER.len()].copy_from_slice(&PROLINK_HEADER);
     packet[PROLINK_HEADER.len()] = KEEPALIVE_PACKET_TYPE;
@@ -291,7 +299,8 @@ pub fn build_keepalive(device_number: u8, name: &str, mac: [u8; 6], ip: Ipv4Addr
     packet[NAME_OFFSET..NAME_OFFSET + name_len].copy_from_slice(&name_bytes[..name_len]);
     packet[PROTOCOL_OFFSET] = 0x01;
     packet[KIND_OFFSET] = KIND_PLAYER;
-    packet[LENGTH_OFFSET..LENGTH_OFFSET + 2].copy_from_slice(&(KEEPALIVE_PACKET_LEN as u16).to_be_bytes());
+    packet[LENGTH_OFFSET..LENGTH_OFFSET + 2]
+        .copy_from_slice(&(KEEPALIVE_PACKET_LEN as u16).to_be_bytes());
     packet[DEVICE_NUMBER_OFFSET] = device_number;
     packet[KIND_REPEAT_OFFSET] = 0x01;
     packet[MAC_OFFSET..MAC_OFFSET + MAC_LEN].copy_from_slice(&mac);

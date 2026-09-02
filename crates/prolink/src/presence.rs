@@ -81,7 +81,10 @@ fn presence_mac(device_number: u8) -> [u8; 6] {
 }
 
 fn mac_string(mac: [u8; 6]) -> String {
-    mac.iter().map(|byte| format!("{byte:02x}")).collect::<Vec<_>>().join(":")
+    mac.iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<Vec<_>>()
+        .join(":")
 }
 
 /// The hardware MAC of the adapter holding `bind_ip`.
@@ -103,13 +106,18 @@ fn interface_mac(bind_ip: Ipv4Addr) -> Option<[u8; 6]> {
     // holds `bind_ip` (an AF_INET entry), then that same name's link-layer
     // entry, which is where the MAC lives.
     let name = interface_entries(|entries| {
-        entries.iter().find(|(_, address)| matches!(address, InterfaceAddress::V4(ip) if *ip == bind_ip)).map(|(name, _)| name.clone())
+        entries
+            .iter()
+            .find(|(_, address)| matches!(address, InterfaceAddress::V4(ip) if *ip == bind_ip))
+            .map(|(name, _)| name.clone())
     })?;
     interface_entries(|entries| {
-        entries.iter().find_map(|(entry_name, address)| match address {
-            InterfaceAddress::Link(mac) if *entry_name == name && *mac != [0; 6] => Some(*mac),
-            _ => None,
-        })
+        entries
+            .iter()
+            .find_map(|(entry_name, address)| match address {
+                InterfaceAddress::Link(mac) if *entry_name == name && *mac != [0; 6] => Some(*mac),
+                _ => None,
+            })
     })
 }
 
@@ -130,7 +138,9 @@ enum InterfaceAddress {
 /// The unsafe block is confined here: everything above works on plain owned
 /// values, and the list is freed on every path out.
 #[cfg(unix)]
-fn interface_entries<T>(read: impl FnOnce(&[(String, InterfaceAddress)]) -> Option<T>) -> Option<T> {
+fn interface_entries<T>(
+    read: impl FnOnce(&[(String, InterfaceAddress)]) -> Option<T>,
+) -> Option<T> {
     let mut list: *mut libc::ifaddrs = std::ptr::null_mut();
     // SAFETY: `getifaddrs` either returns 0 and fills `list` with a
     // null-terminated linked list it owns, or returns non-zero and leaves
@@ -152,13 +162,24 @@ fn interface_entries<T>(read: impl FnOnce(&[(String, InterfaceAddress)]) -> Opti
             if entry.ifa_addr.is_null() {
                 continue;
             }
-            let name = std::ffi::CStr::from_ptr(entry.ifa_name).to_string_lossy().into_owned();
+            let name = std::ffi::CStr::from_ptr(entry.ifa_name)
+                .to_string_lossy()
+                .into_owned();
             match i32::from((*entry.ifa_addr).sa_family) {
                 libc::AF_INET => {
                     let address = &*(entry.ifa_addr as *const libc::sockaddr_in);
-                    entries.push((name, InterfaceAddress::V4(Ipv4Addr::from(u32::from_be(address.sin_addr.s_addr)))));
+                    entries.push((
+                        name,
+                        InterfaceAddress::V4(Ipv4Addr::from(u32::from_be(address.sin_addr.s_addr))),
+                    ));
                 }
-                #[cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))]
+                #[cfg(any(
+                    target_os = "macos",
+                    target_os = "ios",
+                    target_os = "freebsd",
+                    target_os = "netbsd",
+                    target_os = "openbsd"
+                ))]
                 libc::AF_LINK => {
                     let address = &*(entry.ifa_addr as *const libc::sockaddr_dl);
                     let start = usize::from(address.sdl_nlen);
@@ -267,7 +288,12 @@ impl Presence {
     /// rather than taking the engine down over one socket — status/beat
     /// listening keeps working regardless, since those don't depend on
     /// presence (see this module's doc comment).
-    pub async fn run(self: Arc<Self>, device_watcher: Arc<DeviceWatcher>, name: String, bind_ip: Ipv4Addr) {
+    pub async fn run(
+        self: Arc<Self>,
+        device_watcher: Arc<DeviceWatcher>,
+        name: String,
+        bind_ip: Ipv4Addr,
+    ) {
         // Real players broadcast their keep-alives *from* ANNOUNCE_PORT, so
         // that is what we do; an ephemeral source port is the fallback
         // rather than the default, since a peer that filters on the source
@@ -405,13 +431,22 @@ mod tests {
 
     #[test]
     fn a_taken_override_falls_back_to_the_normal_order() {
-        assert_eq!(pick_device_number(&[2], Some(2)), Some(PREFERRED_DEVICE_NUMBER));
+        assert_eq!(
+            pick_device_number(&[2], Some(2)),
+            Some(PREFERRED_DEVICE_NUMBER)
+        );
     }
 
     #[test]
     fn an_out_of_range_override_is_ignored() {
-        assert_eq!(pick_device_number(&[], Some(33)), Some(PREFERRED_DEVICE_NUMBER));
-        assert_eq!(pick_device_number(&[], Some(0)), Some(PREFERRED_DEVICE_NUMBER));
+        assert_eq!(
+            pick_device_number(&[], Some(33)),
+            Some(PREFERRED_DEVICE_NUMBER)
+        );
+        assert_eq!(
+            pick_device_number(&[], Some(0)),
+            Some(PREFERRED_DEVICE_NUMBER)
+        );
     }
 
     #[test]

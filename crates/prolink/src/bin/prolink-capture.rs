@@ -134,24 +134,52 @@ fn parse_args() -> Config {
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
-            "--out" => config.out_dir = PathBuf::from(args.next().expect("--out needs a directory")),
-            "--bind" => config.bind_ip = Some(args.next().and_then(|v| v.parse().ok()).expect("--bind needs an IPv4 address")),
-            "--player" => config.player_overrides.push(args.next().and_then(|v| v.parse().ok()).expect("--player needs an IPv4 address")),
+            "--out" => {
+                config.out_dir = PathBuf::from(args.next().expect("--out needs a directory"))
+            }
+            "--bind" => {
+                config.bind_ip = Some(
+                    args.next()
+                        .and_then(|v| v.parse().ok())
+                        .expect("--bind needs an IPv4 address"),
+                )
+            }
+            "--player" => config.player_overrides.push(
+                args.next()
+                    .and_then(|v| v.parse().ok())
+                    .expect("--player needs an IPv4 address"),
+            ),
             "--slot" => {
                 let raw = args.next().expect("--slot needs usb, sd or cd");
-                config.slot_overrides.push(parse_slot(&raw).unwrap_or_else(|| panic!("unrecognized --slot value: {raw}")));
+                config.slot_overrides.push(
+                    parse_slot(&raw).unwrap_or_else(|| panic!("unrecognized --slot value: {raw}")),
+                );
             }
-            "--max-tracks" => config.max_tracks = args.next().and_then(|v| v.parse().ok()).expect("--max-tracks needs a number"),
+            "--max-tracks" => {
+                config.max_tracks = args
+                    .next()
+                    .and_then(|v| v.parse().ok())
+                    .expect("--max-tracks needs a number")
+            }
             "--duration-sec" => {
-                let secs: u64 = args.next().and_then(|v| v.parse().ok()).expect("--duration-sec needs a number");
+                let secs: u64 = args
+                    .next()
+                    .and_then(|v| v.parse().ok())
+                    .expect("--duration-sec needs a number");
                 config.duration = Some(Duration::from_secs(secs));
             }
             "--no-nfs" => config.no_nfs = true,
             "--no-dbserver" => config.no_dbserver = true,
             "--no-announce" => config.announce = false,
             "--device-number" => {
-                let number: u8 = args.next().and_then(|v| v.parse().ok()).expect("--device-number needs a number");
-                assert!((1..=6).contains(&number), "--device-number must be between 1 and 6");
+                let number: u8 = args
+                    .next()
+                    .and_then(|v| v.parse().ok())
+                    .expect("--device-number needs a number");
+                assert!(
+                    (1..=6).contains(&number),
+                    "--device-number must be between 1 and 6"
+                );
                 config.device_number = Some(number);
             }
             "--help" | "-h" => {
@@ -207,18 +235,24 @@ fn play_state_label(state: RawPlayState) -> String {
 }
 
 fn print_usage() {
-    eprintln!("prolink-capture — records a Pro DJ Link hardware session to disk for offline replay");
+    eprintln!(
+        "prolink-capture — records a Pro DJ Link hardware session to disk for offline replay"
+    );
     eprintln!();
     eprintln!("Options:");
     eprintln!("  --out DIR            session output directory (default {DEFAULT_OUT_DIR})");
-    eprintln!("  --bind IP            local adapter IP (default: auto-detected, printed at startup)");
+    eprintln!(
+        "  --bind IP            local adapter IP (default: auto-detected, printed at startup)"
+    );
     eprintln!("  --player IP          explicit player to pull NFS metadata from, pairs with --slot by position");
     eprintln!("  --slot usb|sd|cd     media slot for the matching --player, see above");
     eprintln!("  --max-tracks N       cap on analysis/artwork files pulled per player (default {DEFAULT_MAX_TRACKS})");
     eprintln!("  --duration-sec N     stop after N seconds instead of running until Ctrl+C");
     eprintln!("  --no-nfs             skip phase C (NFS metadata pull)");
     eprintln!("  --no-dbserver        skip phase D (dbserver metadata pull)");
-    eprintln!("  --no-announce        do not broadcast a virtual-CDJ keep-alive (players will then");
+    eprintln!(
+        "  --no-announce        do not broadcast a virtual-CDJ keep-alive (players will then"
+    );
     eprintln!("                       send no status packets at all — listen-only diagnostics)");
     eprintln!("  --device-number N    virtual player number 1-6 to claim (default: first free of 5, 6, 1-4)");
 }
@@ -296,7 +330,10 @@ struct SessionInfo {
 async fn main() {
     let config = parse_args();
 
-    let subscriber = tracing_subscriber::fmt().with_max_level(tracing::Level::DEBUG).with_writer(std::io::stderr).finish();
+    let subscriber = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .with_writer(std::io::stderr)
+        .finish();
     let _ = tracing::subscriber::set_global_default(subscriber);
 
     let bind_ip = match config.bind_ip {
@@ -308,7 +345,10 @@ async fn main() {
     let writer = match CaptureWriter::new(&config.out_dir) {
         Ok(writer) => Arc::new(writer),
         Err(error) => {
-            eprintln!("failed to create the capture session directory under {}: {error}", config.out_dir.display());
+            eprintln!(
+                "failed to create the capture session directory under {}: {error}",
+                config.out_dir.display()
+            );
             std::process::exit(1);
         }
     };
@@ -341,14 +381,27 @@ async fn main() {
     // decoding (see this module's doc comment for why status decoding lives
     // here rather than behind `StatusWatcher`).
     for port in [ANNOUNCE_PORT, BEAT_PORT, STATUS_PORT] {
-        tokio::spawn(run_phase_a(Arc::clone(&writer), Arc::clone(&ledger), Arc::clone(&device_watcher), Arc::clone(&counts), port));
+        tokio::spawn(run_phase_a(
+            Arc::clone(&writer),
+            Arc::clone(&ledger),
+            Arc::clone(&device_watcher),
+            Arc::clone(&counts),
+            port,
+        ));
     }
 
     // Phase B: device discovery, driven by phase A, and the keep-alive that
     // makes the players talk back on STATUS_PORT (see the module doc).
     tokio::spawn(run_device_sweep(Arc::clone(&device_watcher)));
-    tokio::spawn(run_device_log(Arc::clone(&writer), device_watcher.subscribe()));
-    tokio::spawn(run_live_table(Arc::clone(&device_watcher), Arc::clone(&ledger), Arc::clone(&counts)));
+    tokio::spawn(run_device_log(
+        Arc::clone(&writer),
+        device_watcher.subscribe(),
+    ));
+    tokio::spawn(run_live_table(
+        Arc::clone(&device_watcher),
+        Arc::clone(&ledger),
+        Arc::clone(&counts),
+    ));
     let presence = config.announce.then(|| {
         let presence = Presence::new(config.device_number);
         println!("Announcing as a virtual CDJ named {PRESENCE_NAME} (use --no-announce for a listen-only capture)");
@@ -367,9 +420,16 @@ async fn main() {
     // packets, and their absence is otherwise invisible until the files are
     // read back somewhere else, days later.
     if counts.get(STATUS_PORT) == 0 && !device_watcher.devices().is_empty() {
-        println!("WARNING: {} device(s) discovered but not one status packet on port {STATUS_PORT}.", device_watcher.devices().len());
-        println!("         Players only unicast status to peers whose keep-alives they see, so this");
-        println!("         means our keep-alive isn't reaching them: check --bind ({bind_ip}) is the");
+        println!(
+            "WARNING: {} device(s) discovered but not one status packet on port {STATUS_PORT}.",
+            device_watcher.devices().len()
+        );
+        println!(
+            "         Players only unicast status to peers whose keep-alives they see, so this"
+        );
+        println!(
+            "         means our keep-alive isn't reaching them: check --bind ({bind_ip}) is the"
+        );
         println!("         adapter the players are on, and that --no-announce was not passed.");
     }
 
@@ -377,13 +437,26 @@ async fn main() {
     if config.no_nfs {
         println!("phase C (NFS) skipped: --no-nfs");
     } else {
-        run_phase_c(Arc::clone(&writer), bind_ip, targets, Arc::clone(&ledger), config.max_tracks).await;
+        run_phase_c(
+            Arc::clone(&writer),
+            bind_ip,
+            targets,
+            Arc::clone(&ledger),
+            config.max_tracks,
+        )
+        .await;
     }
 
     if config.no_dbserver {
         println!("phase D (dbserver) skipped: --no-dbserver");
     } else {
-        run_phase_d(Arc::clone(&writer), bind_ip, Arc::clone(&ledger), our_device_number(&config, presence.as_ref())).await;
+        run_phase_d(
+            Arc::clone(&writer),
+            bind_ip,
+            Arc::clone(&ledger),
+            our_device_number(&config, presence.as_ref()),
+        )
+        .await;
     }
 
     if config.duration.is_none() {
@@ -429,12 +502,21 @@ async fn wait_for_stop() {
 }
 
 fn now_unix_ms() -> u128 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|elapsed| elapsed.as_millis()).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis())
+        .unwrap_or(0)
 }
 
 fn git_sha() -> Option<String> {
-    let output = std::process::Command::new("git").args(["rev-parse", "HEAD"]).output().ok()?;
-    output.status.success().then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
+    let output = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .ok()?;
+    output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
 fn host_interfaces() -> Vec<HostInterface> {
@@ -444,7 +526,10 @@ fn host_interfaces() -> Vec<HostInterface> {
                 .into_iter()
                 .map(|interface| {
                     let ip = interface.ip().to_string();
-                    HostInterface { name: interface.name, ip }
+                    HostInterface {
+                        name: interface.name,
+                        ip,
+                    }
                 })
                 .collect()
         })
@@ -470,7 +555,13 @@ fn resolve_bind_ip() -> Ipv4Addr {
 /// the task) writes every datagram raw to `udp.jsonl`. A bind failure is
 /// logged and this port's capture simply never runs — the other two ports'
 /// tasks are unaffected, matching every `*Watcher::run` in this crate.
-async fn run_phase_a(writer: Arc<CaptureWriter>, ledger: Ledger, device_watcher: Arc<DeviceWatcher>, counts: Arc<PortCounts>, port: u16) {
+async fn run_phase_a(
+    writer: Arc<CaptureWriter>,
+    ledger: Ledger,
+    device_watcher: Arc<DeviceWatcher>,
+    counts: Arc<PortCounts>,
+    port: u16,
+) {
     let socket = match bind_capture_socket(port).await {
         Ok(socket) => socket,
         Err(error) => {
@@ -553,13 +644,23 @@ enum StatusDecodeRecord {
 /// `None` result is recorded as a decode failure and does not stop or delay
 /// phase A's raw recording in any way — this runs strictly after the raw
 /// write already happened.
-fn handle_status_packet(writer: &CaptureWriter, ledger: &Ledger, payload: &[u8], source_ip: IpAddr, t: i64) {
+fn handle_status_packet(
+    writer: &CaptureWriter,
+    ledger: &Ledger,
+    payload: &[u8],
+    source_ip: IpAddr,
+    t: i64,
+) {
     let record = match parse_status(payload, source_ip) {
         Some(status) => {
             update_ledger(ledger, &status, source_ip);
             status_to_record(&status, source_ip, t)
         }
-        None => StatusDecodeRecord::DecodeFailed { t, src: source_ip.to_string(), len: payload.len() },
+        None => StatusDecodeRecord::DecodeFailed {
+            t,
+            src: source_ip.to_string(),
+            len: payload.len(),
+        },
     };
     if let Err(error) = writer.write_status_decoded(&record) {
         tracing::warn!(%error, "phase A: failed to write a status-decoded.jsonl record");
@@ -587,15 +688,19 @@ fn status_to_record(status: &DeviceStatus, source_ip: IpAddr, t: i64) -> StatusD
 
 fn update_ledger(ledger: &Ledger, status: &DeviceStatus, source_ip: IpAddr) {
     let IpAddr::V4(ip) = source_ip else { return };
-    let mut ledger = ledger.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    let entry = ledger.entry(status.device_number).or_insert_with(|| LedgerEntry {
-        ip,
-        track_source_device: status.track_source_device,
-        media_slot: status.media_slot,
-        track_type: status.track_type,
-        track_id: status.track_id,
-        play_state: status.play_state,
-    });
+    let mut ledger = ledger
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let entry = ledger
+        .entry(status.device_number)
+        .or_insert_with(|| LedgerEntry {
+            ip,
+            track_source_device: status.track_source_device,
+            media_slot: status.media_slot,
+            track_type: status.track_type,
+            track_id: status.track_id,
+            play_state: status.play_state,
+        });
     entry.ip = ip;
     entry.track_source_device = status.track_source_device;
     entry.media_slot = status.media_slot;
@@ -610,10 +715,16 @@ struct DeviceSnapshot {
     devices: Vec<DiscoveredDevice>,
 }
 
-async fn run_device_log(writer: Arc<CaptureWriter>, mut devices_rx: tokio::sync::watch::Receiver<Vec<DiscoveredDevice>>) {
+async fn run_device_log(
+    writer: Arc<CaptureWriter>,
+    mut devices_rx: tokio::sync::watch::Receiver<Vec<DiscoveredDevice>>,
+) {
     loop {
         let devices = devices_rx.borrow_and_update().clone();
-        let snapshot = DeviceSnapshot { t: now_micros(), devices };
+        let snapshot = DeviceSnapshot {
+            t: now_micros(),
+            devices,
+        };
         if let Err(error) = writer.write_device(&snapshot) {
             tracing::warn!(%error, "phase B: failed to write a devices.jsonl record");
         }
@@ -624,7 +735,10 @@ async fn run_device_log(writer: Arc<CaptureWriter>, mut devices_rx: tokio::sync:
 }
 
 fn now_micros() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|elapsed| elapsed.as_micros() as i64).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_micros() as i64)
+        .unwrap_or(0)
 }
 
 /// Prints device number/name/ip/media-slot/loaded-track-id once a second to
@@ -643,7 +757,11 @@ async fn run_device_sweep(device_watcher: Arc<DeviceWatcher>) {
     }
 }
 
-async fn run_live_table(device_watcher: Arc<DeviceWatcher>, ledger: Ledger, counts: Arc<PortCounts>) {
+async fn run_live_table(
+    device_watcher: Arc<DeviceWatcher>,
+    ledger: Ledger,
+    counts: Arc<PortCounts>,
+) {
     let mut tick = tokio::time::interval(LIVE_TABLE_INTERVAL);
     loop {
         tick.tick().await;
@@ -658,15 +776,31 @@ async fn run_live_table(device_watcher: Arc<DeviceWatcher>, ledger: Ledger, coun
             counts.get(ANNOUNCE_PORT),
             counts.get(BEAT_PORT),
             status_packets,
-            if status_packets == 0 { "  <-- NO STATUS: players are not seeing our keep-alive" } else { "" }
+            if status_packets == 0 {
+                "  <-- NO STATUS: players are not seeing our keep-alive"
+            } else {
+                ""
+            }
         );
-        let ledger = ledger.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let ledger = ledger
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         for device in &devices {
             let extra = ledger
                 .get(&device.device_number)
-                .map(|entry| format!(" slot={} track_id={:?} state={}", slot_label(entry.media_slot), entry.track_id, play_state_label(entry.play_state)))
+                .map(|entry| {
+                    format!(
+                        " slot={} track_id={:?} state={}",
+                        slot_label(entry.media_slot),
+                        entry.track_id,
+                        play_state_label(entry.play_state)
+                    )
+                })
                 .unwrap_or_default();
-            eprintln!("  #{:<2} {:<16} {:<15} {:?}{extra}", device.device_number, device.name, device.ip, device.kind);
+            eprintln!(
+                "  #{:<2} {:<16} {:<15} {:?}{extra}",
+                device.device_number, device.name, device.ip, device.kind
+            );
         }
     }
 }
@@ -676,7 +810,12 @@ async fn run_live_table(device_watcher: Arc<DeviceWatcher>, ledger: Ledger, coun
 /// on-site read of the player's display, which must work even if discovery
 /// is broken), then every player currently in the ledger.
 fn build_nfs_targets(config: &Config, ledger: &Ledger) -> Vec<(Ipv4Addr, MediaSlot)> {
-    let mut targets: Vec<(Ipv4Addr, MediaSlot)> = config.player_overrides.iter().copied().zip(config.slot_overrides.iter().copied()).collect();
+    let mut targets: Vec<(Ipv4Addr, MediaSlot)> = config
+        .player_overrides
+        .iter()
+        .copied()
+        .zip(config.slot_overrides.iter().copied())
+        .collect();
     if config.player_overrides.len() != config.slot_overrides.len() {
         tracing::warn!(
             players = config.player_overrides.len(),
@@ -685,7 +824,9 @@ fn build_nfs_targets(config: &Config, ledger: &Ledger) -> Vec<(Ipv4Addr, MediaSl
         );
     }
 
-    let ledger = ledger.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let ledger = ledger
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     for entry in ledger.values() {
         // The media lives on `track_source_device`, which is a *different*
         // player than this deck whenever the booth is linked off one stick
@@ -704,7 +845,9 @@ fn build_nfs_targets(config: &Config, ledger: &Ledger) -> Vec<(Ipv4Addr, MediaSl
 /// unhelpful target, but a better guess than none, and the parse report
 /// records what was tried either way.
 fn source_ip(ledger: &HashMap<u8, LedgerEntry>, entry: &LedgerEntry) -> Ipv4Addr {
-    ledger.get(&entry.track_source_device).map_or(entry.ip, |source| source.ip)
+    ledger
+        .get(&entry.track_source_device)
+        .map_or(entry.ip, |source| source.ip)
 }
 
 #[derive(Serialize)]
@@ -733,7 +876,13 @@ struct TrackFetchReport {
     error: Option<String>,
 }
 
-async fn run_phase_c(writer: Arc<CaptureWriter>, bind_ip: Ipv4Addr, targets: Vec<(Ipv4Addr, MediaSlot)>, ledger: Ledger, max_tracks: usize) {
+async fn run_phase_c(
+    writer: Arc<CaptureWriter>,
+    bind_ip: Ipv4Addr,
+    targets: Vec<(Ipv4Addr, MediaSlot)>,
+    ledger: Ledger,
+    max_tracks: usize,
+) {
     for (player_ip, slot) in targets {
         let label = slot_label(slot);
         println!("phase C: pulling NFS metadata from {player_ip} ({label})");
@@ -752,7 +901,13 @@ async fn run_phase_c(writer: Arc<CaptureWriter>, bind_ip: Ipv4Addr, targets: Vec
                 let report = NfsParseReport {
                     player_ip,
                     slot: label,
-                    export_pdb: ExportPdbReport { fetched: false, bytes: 0, parsed: false, track_count: 0, error: Some(error.to_string()) },
+                    export_pdb: ExportPdbReport {
+                        fetched: false,
+                        bytes: 0,
+                        parsed: false,
+                        track_count: 0,
+                        error: Some(error.to_string()),
+                    },
                     tracks: Vec::new(),
                 };
                 write_parse_report(&dir, &report);
@@ -767,7 +922,13 @@ async fn run_phase_c(writer: Arc<CaptureWriter>, bind_ip: Ipv4Addr, targets: Vec
                 let report = NfsParseReport {
                     player_ip,
                     slot: label,
-                    export_pdb: ExportPdbReport { fetched: false, bytes: 0, parsed: false, track_count: 0, error: Some(error.to_string()) },
+                    export_pdb: ExportPdbReport {
+                        fetched: false,
+                        bytes: 0,
+                        parsed: false,
+                        track_count: 0,
+                        error: Some(error.to_string()),
+                    },
                     tracks: Vec::new(),
                 };
                 write_parse_report(&dir, &report);
@@ -794,7 +955,16 @@ async fn run_phase_c(writer: Arc<CaptureWriter>, bind_ip: Ipv4Addr, targets: Vec
         };
 
         let track_reports = match &pdb {
-            Some(pdb) => fetch_tracks(&mut client, &dir, pdb, preferred_track_ids_for(&ledger, player_ip), max_tracks).await,
+            Some(pdb) => {
+                fetch_tracks(
+                    &mut client,
+                    &dir,
+                    pdb,
+                    preferred_track_ids_for(&ledger, player_ip),
+                    max_tracks,
+                )
+                .await
+            }
             None => Vec::new(),
         };
 
@@ -819,12 +989,27 @@ async fn run_phase_c(writer: Arc<CaptureWriter>, bind_ip: Ipv4Addr, targets: Vec
 /// other decks linked to it — those are exactly the ones worth having, and
 /// keying on the deck's own address would miss every one of them.
 fn preferred_track_ids_for(ledger: &Ledger, player_ip: Ipv4Addr) -> Vec<u32> {
-    let ledger = ledger.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    ledger.values().filter(|entry| source_ip(&ledger, entry) == player_ip).filter_map(|entry| entry.track_id).collect()
+    let ledger = ledger
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    ledger
+        .values()
+        .filter(|entry| source_ip(&ledger, entry) == player_ip)
+        .filter_map(|entry| entry.track_id)
+        .collect()
 }
 
-async fn fetch_tracks(client: &mut NfsClient, dir: &std::path::Path, pdb: &Pdb, preferred: Vec<u32>, max_tracks: usize) -> Vec<TrackFetchReport> {
-    let mut ids: Vec<u32> = preferred.into_iter().filter(|id| pdb.tracks.contains_key(id)).collect();
+async fn fetch_tracks(
+    client: &mut NfsClient,
+    dir: &std::path::Path,
+    pdb: &Pdb,
+    preferred: Vec<u32>,
+    max_tracks: usize,
+) -> Vec<TrackFetchReport> {
+    let mut ids: Vec<u32> = preferred
+        .into_iter()
+        .filter(|id| pdb.tracks.contains_key(id))
+        .collect();
     for id in pdb.tracks.keys() {
         if ids.len() >= max_tracks {
             break;
@@ -837,13 +1022,20 @@ async fn fetch_tracks(client: &mut NfsClient, dir: &std::path::Path, pdb: &Pdb, 
 
     let mut reports = Vec::with_capacity(ids.len());
     for track_id in ids {
-        let Some(track) = pdb.tracks.get(&track_id) else { continue };
+        let Some(track) = pdb.tracks.get(&track_id) else {
+            continue;
+        };
         reports.push(fetch_one_track(client, dir, pdb, track).await);
     }
     reports
 }
 
-async fn fetch_one_track(client: &mut NfsClient, dir: &std::path::Path, pdb: &Pdb, track: &Track) -> TrackFetchReport {
+async fn fetch_one_track(
+    client: &mut NfsClient,
+    dir: &std::path::Path,
+    pdb: &Pdb,
+    track: &Track,
+) -> TrackFetchReport {
     let mut error = None;
 
     let dat_fetched = match client.read_file(&track.analyze_path).await {
@@ -893,7 +1085,13 @@ async fn fetch_one_track(client: &mut NfsClient, dir: &std::path::Path, pdb: &Pd
         None => false,
     };
 
-    TrackFetchReport { track_id: track.id, dat_fetched, ext_fetched, artwork_fetched, error }
+    TrackFetchReport {
+        track_id: track.id,
+        dat_fetched,
+        ext_fetched,
+        artwork_fetched,
+        error,
+    }
 }
 
 fn ext_variant_path(dat_path: &str) -> String {
@@ -963,7 +1161,11 @@ fn our_device_number(config: &Config, presence: Option<&Arc<Presence>>) -> u8 {
     let claimed = presence.and_then(|presence| presence.device_number());
     let number = claimed
         .or(config.device_number)
-        .or_else(|| std::env::var("DECKTECTIVE_VCDJ_ID").ok().and_then(|value| value.parse().ok()))
+        .or_else(|| {
+            std::env::var("DECKTECTIVE_VCDJ_ID")
+                .ok()
+                .and_then(|value| value.parse().ok())
+        })
         .unwrap_or(5);
     // CDJ-3000s answer queries from numbers 1-6; older players only from
     // 1-4. Worth saying out loud rather than silently producing an empty
@@ -974,20 +1176,35 @@ fn our_device_number(config: &Config, presence: Option<&Arc<Presence>>) -> u8 {
     number
 }
 
-async fn run_phase_d(writer: Arc<CaptureWriter>, bind_ip: Ipv4Addr, ledger: Ledger, our_device_number: u8) {
+async fn run_phase_d(
+    writer: Arc<CaptureWriter>,
+    bind_ip: Ipv4Addr,
+    ledger: Ledger,
+    our_device_number: u8,
+) {
     // Keyed by the player being *asked*, not the deck doing the playing:
     // several decks linked off one stick all resolve to the same dbserver,
     // and asking it once for each of them would pull the same bytes twice.
     let targets: Vec<(u8, Ipv4Addr, LedgerEntry)> = {
-        let ledger = ledger.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let ledger = ledger
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut targets: Vec<(u8, Ipv4Addr, LedgerEntry)> = Vec::new();
         for (&device_number, entry) in ledger.iter() {
-            if DeviceKind::from_device_number(device_number) != DeviceKind::Player || entry.track_id.is_none() {
+            if DeviceKind::from_device_number(device_number) != DeviceKind::Player
+                || entry.track_id.is_none()
+            {
                 continue;
             }
-            let source_device = if entry.track_source_device == 0 { device_number } else { entry.track_source_device };
+            let source_device = if entry.track_source_device == 0 {
+                device_number
+            } else {
+                entry.track_source_device
+            };
             let target = (source_device, source_ip(&ledger, entry), entry.clone());
-            if !targets.iter().any(|(device, _, existing)| *device == source_device && existing.track_id == entry.track_id) {
+            if !targets.iter().any(|(device, _, existing)| {
+                *device == source_device && existing.track_id == entry.track_id
+            }) {
                 targets.push(target);
             }
         }
@@ -1014,7 +1231,14 @@ async fn run_phase_d(writer: Arc<CaptureWriter>, bind_ip: Ipv4Addr, ledger: Ledg
             Ok(connection) => connection,
             Err(error) => {
                 tracing::warn!(%error, ip = %player_ip, "phase D: could not open a dbserver connection — a dead/unreachable player is expected on a live network");
-                let report = DbserverParseReport { player_ip, device_number, track_id: Some(track_id), connected: false, queries: Vec::new(), error: Some(error.to_string()) };
+                let report = DbserverParseReport {
+                    player_ip,
+                    device_number,
+                    track_id: Some(track_id),
+                    connected: false,
+                    queries: Vec::new(),
+                    error: Some(error.to_string()),
+                };
                 write_parse_report_named(&dir, &format!("parse-report-{track_id}.json"), &report);
                 continue;
             }
@@ -1023,20 +1247,53 @@ async fn run_phase_d(writer: Arc<CaptureWriter>, bind_ip: Ipv4Addr, ledger: Ledg
         let slot_byte = entry.media_slot.to_byte();
         let mut queries = Vec::new();
 
-        queries.push(run_metadata_query(&mut connection, &dir, device_number, slot_byte, entry.track_type, track_id).await);
+        queries.push(
+            run_metadata_query(
+                &mut connection,
+                &dir,
+                device_number,
+                slot_byte,
+                entry.track_type,
+                track_id,
+            )
+            .await,
+        );
 
-        let beat_grid = connection.fetch_beat_grid(device_number, slot_byte, entry.track_type, track_id).await;
+        let beat_grid = connection
+            .fetch_beat_grid(device_number, slot_byte, entry.track_type, track_id)
+            .await;
         queries.push(record_blob_result(&dir, "beatgrid", track_id, beat_grid));
 
-        let cues_ext = connection.fetch_cues_extended(device_number, slot_byte, entry.track_type, track_id).await;
+        let cues_ext = connection
+            .fetch_cues_extended(device_number, slot_byte, entry.track_type, track_id)
+            .await;
         queries.push(record_blob_result(&dir, "cues-ext", track_id, cues_ext));
 
-        let cues_basic = connection.fetch_cues_basic(device_number, slot_byte, entry.track_type, track_id).await;
+        let cues_basic = connection
+            .fetch_cues_basic(device_number, slot_byte, entry.track_type, track_id)
+            .await;
         queries.push(record_blob_result(&dir, "cues-basic", track_id, cues_basic));
 
-        queries.push(run_artwork_query(&mut connection, &dir, device_number, slot_byte, entry.track_type, track_id).await);
+        queries.push(
+            run_artwork_query(
+                &mut connection,
+                &dir,
+                device_number,
+                slot_byte,
+                entry.track_type,
+                track_id,
+            )
+            .await,
+        );
 
-        let report = DbserverParseReport { player_ip, device_number, track_id: Some(track_id), connected: true, queries, error: None };
+        let report = DbserverParseReport {
+            player_ip,
+            device_number,
+            track_id: Some(track_id),
+            connected: true,
+            queries,
+            error: None,
+        };
         write_parse_report_named(&dir, &format!("parse-report-{track_id}.json"), &report);
     }
 }
@@ -1049,8 +1306,18 @@ async fn run_phase_d(writer: Arc<CaptureWriter>, bind_ip: Ipv4Addr, ledger: Ledg
 /// capture layout) rather than skipped, since the parsed items are still
 /// valuable replay input; a raw-bytes passthrough would be a `dbserver`
 /// client enhancement, out of scope for this capture tool.
-async fn run_metadata_query(connection: &mut Connection, dir: &std::path::Path, device_number: u8, slot: u8, track_type: u8, track_id: u32) -> QueryReport {
-    match connection.fetch_metadata(device_number, slot, track_type, track_id).await {
+async fn run_metadata_query(
+    connection: &mut Connection,
+    dir: &std::path::Path,
+    device_number: u8,
+    slot: u8,
+    track_type: u8,
+    track_id: u32,
+) -> QueryReport {
+    match connection
+        .fetch_metadata(device_number, slot, track_type, track_id)
+        .await
+    {
         Ok(items) => {
             let payload: Vec<_> = items
                 .iter()
@@ -1059,9 +1326,19 @@ async fn run_metadata_query(connection: &mut Connection, dir: &std::path::Path, 
             let bytes = serde_json::to_vec_pretty(&payload).unwrap_or_default();
             let path = dir.join(format!("metadata-{track_id}.bin"));
             let error = write_raw_file(&path, &bytes).err().map(|e| e.to_string());
-            QueryReport { query: "metadata", fetched: error.is_none(), bytes: bytes.len(), error }
+            QueryReport {
+                query: "metadata",
+                fetched: error.is_none(),
+                bytes: bytes.len(),
+                error,
+            }
         }
-        Err(fetch_error) => QueryReport { query: "metadata", fetched: false, bytes: 0, error: Some(fetch_error.to_string()) },
+        Err(fetch_error) => QueryReport {
+            query: "metadata",
+            fetched: false,
+            bytes: 0,
+            error: Some(fetch_error.to_string()),
+        },
     }
 }
 
@@ -1071,19 +1348,46 @@ async fn run_metadata_query(connection: &mut Connection, dir: &std::path::Path, 
 /// a closure borrowing `&mut Connection` across an `.await` doesn't have a
 /// lifetime simple enough to express as a reusable generic helper here, and
 /// three call sites don't justify fighting it.
-fn record_blob_result(dir: &std::path::Path, name: &'static str, track_id: u32, result: std::io::Result<Option<Vec<u8>>>) -> QueryReport {
+fn record_blob_result(
+    dir: &std::path::Path,
+    name: &'static str,
+    track_id: u32,
+    result: std::io::Result<Option<Vec<u8>>>,
+) -> QueryReport {
     match result {
         Ok(Some(bytes)) => {
             let path = dir.join(format!("{name}-{track_id}.bin"));
             let error = write_raw_file(&path, &bytes).err().map(|e| e.to_string());
-            QueryReport { query: name, fetched: error.is_none(), bytes: bytes.len(), error }
+            QueryReport {
+                query: name,
+                fetched: error.is_none(),
+                bytes: bytes.len(),
+                error,
+            }
         }
-        Ok(None) => QueryReport { query: name, fetched: false, bytes: 0, error: None },
-        Err(fetch_error) => QueryReport { query: name, fetched: false, bytes: 0, error: Some(fetch_error.to_string()) },
+        Ok(None) => QueryReport {
+            query: name,
+            fetched: false,
+            bytes: 0,
+            error: None,
+        },
+        Err(fetch_error) => QueryReport {
+            query: name,
+            fetched: false,
+            bytes: 0,
+            error: Some(fetch_error.to_string()),
+        },
     }
 }
 
-async fn run_artwork_query(connection: &mut Connection, dir: &std::path::Path, device_number: u8, slot: u8, track_type: u8, track_id: u32) -> QueryReport {
+async fn run_artwork_query(
+    connection: &mut Connection,
+    dir: &std::path::Path,
+    device_number: u8,
+    slot: u8,
+    track_type: u8,
+    track_id: u32,
+) -> QueryReport {
     // Artwork is looked up by artwork id in the real protocol, but this
     // tool doesn't have one available without a prior metadata parse it
     // deliberately keeps decoupled (see `run_metadata_query`'s doc comment)
@@ -1092,13 +1396,31 @@ async fn run_artwork_query(connection: &mut Connection, dir: &std::path::Path, d
     // the player, recorded as "fetched: false" rather than corrupting
     // anything, and the raw metadata JSON captured above still carries
     // whatever the real artwork id was for offline reconciliation.
-    match connection.fetch_artwork(device_number, slot, track_type, track_id).await {
+    match connection
+        .fetch_artwork(device_number, slot, track_type, track_id)
+        .await
+    {
         Ok(Some(bytes)) => {
             let path = dir.join(format!("artwork-{track_id}.bin"));
             let error = write_raw_file(&path, &bytes).err().map(|e| e.to_string());
-            QueryReport { query: "artwork", fetched: error.is_none(), bytes: bytes.len(), error }
+            QueryReport {
+                query: "artwork",
+                fetched: error.is_none(),
+                bytes: bytes.len(),
+                error,
+            }
         }
-        Ok(None) => QueryReport { query: "artwork", fetched: false, bytes: 0, error: None },
-        Err(fetch_error) => QueryReport { query: "artwork", fetched: false, bytes: 0, error: Some(fetch_error.to_string()) },
+        Ok(None) => QueryReport {
+            query: "artwork",
+            fetched: false,
+            bytes: 0,
+            error: None,
+        },
+        Err(fetch_error) => QueryReport {
+            query: "artwork",
+            fetched: false,
+            bytes: 0,
+            error: Some(fetch_error.to_string()),
+        },
     }
 }

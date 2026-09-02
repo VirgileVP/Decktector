@@ -53,7 +53,11 @@ pub struct NfsClient {
 impl NfsClient {
     /// Resolves the MOUNT and NFS daemons' ports via the portmapper, mounts
     /// `slot`, and is ready for [`Self::read_file`] once this returns.
-    pub async fn open(player_ip: Ipv4Addr, bind_ip: Ipv4Addr, slot: MediaSlot) -> std::io::Result<Self> {
+    pub async fn open(
+        player_ip: Ipv4Addr,
+        bind_ip: Ipv4Addr,
+        slot: MediaSlot,
+    ) -> std::io::Result<Self> {
         Self::open_with_portmap_port(player_ip, bind_ip, slot, PORTMAP_PORT).await
     }
 
@@ -63,7 +67,12 @@ impl NfsClient {
     /// 111 in a test would need elevated privileges and risks colliding
     /// with a real `rpcbind`/portmapper already running on the test
     /// machine.
-    pub async fn open_with_portmap_port(player_ip: Ipv4Addr, bind_ip: Ipv4Addr, slot: MediaSlot, portmap_port: u16) -> std::io::Result<Self> {
+    pub async fn open_with_portmap_port(
+        player_ip: Ipv4Addr,
+        bind_ip: Ipv4Addr,
+        slot: MediaSlot,
+        portmap_port: u16,
+    ) -> std::io::Result<Self> {
         let socket = UdpSocket::bind((bind_ip, 0)).await?;
         let mut client = Self {
             socket,
@@ -75,17 +84,25 @@ impl NfsClient {
             next_xid: 1,
         };
 
-        client.mount_port = client.get_port(mount::MOUNT_PROGRAM, mount::MOUNT_VERSION).await?;
+        client.mount_port = client
+            .get_port(mount::MOUNT_PROGRAM, mount::MOUNT_VERSION)
+            .await?;
 
-        let dir_path = slot_path(slot)
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("no NFS mount path for media slot {slot:?}")))?;
+        let dir_path = slot_path(slot).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("no NFS mount path for media slot {slot:?}"),
+            )
+        })?;
         let xid = client.fresh_xid();
         let call = mount::build_mnt_call(xid, dir_path);
         let reply = client.call(client.mount_port, &call).await?;
-        client.root_handle = mount::parse_mnt_reply(&reply, xid)
-            .ok_or_else(|| protocol_error("mount", dir_path))?;
+        client.root_handle =
+            mount::parse_mnt_reply(&reply, xid).ok_or_else(|| protocol_error("mount", dir_path))?;
 
-        client.nfs_port = client.get_port(procedures::NFS_PROGRAM, procedures::NFS_VERSION).await?;
+        client.nfs_port = client
+            .get_port(procedures::NFS_PROGRAM, procedures::NFS_VERSION)
+            .await?;
         Ok(client)
     }
 
@@ -113,7 +130,8 @@ impl NfsClient {
             let xid = self.fresh_xid();
             let call = procedures::build_read_call(xid, handle, offset, count);
             let reply = self.call(self.nfs_port, &call).await?;
-            let result = procedures::parse_read_reply(&reply, xid).ok_or_else(|| protocol_error("read", path))?;
+            let result = procedures::parse_read_reply(&reply, xid)
+                .ok_or_else(|| protocol_error("read", path))?;
             if result.data.is_empty() {
                 break; // Guards against looping forever if a server reports a size it never actually delivers.
             }
@@ -127,8 +145,12 @@ impl NfsClient {
         let xid = self.fresh_xid();
         let call = portmap::build_getport_call(xid, program, version);
         let reply = self.call(self.portmap_port, &call).await?;
-        portmap::parse_getport_reply(&reply, xid)
-            .ok_or_else(|| protocol_error("portmapper", &format!("program {program} version {version}")))
+        portmap::parse_getport_reply(&reply, xid).ok_or_else(|| {
+            protocol_error(
+                "portmapper",
+                &format!("program {program} version {version}"),
+            )
+        })
     }
 
     /// One RPC exchange: send, wait, retransmit with doubling backoff on
@@ -155,7 +177,10 @@ impl NfsClient {
             }
             wait *= 2;
         }
-        Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "no reply from the player after retrying"))
+        Err(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "no reply from the player after retrying",
+        ))
     }
 
     fn fresh_xid(&mut self) -> u32 {
@@ -181,7 +206,10 @@ fn slot_path(slot: MediaSlot) -> Option<&'static str> {
 }
 
 fn protocol_error(step: &str, detail: &str) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::InvalidData, format!("NFS {step} failed for {detail}"))
+    std::io::Error::new(
+        std::io::ErrorKind::InvalidData,
+        format!("NFS {step} failed for {detail}"),
+    )
 }
 
 #[cfg(test)]

@@ -23,8 +23,16 @@ pub fn build_minimal_pdb_bytes() -> Vec<u8> {
     const LABELS: u32 = 4;
     const KEYS: u32 = 5;
 
-    let named_tables = [(GENRES, 10u32, "Test Genre"), (ARTISTS, 20, "Test Artist"), (ALBUMS, 30, "Test Album"), (LABELS, 40, "Test Label"), (KEYS, 50, "Test Key")];
-    let page_types: Vec<u32> = std::iter::once(TRACKS).chain(named_tables.iter().map(|&(page_type, ..)| page_type)).collect();
+    let named_tables = [
+        (GENRES, 10u32, "Test Genre"),
+        (ARTISTS, 20, "Test Artist"),
+        (ALBUMS, 30, "Test Album"),
+        (LABELS, 40, "Test Label"),
+        (KEYS, 50, "Test Key"),
+    ];
+    let page_types: Vec<u32> = std::iter::once(TRACKS)
+        .chain(named_tables.iter().map(|&(page_type, ..)| page_type))
+        .collect();
     let num_tables = page_types.len();
 
     let total_pages = 1 + num_tables; // Page 0 unused (see this fn's doc comment).
@@ -45,16 +53,33 @@ pub fn build_minimal_pdb_bytes() -> Vec<u8> {
         let row = if page_type == TRACKS {
             build_track_row()
         } else {
-            let (_, id, name) = named_tables.iter().find(|&&(pt, ..)| pt == page_type).expect("known page type");
+            let (_, id, name) = named_tables
+                .iter()
+                .find(|&&(pt, ..)| pt == page_type)
+                .expect("known page type");
             build_named_row(page_type, *id, name)
         };
-        write_single_row_page(&mut file, page_index, page_type, PAGE_SIZE, PAGE_HEADER_LEN, &row);
+        write_single_row_page(
+            &mut file,
+            page_index,
+            page_type,
+            PAGE_SIZE,
+            PAGE_HEADER_LEN,
+            &row,
+        );
     }
 
     file
 }
 
-fn write_single_row_page(file: &mut [u8], page_index: u32, page_type: u32, page_size: u32, page_header_len: usize, row: &[u8]) {
+fn write_single_row_page(
+    file: &mut [u8],
+    page_index: u32,
+    page_type: u32,
+    page_size: u32,
+    page_header_len: usize,
+    row: &[u8],
+) {
     let base = page_index as usize * page_size as usize;
     write_u32_le(file, base + 0x04, page_index);
     // A page states its own table, and the parser checks it against the
@@ -145,12 +170,17 @@ fn build_track_row() -> Vec<u8> {
     write_u16_le(&mut row, 0x54, 240); // duration_sec
 
     for index in 0..STRING_COUNT {
-        let offset = if index == ANALYZE_PATH_INDEX { analyze_path_offset } else { title_offset };
+        let offset = if index == ANALYZE_PATH_INDEX {
+            analyze_path_offset
+        } else {
+            title_offset
+        };
         write_u16_le(&mut row, STRING_TABLE_OFFSET + index * 2, offset as u16);
     }
 
     row[title_offset..title_offset + title.len()].copy_from_slice(&title);
-    row[analyze_path_offset..analyze_path_offset + analyze_path.len()].copy_from_slice(&analyze_path);
+    row[analyze_path_offset..analyze_path_offset + analyze_path.len()]
+        .copy_from_slice(&analyze_path);
     row
 }
 

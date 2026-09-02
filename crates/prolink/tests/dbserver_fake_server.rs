@@ -27,7 +27,9 @@ const TRACK_TYPE: u8 = 0x01; // Rekordbox-analyzed
 const TRACK_ID: u32 = 4207;
 
 async fn start_listener() -> (TcpListener, u16) {
-    let listener = TcpListener::bind((LOOPBACK, 0)).await.expect("bind an ephemeral port");
+    let listener = TcpListener::bind((LOOPBACK, 0))
+        .await
+        .expect("bind an ephemeral port");
     let port = listener.local_addr().expect("local addr").port();
     (listener, port)
 }
@@ -40,7 +42,10 @@ async fn read_message(stream: &mut TcpStream, buffer: &mut Vec<u8>) -> Message {
         }
         let mut chunk = [0u8; 4096];
         let read = stream.read(&mut chunk).await.expect("read from the client");
-        assert_ne!(read, 0, "client closed the connection before sending a complete message");
+        assert_ne!(
+            read, 0,
+            "client closed the connection before sending a complete message"
+        );
         buffer.extend_from_slice(&chunk[..read]);
     }
 }
@@ -51,14 +56,23 @@ async fn read_message(stream: &mut TcpStream, buffer: &mut Vec<u8>) -> Message {
 /// against hardware that refused the connection.
 async fn greet(stream: &mut TcpStream) {
     let mut greeting = [0u8; 5];
-    stream.read_exact(&mut greeting).await.expect("read the client's greeting");
-    stream.write_all(&greeting).await.expect("echo the greeting");
+    stream
+        .read_exact(&mut greeting)
+        .await
+        .expect("read the client's greeting");
+    stream
+        .write_all(&greeting)
+        .await
+        .expect("echo the greeting");
 }
 
 /// What a player answers a metadata request with: the request type echoed
 /// back, then how many menu items it is willing to render.
 fn menu_available_args(item_count: u32) -> Vec<Field> {
-    vec![Field::U32(u32::from(queries::METADATA_REQ)), Field::U32(item_count)]
+    vec![
+        Field::U32(u32::from(queries::METADATA_REQ)),
+        Field::U32(item_count),
+    ]
 }
 
 async fn send(stream: &mut TcpStream, transaction_id: u32, message_type: u16, args: Vec<Field>) {
@@ -70,9 +84,9 @@ async fn send(stream: &mut TcpStream, transaction_id: u32, message_type: u16, ar
 /// label length at 2, label at 3, item type at 6.
 fn menu_item_args(item_type: u32, text: &str) -> Vec<Field> {
     vec![
-        Field::U32(1),                             // parent id
-        Field::U32(1),                             // the item's value
-        Field::U32(text.chars().count() as u32),   // label length
+        Field::U32(1),                           // parent id
+        Field::U32(1),                           // the item's value
+        Field::U32(text.chars().count() as u32), // label length
         Field::Str(text.to_string()),
         Field::U32(2),
         Field::Str(String::new()),
@@ -96,17 +110,37 @@ async fn fetches_full_track_metadata_via_the_menu_render_exchange() {
 
         let metadata_req = read_message(&mut stream, &mut buffer).await;
         assert_eq!(metadata_req.message_type, queries::METADATA_REQ);
-        send(&mut stream, 1, queries::MENU_AVAILABLE, menu_available_args(2)).await;
+        send(
+            &mut stream,
+            1,
+            queries::MENU_AVAILABLE,
+            menu_available_args(2),
+        )
+        .await;
 
         let render_req = read_message(&mut stream, &mut buffer).await;
         assert_eq!(render_req.message_type, queries::RENDER_MENU_REQ);
         send(&mut stream, 2, queries::MENU_HEADER, vec![]).await;
-        send(&mut stream, 3, queries::MENU_ITEM, menu_item_args(0x0004, "Strobe")).await;
-        send(&mut stream, 4, queries::MENU_ITEM, menu_item_args(0x0007, "deadmau5")).await;
+        send(
+            &mut stream,
+            3,
+            queries::MENU_ITEM,
+            menu_item_args(0x0004, "Strobe"),
+        )
+        .await;
+        send(
+            &mut stream,
+            4,
+            queries::MENU_ITEM,
+            menu_item_args(0x0007, "deadmau5"),
+        )
+        .await;
         send(&mut stream, 5, queries::MENU_FOOTER, vec![]).await;
     });
 
-    let mut connection = Connection::connect(LOOPBACK, LOOPBACK, port, OUR_DEVICE_NUMBER).await.expect("should connect");
+    let mut connection = Connection::connect(LOOPBACK, LOOPBACK, port, OUR_DEVICE_NUMBER)
+        .await
+        .expect("should connect");
     let items = connection
         .fetch_metadata(TARGET_DEVICE_NUMBER, SLOT, TRACK_TYPE, TRACK_ID)
         .await
@@ -130,11 +164,22 @@ async fn a_zero_item_count_yields_an_empty_metadata_list_without_a_render_step()
         read_message(&mut stream, &mut buffer).await; // SETUP_REQ
         send(&mut stream, 0, queries::SETUP_REQ, vec![]).await;
         read_message(&mut stream, &mut buffer).await; // METADATA_REQ
-        send(&mut stream, 1, queries::MENU_AVAILABLE, menu_available_args(0)).await;
+        send(
+            &mut stream,
+            1,
+            queries::MENU_AVAILABLE,
+            menu_available_args(0),
+        )
+        .await;
     });
 
-    let mut connection = Connection::connect(LOOPBACK, LOOPBACK, port, OUR_DEVICE_NUMBER).await.expect("should connect");
-    let items = connection.fetch_metadata(TARGET_DEVICE_NUMBER, SLOT, TRACK_TYPE, TRACK_ID).await.expect("should fetch");
+    let mut connection = Connection::connect(LOOPBACK, LOOPBACK, port, OUR_DEVICE_NUMBER)
+        .await
+        .expect("should connect");
+    let items = connection
+        .fetch_metadata(TARGET_DEVICE_NUMBER, SLOT, TRACK_TYPE, TRACK_ID)
+        .await
+        .expect("should fetch");
     assert!(items.is_empty());
 
     server.await.expect("server task should finish cleanly");
@@ -153,15 +198,23 @@ async fn fetches_and_parses_a_beat_grid_blob() {
 
         read_message(&mut stream, &mut buffer).await; // BEAT_GRID_REQ
         let mut blob = vec![0u8; 20]; // Header this parser skips.
-        // One entry: beat 1, 128.00 BPM, at 0ms (little-endian, per beatgrid.rs).
+                                      // One entry: beat 1, 128.00 BPM, at 0ms (little-endian, per beatgrid.rs).
         blob.extend_from_slice(&1u16.to_le_bytes());
         blob.extend_from_slice(&12_800u16.to_le_bytes());
         blob.extend_from_slice(&0u32.to_le_bytes());
         blob.extend_from_slice(&[0u8; 8]);
-        send(&mut stream, 1, queries::BEAT_GRID_RESPONSE, vec![Field::Blob(blob)]).await;
+        send(
+            &mut stream,
+            1,
+            queries::BEAT_GRID_RESPONSE,
+            vec![Field::Blob(blob)],
+        )
+        .await;
     });
 
-    let mut connection = Connection::connect(LOOPBACK, LOOPBACK, port, OUR_DEVICE_NUMBER).await.expect("should connect");
+    let mut connection = Connection::connect(LOOPBACK, LOOPBACK, port, OUR_DEVICE_NUMBER)
+        .await
+        .expect("should connect");
     let blob = connection
         .fetch_beat_grid(TARGET_DEVICE_NUMBER, SLOT, TRACK_TYPE, TRACK_ID)
         .await
@@ -189,13 +242,21 @@ async fn fetches_and_parses_a_waveform_blob() {
 
         read_message(&mut stream, &mut buffer).await; // ANLZ_TAG_REQ
         let mut blob = vec![0u8; 28]; // Leading junk this parser skips.
-        // One full-height white column.
+                                      // One full-height white column.
         let bits: u16 = (31u16 << 2) | (7u16 << 13) | (7u16 << 10) | (7u16 << 7);
         blob.extend_from_slice(&bits.to_be_bytes());
-        send(&mut stream, 1, queries::ANLZ_TAG_RESPONSE, vec![Field::Blob(blob)]).await;
+        send(
+            &mut stream,
+            1,
+            queries::ANLZ_TAG_RESPONSE,
+            vec![Field::Blob(blob)],
+        )
+        .await;
     });
 
-    let mut connection = Connection::connect(LOOPBACK, LOOPBACK, port, OUR_DEVICE_NUMBER).await.expect("should connect");
+    let mut connection = Connection::connect(LOOPBACK, LOOPBACK, port, OUR_DEVICE_NUMBER)
+        .await
+        .expect("should connect");
     let blob = connection
         .fetch_anlz_tag(
             TARGET_DEVICE_NUMBER,
@@ -239,8 +300,15 @@ async fn a_connection_that_never_answers_can_be_interrupted_by_a_timeout() {
     // The hang would happen here — inside the setup handshake `connect`
     // performs — not in a later query, so the timeout has to wrap this
     // call itself, not just a query made on an already-open connection.
-    let result = timeout(Duration::from_millis(200), Connection::connect(LOOPBACK, LOOPBACK, port, OUR_DEVICE_NUMBER)).await;
+    let result = timeout(
+        Duration::from_millis(200),
+        Connection::connect(LOOPBACK, LOOPBACK, port, OUR_DEVICE_NUMBER),
+    )
+    .await;
 
-    assert!(result.is_err(), "connect should have been interrupted by the timeout, not hung or errored on its own");
+    assert!(
+        result.is_err(),
+        "connect should have been interrupted by the timeout, not hung or errored on its own"
+    );
     server.abort();
 }

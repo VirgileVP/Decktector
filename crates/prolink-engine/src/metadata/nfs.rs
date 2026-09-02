@@ -13,13 +13,15 @@ use std::net::Ipv4Addr;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine as _;
 use binrw::BinRead;
-use decktective_core::model::{BeatGridBeat, CueKind, TrackCue, TrackInfo, WaveformData, WaveformSegment};
+use binrw::Endian;
+use decktective_core::model::{
+    BeatGridBeat, CueKind, TrackCue, TrackInfo, WaveformData, WaveformSegment,
+};
 use decktective_core::structure::{self, StructureInput};
 use decktective_core::waveform::{build_preview_from_detail, PREVIEW_SEGMENT_COUNT};
 use prolink::nfs::pdb::{self, Pdb, Track};
 use prolink::nfs::NfsClient;
 use prolink::status::MediaSlot;
-use binrw::Endian;
 use rekordcrate::anlz::{Content, ContentKind, Cue, CueType, ExtendedCue, Header, Section};
 
 /// Bytes of an ANLZ section header: its kind, its own size, and the
@@ -53,7 +55,8 @@ pub async fn fetch_track_info(
     let mut client = NfsClient::open(player_ip, bind_ip, slot).await?;
 
     let pdb_bytes = client.read_file(EXPORT_PDB_PATH).await?;
-    let pdb = pdb::parse(&pdb_bytes).ok_or_else(|| anyhow::anyhow!("could not parse export.pdb"))?;
+    let pdb =
+        pdb::parse(&pdb_bytes).ok_or_else(|| anyhow::anyhow!("could not parse export.pdb"))?;
 
     let Some(track) = pdb.tracks.get(&track_id) else {
         return Ok(None);
@@ -62,13 +65,19 @@ pub async fn fetch_track_info(
     let analysis = fetch_analysis(&mut client, &track.analyze_path).await;
     let artwork = fetch_artwork(&mut client, &pdb, track).await;
 
-    Ok(Some(build_track_info(&pdb, track, analysis, artwork, status_bpm)))
+    Ok(Some(build_track_info(
+        &pdb, track, analysis, artwork, status_bpm,
+    )))
 }
 
 /// A track's beat grid, waveform and cues, as read out of its `.DAT`/`.EXT`
 /// pair — the three things that come from analysis files rather than from
 /// the database.
-pub type Analysis = (Option<Vec<BeatGridBeat>>, Option<WaveformData>, Vec<TrackCue>);
+pub type Analysis = (
+    Option<Vec<BeatGridBeat>>,
+    Option<WaveformData>,
+    Vec<TrackCue>,
+);
 
 /// Assembles one [`TrackInfo`] from bytes already in hand.
 ///
@@ -77,7 +86,13 @@ pub type Analysis = (Option<Vec<BeatGridBeat>>, Option<WaveformData>, Vec<TrackC
 /// `export.pdb` and the analysis files recovered out of a recorded capture,
 /// and it must produce exactly what a live player would have, not a second
 /// approximation of it.
-pub fn build_track_info(pdb: &Pdb, track: &Track, analysis: Analysis, artwork: Option<String>, status_bpm: Option<f64>) -> TrackInfo {
+pub fn build_track_info(
+    pdb: &Pdb,
+    track: &Track,
+    analysis: Analysis,
+    artwork: Option<String>,
+    status_bpm: Option<f64>,
+) -> TrackInfo {
     let (beat_grid, waveform, cues) = analysis;
     let duration_ms = f64::from(track.duration_sec) * 1000.0;
     let bpm = normalize_tempo(f64::from(track.tempo_centibpm)).or(status_bpm);
@@ -125,7 +140,10 @@ async fn fetch_analysis(client: &mut NfsClient, dat_path: &str) -> Analysis {
     // only in the `.DAT` — the `.EXT`'s own `PQT2` beat grid is a format it
     // has no variant for. Reading only the `.EXT`, as this did before
     // 2026-08-19, means never getting a beat grid over NFS at all.
-    let ext_bytes = client.read_file(&ext_variant_path(dat_path)).await.unwrap_or_default();
+    let ext_bytes = client
+        .read_file(&ext_variant_path(dat_path))
+        .await
+        .unwrap_or_default();
     let dat_bytes = client.read_file(dat_path).await.unwrap_or_default();
     parse_analysis(&ext_bytes, &dat_bytes)
 }
@@ -164,13 +182,22 @@ fn read_sections(bytes: &[u8]) -> Vec<Section> {
 
     let mut sections = Vec::new();
     while position < end {
-        let Some(remaining) = bytes.get(position..end) else { break };
-        let Ok(header) = Header::read(&mut Cursor::new(remaining)) else { break };
-        // A zero/short size would leave `position` stuck and loop forever.
-        let Some(section_bytes) = usize::try_from(header.total_size).ok().filter(|size| *size >= HEADER_LEN).and_then(|size| remaining.get(..size)) else {
+        let Some(remaining) = bytes.get(position..end) else {
             break;
         };
-        if let Ok(section) = Section::read_options(&mut Cursor::new(section_bytes), Endian::Big, ()) {
+        let Ok(header) = Header::read(&mut Cursor::new(remaining)) else {
+            break;
+        };
+        // A zero/short size would leave `position` stuck and loop forever.
+        let Some(section_bytes) = usize::try_from(header.total_size)
+            .ok()
+            .filter(|size| *size >= HEADER_LEN)
+            .and_then(|size| remaining.get(..size))
+        else {
+            break;
+        };
+        if let Ok(section) = Section::read_options(&mut Cursor::new(section_bytes), Endian::Big, ())
+        {
             sections.push(section);
         }
         position += section_bytes.len();
@@ -193,7 +220,10 @@ pub fn parse_analysis(ext_bytes: &[u8], dat_bytes: &[u8]) -> Analysis {
                 beat_grid = Some(
                     grid.beats
                         .iter()
-                        .map(|beat| BeatGridBeat { offset_ms: f64::from(beat.time), beat_in_measure: beat.beat_number as u8 })
+                        .map(|beat| BeatGridBeat {
+                            offset_ms: f64::from(beat.time),
+                            beat_in_measure: beat.beat_number as u8,
+                        })
                         .collect(),
                 );
             }
@@ -232,7 +262,11 @@ fn build_waveform(detail: &rekordcrate::anlz::WaveformColorDetail) -> Option<Wav
         .iter()
         .map(|column| WaveformSegment {
             height: f32::from(column.height()) / 31.0,
-            color: [scale_3bit(column.red()), scale_3bit(column.green()), scale_3bit(column.blue())],
+            color: [
+                scale_3bit(column.red()),
+                scale_3bit(column.green()),
+                scale_3bit(column.blue()),
+            ],
         })
         .collect();
 
@@ -324,12 +358,18 @@ mod tests {
 
     #[test]
     fn a_dat_path_becomes_its_ext_sibling() {
-        assert_eq!(ext_variant_path("PIONEER/USBANLZ/P001/00000001/ANLZ0000.DAT"), "PIONEER/USBANLZ/P001/00000001/ANLZ0000.EXT");
+        assert_eq!(
+            ext_variant_path("PIONEER/USBANLZ/P001/00000001/ANLZ0000.DAT"),
+            "PIONEER/USBANLZ/P001/00000001/ANLZ0000.EXT"
+        );
     }
 
     #[test]
     fn a_path_with_an_unrecognized_extension_is_left_alone() {
-        assert_eq!(ext_variant_path("PIONEER/whatever.txt"), "PIONEER/whatever.txt");
+        assert_eq!(
+            ext_variant_path("PIONEER/whatever.txt"),
+            "PIONEER/whatever.txt"
+        );
     }
 
     #[test]

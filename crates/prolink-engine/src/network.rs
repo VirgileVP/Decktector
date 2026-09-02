@@ -30,7 +30,10 @@ pub fn pick_interface(known_peer: Option<Ipv4Addr>) -> anyhow::Result<Ipv4Addr> 
 }
 
 fn shares_subnet(interface: &NetworkInterfaceInfo, peer: Ipv4Addr) -> bool {
-    let (Ok(ip), Ok(mask)) = (interface.ip.parse::<Ipv4Addr>(), interface.netmask.parse::<Ipv4Addr>()) else {
+    let (Ok(ip), Ok(mask)) = (
+        interface.ip.parse::<Ipv4Addr>(),
+        interface.netmask.parse::<Ipv4Addr>(),
+    ) else {
         return false;
     };
     (u32::from(ip) & u32::from(mask)) == (u32::from(peer) & u32::from(mask))

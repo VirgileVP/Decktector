@@ -234,7 +234,9 @@ pub fn parse_status(data: &[u8], source_ip: IpAddr) -> Option<DeviceStatus> {
         pitch_percent: decode_pitch(read_u32(data, PITCH_OFFSET)),
         track_bpm: (bpm_raw != BPM_UNKNOWN).then(|| f64::from(bpm_raw) / 100.0),
         beat_count: (beat_count_raw != BEAT_COUNT_UNKNOWN).then_some(beat_count_raw),
-        beat_in_bar: (1..=4).contains(&beat_in_bar_raw).then_some(beat_in_bar_raw),
+        beat_in_bar: (1..=4)
+            .contains(&beat_in_bar_raw)
+            .then_some(beat_in_bar_raw),
         track_id: (rekordbox_id != 0).then_some(rekordbox_id),
     })
 }
@@ -383,7 +385,18 @@ mod tests {
 
     #[test]
     fn parses_a_playing_master_deck() {
-        let bytes = build_status(2, RawPlayState::Playing, true, false, true, 2.35, Some(128.0), Some(64), Some(1), Some(4207));
+        let bytes = build_status(
+            2,
+            RawPlayState::Playing,
+            true,
+            false,
+            true,
+            2.35,
+            Some(128.0),
+            Some(64),
+            Some(1),
+            Some(4207),
+        );
         let status = parse_status(&bytes, source()).expect("should parse");
 
         assert_eq!(status.device_number, 2);
@@ -401,7 +414,18 @@ mod tests {
 
     #[test]
     fn an_empty_deck_reports_no_track_fields() {
-        let bytes = build_status(3, RawPlayState::NoTrack, false, false, false, 0.0, None, None, None, None);
+        let bytes = build_status(
+            3,
+            RawPlayState::NoTrack,
+            false,
+            false,
+            false,
+            0.0,
+            None,
+            None,
+            None,
+            None,
+        );
         let status = parse_status(&bytes, source()).expect("should parse");
 
         assert_eq!(status.play_state, RawPlayState::NoTrack);
@@ -436,14 +460,36 @@ mod tests {
 
     #[test]
     fn an_unrecognized_play_state_byte_is_preserved_as_unknown() {
-        let bytes = build_status(1, RawPlayState::Unknown(0x7f), false, false, false, 0.0, None, None, None, None);
+        let bytes = build_status(
+            1,
+            RawPlayState::Unknown(0x7f),
+            false,
+            false,
+            false,
+            0.0,
+            None,
+            None,
+            None,
+            None,
+        );
         let status = parse_status(&bytes, source()).expect("should parse");
         assert_eq!(status.play_state, RawPlayState::Unknown(0x7f));
     }
 
     #[test]
     fn a_beat_in_bar_outside_one_to_four_reads_as_unknown() {
-        let mut bytes = build_status(1, RawPlayState::Playing, false, false, false, 0.0, Some(120.0), Some(10), None, Some(1));
+        let mut bytes = build_status(
+            1,
+            RawPlayState::Playing,
+            false,
+            false,
+            false,
+            0.0,
+            Some(120.0),
+            Some(10),
+            None,
+            Some(1),
+        );
         bytes[BEAT_IN_BAR_OFFSET] = 0xff;
         let status = parse_status(&bytes, source()).expect("should parse");
         assert_eq!(status.beat_in_bar, None);
@@ -451,28 +497,72 @@ mod tests {
 
     #[test]
     fn rejects_a_packet_shorter_than_the_known_floor() {
-        let mut bytes = build_status(2, RawPlayState::Playing, false, false, false, 0.0, Some(120.0), Some(1), Some(1), Some(1));
+        let mut bytes = build_status(
+            2,
+            RawPlayState::Playing,
+            false,
+            false,
+            false,
+            0.0,
+            Some(120.0),
+            Some(1),
+            Some(1),
+            Some(1),
+        );
         bytes.truncate(STATUS_PACKET_MIN_LEN - 1);
         assert!(parse_status(&bytes, source()).is_none());
     }
 
     #[test]
     fn accepts_a_longer_cdj_3000_style_packet() {
-        let mut bytes = build_status(2, RawPlayState::Playing, false, false, false, 0.0, Some(120.0), Some(1), Some(1), Some(1));
+        let mut bytes = build_status(
+            2,
+            RawPlayState::Playing,
+            false,
+            false,
+            false,
+            0.0,
+            Some(120.0),
+            Some(1),
+            Some(1),
+            Some(1),
+        );
         bytes.resize(0x200, 0);
         assert!(parse_status(&bytes, source()).is_some());
     }
 
     #[test]
     fn rejects_a_foreign_header() {
-        let mut bytes = build_status(2, RawPlayState::Playing, false, false, false, 0.0, None, None, None, None);
+        let mut bytes = build_status(
+            2,
+            RawPlayState::Playing,
+            false,
+            false,
+            false,
+            0.0,
+            None,
+            None,
+            None,
+            None,
+        );
         bytes[0] = 0x00;
         assert!(parse_status(&bytes, source()).is_none());
     }
 
     #[test]
     fn rejects_a_non_status_packet_type() {
-        let mut bytes = build_status(2, RawPlayState::Playing, false, false, false, 0.0, None, None, None, None);
+        let mut bytes = build_status(
+            2,
+            RawPlayState::Playing,
+            false,
+            false,
+            false,
+            0.0,
+            None,
+            None,
+            None,
+            None,
+        );
         bytes[PROLINK_HEADER.len()] = 0x06; // A keep-alive, not a status packet.
         assert!(parse_status(&bytes, source()).is_none());
     }

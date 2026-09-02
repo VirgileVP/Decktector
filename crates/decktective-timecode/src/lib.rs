@@ -84,18 +84,11 @@ pub enum TimecodeProtocol {
     Off,
     /// `interface_name` is a [`network::NetworkInterfaceInfo::name`] — the
     /// adapter to broadcast from, not a typed destination address.
-    ArtNet {
-        interface_name: String,
-        port: u16,
-    },
+    ArtNet { interface_name: String, port: u16 },
     /// `port_name` is a name as returned by [`mtc::list_output_ports`].
-    Mtc {
-        port_name: String,
-    },
+    Mtc { port_name: String },
     /// `device_name` is a name as returned by [`ltc::list_output_devices`].
-    Ltc {
-        device_name: String,
-    },
+    Ltc { device_name: String },
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
@@ -180,7 +173,8 @@ impl TimecodeService {
     }
 
     pub fn set_source(&self, deck_id: Option<DeckId>) {
-        self.state_tx.send_modify(|state| state.source_deck_id = deck_id);
+        self.state_tx
+            .send_modify(|state| state.source_deck_id = deck_id);
     }
 
     pub fn set_config(&self, config: TimecodeConfig) {
@@ -194,7 +188,10 @@ impl TimecodeService {
     }
 
     pub fn status(&self) -> TimecodeStatus {
-        *self.last_status.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        *self
+            .last_status
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     /// Runs until the process exits. Art-Net produces one frame per tick;
@@ -236,7 +233,10 @@ impl TimecodeService {
 
         let new_status = match self.resolve(&state) {
             Some((timecode, deck_id)) => match &state.config.protocol {
-                TimecodeProtocol::ArtNet { interface_name, port } => {
+                TimecodeProtocol::ArtNet {
+                    interface_name,
+                    port,
+                } => {
                     output.mtc_session = None; // Not running MTC this tick.
                     output.ltc_stream = None; // Not running LTC this tick — stop any audio actually playing.
                     match bound_socket(&mut output.art_net_socket, interface_name).await {
@@ -255,14 +255,22 @@ impl TimecodeService {
                 }
                 TimecodeProtocol::Mtc { port_name } => {
                     output.ltc_stream = None; // Not running LTC this tick — stop any audio actually playing.
-                    self.tick_mtc(output, port_name, timecode, deck_id, state.config.frame_rate)
+                    self.tick_mtc(
+                        output,
+                        port_name,
+                        timecode,
+                        deck_id,
+                        state.config.frame_rate,
+                    )
                 }
                 TimecodeProtocol::Ltc { device_name } => {
                     output.mtc_session = None; // Not running MTC this tick.
                     self.tick_ltc(output, device_name, timecode, state.config.frame_rate);
                     Some(running_status(timecode, deck_id))
                 }
-                TimecodeProtocol::Off => unreachable!("resolve() returns None when the protocol is off"),
+                TimecodeProtocol::Off => {
+                    unreachable!("resolve() returns None when the protocol is off")
+                }
             },
             None => {
                 output.mtc_session = None;
@@ -276,7 +284,10 @@ impl TimecodeService {
         };
 
         if let Some(status) = new_status {
-            *self.last_status.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = status;
+            *self
+                .last_status
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = status;
             // No subscribers yet (window still opening) is not an error.
             let _ = self.status_tx.send(status);
         }
@@ -299,7 +310,10 @@ impl TimecodeService {
         deck_id: DeckId,
         frame_rate: FrameRate,
     ) -> Option<TimecodeStatus> {
-        let session = MtcSession { deck_id, frame_rate };
+        let session = MtcSession {
+            deck_id,
+            frame_rate,
+        };
         let is_restart = output.mtc_session != Some(session);
         output.mtc_session = Some(session);
         if is_restart {
@@ -332,7 +346,13 @@ impl TimecodeService {
     /// [`bound_socket`]/[`connected_midi`]) and hands it the deck's current
     /// timecode so its free-running audio thread can re-latch if it has
     /// drifted — see the [`ltc`] module doc for the full picture.
-    fn tick_ltc(&self, output: &mut OutputState, device_name: &str, timecode: TimeCode, frame_rate: FrameRate) {
+    fn tick_ltc(
+        &self,
+        output: &mut OutputState,
+        device_name: &str,
+        timecode: TimeCode,
+        frame_rate: FrameRate,
+    ) {
         match ltc_stream(&mut output.ltc_stream, device_name, timecode, frame_rate) {
             Ok(stream) => stream.resync(timecode, frame_rate),
             Err(error) => {
@@ -349,9 +369,15 @@ impl TimecodeService {
         }
         let deck_id = state.source_deck_id?;
         let snapshot = self.engine.handle().snapshot();
-        let deck = snapshot.decks.into_iter().find(|deck| deck.deck_id == deck_id)?;
+        let deck = snapshot
+            .decks
+            .into_iter()
+            .find(|deck| deck.deck_id == deck_id)?;
         let elapsed_ms = extrapolate_playhead_ms(&deck, epoch_ms())?;
-        Some((TimeCode::from_elapsed_ms(elapsed_ms, state.config.frame_rate), deck_id))
+        Some((
+            TimeCode::from_elapsed_ms(elapsed_ms, state.config.frame_rate),
+            deck_id,
+        ))
     }
 }
 
@@ -368,7 +394,10 @@ async fn bound_socket<'a>(
 ) -> anyhow::Result<&'a UdpSocket> {
     let is_current = matches!(cached, Some((bound_name, _)) if bound_name == interface_name);
     if !is_current {
-        *cached = Some((interface_name.to_string(), bind_socket(interface_name).await?));
+        *cached = Some((
+            interface_name.to_string(),
+            bind_socket(interface_name).await?,
+        ));
     }
     Ok(&cached.as_ref().expect("just bound above").1)
 }
@@ -414,7 +443,11 @@ fn ltc_stream<'a>(
 ) -> anyhow::Result<&'a ltc::LtcStream> {
     let is_current = matches!(cached, Some(stream) if stream.device_name() == device_name);
     if !is_current {
-        *cached = Some(ltc::LtcStream::start(device_name, initial_timecode, frame_rate)?);
+        *cached = Some(ltc::LtcStream::start(
+            device_name,
+            initial_timecode,
+            frame_rate,
+        )?);
     }
     Ok(cached.as_ref().expect("just started above"))
 }

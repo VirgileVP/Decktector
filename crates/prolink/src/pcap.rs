@@ -195,7 +195,10 @@ impl TimestampResolution {
 
 impl Default for TimestampResolution {
     fn default() -> Self {
-        Self { value: DEFAULT_TSRESOL, binary: false }
+        Self {
+            value: DEFAULT_TSRESOL,
+            binary: false,
+        }
     }
 }
 
@@ -260,7 +263,10 @@ impl<R: Read> PcapngReader<R> {
     /// Counts so far; final once [`Self::next_datagram`] has returned
     /// `None`.
     pub fn stats(&self) -> PcapngStats {
-        PcapngStats { incomplete_datagrams: self.pending.len() as u64, ..self.stats }
+        PcapngStats {
+            incomplete_datagrams: self.pending.len() as u64,
+            ..self.stats
+        }
     }
 
     /// Returns the next UDP datagram, or `None` at end of file.
@@ -296,7 +302,8 @@ impl<R: Read> PcapngReader<R> {
         // including its own length field, so its type has to be recognised
         // from the raw bytes before any endianness is known. The magic is a
         // palindrome across byte order, which is what makes that work.
-        if u32::from_le_bytes([header[0], header[1], header[2], header[3]]) == BLOCK_SECTION_HEADER {
+        if u32::from_le_bytes([header[0], header[1], header[2], header[3]]) == BLOCK_SECTION_HEADER
+        {
             return self.read_section_header(&header).map(Some);
         }
         let block_type = self.u32_at(&header, 0);
@@ -307,7 +314,10 @@ impl<R: Read> PcapngReader<R> {
 
     /// Consumes a section header, adopting the endianness it declares and
     /// resetting the interface table (ids restart at zero in each section).
-    fn read_section_header(&mut self, header: &[u8; BLOCK_HEADER_LEN as usize]) -> io::Result<(u32, Vec<u8>)> {
+    fn read_section_header(
+        &mut self,
+        header: &[u8; BLOCK_HEADER_LEN as usize],
+    ) -> io::Result<(u32, Vec<u8>)> {
         const MAGIC_LEN: u32 = 4;
         let mut magic = [0u8; MAGIC_LEN as usize];
         self.reader.read_exact(&mut magic)?;
@@ -315,9 +325,15 @@ impl<R: Read> PcapngReader<R> {
         let block_len = self.u32_at(header, 4);
         let remaining = block_len
             .checked_sub(MIN_BLOCK_LEN + MAGIC_LEN)
-            .ok_or_else(|| invalid_data(format!("section header block length {block_len} is too small")))?;
+            .ok_or_else(|| {
+                invalid_data(format!(
+                    "section header block length {block_len} is too small"
+                ))
+            })?;
         if remaining > MAX_BLOCK_LEN {
-            return Err(invalid_data(format!("section header block length {block_len} exceeds the {MAX_BLOCK_LEN}-byte limit")));
+            return Err(invalid_data(format!(
+                "section header block length {block_len} exceeds the {MAX_BLOCK_LEN}-byte limit"
+            )));
         }
         let mut body = magic.to_vec();
         body.extend(self.read_exact_vec(remaining)?);
@@ -328,10 +344,14 @@ impl<R: Read> PcapngReader<R> {
 
     fn read_block_body(&mut self, block_len: u32) -> io::Result<Vec<u8>> {
         if block_len < MIN_BLOCK_LEN {
-            return Err(invalid_data(format!("block length {block_len} is shorter than an empty block")));
+            return Err(invalid_data(format!(
+                "block length {block_len} is shorter than an empty block"
+            )));
         }
         if block_len > MAX_BLOCK_LEN {
-            return Err(invalid_data(format!("block length {block_len} exceeds the {MAX_BLOCK_LEN}-byte limit")));
+            return Err(invalid_data(format!(
+                "block length {block_len} exceeds the {MAX_BLOCK_LEN}-byte limit"
+            )));
         }
         let body = self.read_exact_vec(block_len - MIN_BLOCK_LEN)?;
         self.skip_trailer()?;
@@ -359,7 +379,12 @@ impl<R: Read> PcapngReader<R> {
     }
 
     fn u32_at(&self, bytes: &[u8], offset: usize) -> u32 {
-        let raw = [bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]];
+        let raw = [
+            bytes[offset],
+            bytes[offset + 1],
+            bytes[offset + 2],
+            bytes[offset + 3],
+        ];
         if self.big_endian {
             u32::from_be_bytes(raw)
         } else {
@@ -375,7 +400,10 @@ impl<R: Read> PcapngReader<R> {
         // Link type (2) + reserved (2) + snaplen (4), then options.
         const OPTIONS_OFFSET: usize = 8;
         if body.len() < OPTIONS_OFFSET {
-            self.interfaces.push(Interface { link_type: LINKTYPE_ETHERNET, resolution: TimestampResolution::default() });
+            self.interfaces.push(Interface {
+                link_type: LINKTYPE_ETHERNET,
+                resolution: TimestampResolution::default(),
+            });
             return;
         }
         self.interfaces.push(Interface {
@@ -395,7 +423,10 @@ impl<R: Read> PcapngReader<R> {
             }
             if code == OPTION_IF_TSRESOL && len >= 1 {
                 let raw = options[OPTION_HEADER_LEN];
-                return TimestampResolution { value: raw & !TSRESOL_BINARY_FLAG, binary: raw & TSRESOL_BINARY_FLAG != 0 };
+                return TimestampResolution {
+                    value: raw & !TSRESOL_BINARY_FLAG,
+                    binary: raw & TSRESOL_BINARY_FLAG != 0,
+                };
             }
             // Option values are padded to a 4-byte boundary.
             let padded = value_end.div_ceil(4) * 4;
@@ -429,7 +460,10 @@ impl<R: Read> PcapngReader<R> {
             .interfaces
             .get(interface_id)
             .copied()
-            .unwrap_or(Interface { link_type: LINKTYPE_ETHERNET, resolution: TimestampResolution::default() });
+            .unwrap_or(Interface {
+                link_type: LINKTYPE_ETHERNET,
+                resolution: TimestampResolution::default(),
+            });
         if interface.link_type != LINKTYPE_ETHERNET {
             self.stats.packets_skipped += 1;
             self.stats.packets_unsupported_link += 1;
@@ -468,9 +502,15 @@ impl<R: Read> PcapngReader<R> {
         let payload = &packet[header_len..payload_end];
 
         let more_fragments = flags_and_offset & IPV4_FLAG_MORE_FRAGMENTS != 0;
-        let fragment_offset = usize::from(flags_and_offset & IPV4_FRAGMENT_OFFSET_MASK) * IPV4_FRAGMENT_OFFSET_UNIT;
+        let fragment_offset =
+            usize::from(flags_and_offset & IPV4_FRAGMENT_OFFSET_MASK) * IPV4_FRAGMENT_OFFSET_UNIT;
         let transport = if more_fragments || fragment_offset > 0 {
-            let key = FragmentKey { src, dst, protocol, identification };
+            let key = FragmentKey {
+                src,
+                dst,
+                protocol,
+                identification,
+            };
             self.reassemble(key, fragment_offset, payload, !more_fragments)?
         } else {
             payload.to_vec()
@@ -486,23 +526,46 @@ impl<R: Read> PcapngReader<R> {
         let udp_len = usize::from(u16::from_be_bytes([transport[4], transport[5]]))
             .max(UDP_HEADER_LEN)
             .min(transport.len());
-        Some(Datagram { time_micros, src, dst, src_port, dst_port, payload: transport[UDP_HEADER_LEN..udp_len].to_vec() })
+        Some(Datagram {
+            time_micros,
+            src,
+            dst,
+            src_port,
+            dst_port,
+            payload: transport[UDP_HEADER_LEN..udp_len].to_vec(),
+        })
     }
 
     /// Adds one fragment, returning the whole datagram once the last
     /// fragment has arrived and nothing is missing.
-    fn reassemble(&mut self, key: FragmentKey, offset: usize, payload: &[u8], last: bool) -> Option<Vec<u8>> {
+    fn reassemble(
+        &mut self,
+        key: FragmentKey,
+        offset: usize,
+        payload: &[u8],
+        last: bool,
+    ) -> Option<Vec<u8>> {
         if self.pending.len() >= MAX_PENDING_FRAGMENTS && !self.pending.contains_key(&key) {
             self.evict_oldest_pending();
         }
         let arrival = self.stats.packets_seen;
-        let entry = self.pending.entry(key).or_insert_with(|| PendingDatagram { arrival, ..Default::default() });
+        let entry = self.pending.entry(key).or_insert_with(|| PendingDatagram {
+            arrival,
+            ..Default::default()
+        });
         entry.insert(offset, payload, last);
-        entry.is_complete().then(|| self.pending.remove(&key))?.map(PendingDatagram::into_payload)
+        entry
+            .is_complete()
+            .then(|| self.pending.remove(&key))?
+            .map(PendingDatagram::into_payload)
     }
 
     fn evict_oldest_pending(&mut self) {
-        let oldest = self.pending.iter().min_by_key(|(_, entry)| entry.arrival).map(|(key, _)| *key);
+        let oldest = self
+            .pending
+            .iter()
+            .min_by_key(|(_, entry)| entry.arrival)
+            .map(|(key, _)| *key);
         if let Some(key) = oldest {
             self.pending.remove(&key);
         }
@@ -535,7 +598,12 @@ fn read_exact_or_eof<R: Read>(reader: &mut R, buf: &mut [u8]) -> io::Result<bool
     while filled < buf.len() {
         match reader.read(&mut buf[filled..])? {
             0 if filled == 0 => return Ok(false),
-            0 => return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "pcapng file ends mid-block")),
+            0 => {
+                return Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "pcapng file ends mid-block",
+                ))
+            }
             read => filled += read,
         }
     }

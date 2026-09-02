@@ -204,7 +204,9 @@ impl Engine for SimEngine {
         let handle = Arc::clone(&self.handle);
         let library = Arc::clone(&self.library);
         let deck_count = self.deck_count;
-        *self.task_slot() = Some(tokio::spawn(async move { run(deck_count, library, handle).await }));
+        *self.task_slot() = Some(tokio::spawn(async move {
+            run(deck_count, library, handle).await
+        }));
 
         Ok(())
     }
@@ -622,7 +624,10 @@ mod tests {
         }
 
         let loaded = loaded.expect("the deck should report a loaded track");
-        assert_eq!(loaded, recorded, "a recorded track should reach the deck exactly as recorded");
+        assert_eq!(
+            loaded, recorded,
+            "a recorded track should reach the deck exactly as recorded"
+        );
     }
 
     /// Exercises the path the renderer actually depends on: a started engine

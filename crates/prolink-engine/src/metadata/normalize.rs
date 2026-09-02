@@ -20,11 +20,17 @@ pub(crate) fn normalize_tempo(raw: f64) -> Option<f64> {
 }
 
 fn text_field(items: &[TrackMenuItem], item_type: MenuItemType) -> Option<String> {
-    items.iter().find(|item| item.item_type == item_type).and_then(|item| item.text.clone())
+    items
+        .iter()
+        .find(|item| item.item_type == item_type)
+        .and_then(|item| item.text.clone())
 }
 
 fn numeric_field(items: &[TrackMenuItem], item_type: MenuItemType) -> Option<u32> {
-    items.iter().find(|item| item.item_type == item_type).and_then(|item| item.number)
+    items
+        .iter()
+        .find(|item| item.item_type == item_type)
+        .and_then(|item| item.number)
 }
 
 pub fn title(items: &[TrackMenuItem]) -> Option<String> {
@@ -56,7 +62,9 @@ pub fn comment(items: &[TrackMenuItem]) -> Option<String> {
 }
 
 pub fn duration_ms(items: &[TrackMenuItem]) -> f64 {
-    numeric_field(items, MenuItemType::Duration).map(|seconds| f64::from(seconds) * 1000.0).unwrap_or(0.0)
+    numeric_field(items, MenuItemType::Duration)
+        .map(|seconds| f64::from(seconds) * 1000.0)
+        .unwrap_or(0.0)
 }
 
 /// Prefers the track's own tempo; falls back to `status_bpm` (the status
@@ -79,12 +87,19 @@ pub fn beat_grid(entries: &[DbBeatGridEntry]) -> Vec<BeatGridBeat> {
         .collect()
 }
 
-pub fn waveform_data(columns: &[prolink::dbserver::waveform::DbWaveformColumn]) -> Option<WaveformData> {
+pub fn waveform_data(
+    columns: &[prolink::dbserver::waveform::DbWaveformColumn],
+) -> Option<WaveformData> {
     if columns.is_empty() {
         return None;
     }
-    let detail: Vec<WaveformSegment> =
-        columns.iter().map(|column| WaveformSegment { height: column.height, color: column.color }).collect();
+    let detail: Vec<WaveformSegment> = columns
+        .iter()
+        .map(|column| WaveformSegment {
+            height: column.height,
+            color: column.color,
+        })
+        .collect();
     let preview = decktective_core::waveform::build_preview_from_detail(
         &detail,
         decktective_core::waveform::PREVIEW_SEGMENT_COUNT,
@@ -101,7 +116,11 @@ mod tests {
     use super::*;
 
     fn item(item_type: MenuItemType, text: Option<&str>, number: Option<u32>) -> TrackMenuItem {
-        TrackMenuItem { item_type, text: text.map(str::to_string), number }
+        TrackMenuItem {
+            item_type,
+            text: text.map(str::to_string),
+            number,
+        }
     }
 
     #[test]
@@ -135,7 +154,11 @@ mod tests {
 
     #[test]
     fn beat_grid_maps_time_and_bar_position() {
-        let entries = vec![DbBeatGridEntry { beat_in_bar: 1, tempo_centibpm: 12_800, time_ms: 469 }];
+        let entries = vec![DbBeatGridEntry {
+            beat_in_bar: 1,
+            tempo_centibpm: 12_800,
+            time_ms: 469,
+        }];
         let grid = beat_grid(&entries);
         assert_eq!(grid[0].offset_ms, 469.0);
         assert_eq!(grid[0].beat_in_measure, 1);

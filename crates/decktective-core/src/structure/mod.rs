@@ -91,7 +91,12 @@ mod tests {
             let track = build_sim_track(spec, index as u32 + 1);
             let kinds: Vec<_> = track.events.iter().map(|event| event.kind).collect();
 
-            assert_eq!(kinds.first(), Some(&TrackEventKind::Intro), "{}", spec.title);
+            assert_eq!(
+                kinds.first(),
+                Some(&TrackEventKind::Intro),
+                "{}",
+                spec.title
+            );
             assert!(
                 kinds.contains(&TrackEventKind::Drop),
                 "{} found no drop in {kinds:?}",

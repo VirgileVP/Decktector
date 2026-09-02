@@ -150,7 +150,10 @@ mod tests {
         use decktective_core::sim::{build_sim_track, SIM_TRACKS};
 
         let mut track = build_sim_track(&SIM_TRACKS[0], 1);
-        assert!(track.waveform.is_some(), "fixture needs a waveform to prove it gets stripped");
+        assert!(
+            track.waveform.is_some(),
+            "fixture needs a waveform to prove it gets stripped"
+        );
         track.artwork = Some("data:image/jpeg;base64,/9k=".to_string());
         track
     }
@@ -166,7 +169,9 @@ mod tests {
         let wire_track: DeckTrack =
             serde_json::from_value(message.payload).expect("payload deserializes");
 
-        let track = wire_track.track.expect("track is still present, just lighter");
+        let track = wire_track
+            .track
+            .expect("track is still present, just lighter");
         assert!(track.artwork.is_none());
         assert!(track.waveform.is_none());
     }

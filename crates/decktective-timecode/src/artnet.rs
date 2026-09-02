@@ -65,7 +65,11 @@ mod tests {
 
         assert_eq!(&packet[0..8], ART_NET_ID);
         assert_eq!(&packet[8..10], &[0x00, 0x97], "OpTimeCode, low byte first");
-        assert_eq!(&packet[10..12], &[0x00, 0x0e], "ProtVer 14, high byte first");
+        assert_eq!(
+            &packet[10..12],
+            &[0x00, 0x0e],
+            "ProtVer 14, high byte first"
+        );
         assert_eq!(packet[14], 4, "frames");
         assert_eq!(packet[15], 3, "seconds");
         assert_eq!(packet[16], 2, "minutes");

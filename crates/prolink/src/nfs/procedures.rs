@@ -40,7 +40,13 @@ pub fn build_lookup_call(xid: u32, dir: FileHandle, name: &str) -> Vec<u8> {
     let mut args = XdrEncoder::new();
     args.write_opaque_fixed(&dir);
     args.write_string_utf16le(name);
-    rpc::build_call(xid, NFS_PROGRAM, NFS_VERSION, NFSPROC_LOOKUP, &args.into_bytes())
+    rpc::build_call(
+        xid,
+        NFS_PROGRAM,
+        NFS_VERSION,
+        NFSPROC_LOOKUP,
+        &args.into_bytes(),
+    )
 }
 
 /// The arguments of a `LOOKUP` call, as read back off the wire.
@@ -57,7 +63,10 @@ pub struct LookupArgs {
 
 pub fn parse_lookup_call(args: &[u8]) -> Option<LookupArgs> {
     let mut decoder = XdrDecoder::new(args);
-    let dir: FileHandle = decoder.read_opaque_fixed(FILE_HANDLE_LEN)?.try_into().ok()?;
+    let dir: FileHandle = decoder
+        .read_opaque_fixed(FILE_HANDLE_LEN)?
+        .try_into()
+        .ok()?;
     let name = decoder.read_string_utf16le()?;
     Some(LookupArgs { dir, name })
 }
@@ -71,7 +80,10 @@ pub fn parse_lookup_reply(data: &[u8], expected_xid: u32) -> Option<LookupResult
     if decoder.read_u32()? != NFS_OK {
         return None; // Most commonly NFSERR_NOENT — the path segment doesn't exist.
     }
-    let handle: FileHandle = decoder.read_opaque_fixed(FILE_HANDLE_LEN)?.try_into().ok()?;
+    let handle: FileHandle = decoder
+        .read_opaque_fixed(FILE_HANDLE_LEN)?
+        .try_into()
+        .ok()?;
     let attributes = read_fattr(&mut decoder)?;
     Some(LookupResult { handle, attributes })
 }
@@ -90,7 +102,13 @@ pub fn build_read_call(xid: u32, file: FileHandle, offset: u32, count: u32) -> V
     args.write_u32(offset);
     args.write_u32(count);
     args.write_u32(0); // `totalcount`: present for historical reasons, unused by any server.
-    rpc::build_call(xid, NFS_PROGRAM, NFS_VERSION, NFSPROC_READ, &args.into_bytes())
+    rpc::build_call(
+        xid,
+        NFS_PROGRAM,
+        NFS_VERSION,
+        NFSPROC_READ,
+        &args.into_bytes(),
+    )
 }
 
 /// The arguments of a `READ` call, as read back off the wire — the file and
@@ -105,8 +123,15 @@ pub struct ReadArgs {
 
 pub fn parse_read_call(args: &[u8]) -> Option<ReadArgs> {
     let mut decoder = XdrDecoder::new(args);
-    let file: FileHandle = decoder.read_opaque_fixed(FILE_HANDLE_LEN)?.try_into().ok()?;
-    Some(ReadArgs { file, offset: decoder.read_u32()?, count: decoder.read_u32()? })
+    let file: FileHandle = decoder
+        .read_opaque_fixed(FILE_HANDLE_LEN)?
+        .try_into()
+        .ok()?;
+    Some(ReadArgs {
+        file,
+        offset: decoder.read_u32()?,
+        count: decoder.read_u32()?,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -186,7 +211,10 @@ mod tests {
 
     #[test]
     fn a_lookup_result_round_trips() {
-        let attributes = FileAttributes { file_type: FTYPE_REGULAR_FILE, size: 123_456 };
+        let attributes = FileAttributes {
+            file_type: FTYPE_REGULAR_FILE,
+            size: 123_456,
+        };
         let reply = build_lookup_reply(5, handle(0x11), attributes);
         let result = parse_lookup_reply(&reply, 5).expect("should parse");
 
@@ -203,7 +231,10 @@ mod tests {
 
     #[test]
     fn a_read_result_round_trips() {
-        let attributes = FileAttributes { file_type: FTYPE_REGULAR_FILE, size: 5 };
+        let attributes = FileAttributes {
+            file_type: FTYPE_REGULAR_FILE,
+            size: 5,
+        };
         let reply = build_read_reply(9, attributes, &[1, 2, 3, 4, 5]);
         let result = parse_read_reply(&reply, 9).expect("should parse");
 
@@ -221,7 +252,10 @@ mod tests {
 
     #[test]
     fn a_reply_for_a_different_call_is_rejected() {
-        let attributes = FileAttributes { file_type: FTYPE_REGULAR_FILE, size: 1 };
+        let attributes = FileAttributes {
+            file_type: FTYPE_REGULAR_FILE,
+            size: 1,
+        };
         let reply = build_lookup_reply(5, handle(0), attributes);
         assert!(parse_lookup_reply(&reply, 6).is_none());
     }
