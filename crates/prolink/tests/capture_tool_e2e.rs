@@ -665,13 +665,18 @@ async fn phase_d_pulls_metadata_and_blobs_for_a_player_with_a_loaded_track() {
         out_dir.path(),
         &["--bind", "127.0.0.1", "--duration-sec", "2", "--no-nfs"],
     );
-    tokio::time::sleep(Duration::from_millis(300)).await; // Let phase A's status listener bind before sending.
-    inject_status_packet().await;
+    let injector = tokio::spawn(async {
+        for _ in 0..15 {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            inject_status_packet().await;
+        }
+    });
 
     let status = timeout(Duration::from_secs(30), capture.wait())
         .await
         .expect("prolink-capture should exit on its own")
         .expect("wait");
+    injector.abort();
     assert!(status.success(), "prolink-capture exited with {status:?}");
 
     let session = session_dir(out_dir.path());

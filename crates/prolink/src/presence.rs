@@ -36,7 +36,7 @@
 //! later phase keys off the currently-loaded track.
 
 use std::net::Ipv4Addr;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use tokio::net::UdpSocket;
@@ -65,8 +65,9 @@ const BROADCAST_ADDR: Ipv4Addr = Ipv4Addr::new(255, 255, 255, 255);
 /// has resolved it. Process-global because it is a process-global fact —
 /// there is one Pro DJ Link identity per process — and because
 /// [`is_own_broadcast`] is called from code that has no handle on
-/// [`Presence`] (`prolink_engine::engine`'s deck mapping).
-static ANNOUNCED_MAC: OnceLock<[u8; 6]> = OnceLock::new();
+/// [`Presence`] (`prolink_engine::engine`'s deck mapping). Updated if
+/// decktective re-binds to a different network interface.
+static ANNOUNCED_MAC: RwLock<Option<[u8; 6]>> = RwLock::new(None);
 
 /// Fallback MAC for our virtual identity when the real adapter's can't be
 /// read: locally-administered, keyed by device number so it's deterministic
@@ -227,8 +228,9 @@ fn pick_device_number(taken: &[u8], preferred_override: Option<u8>) -> Option<u8
 /// callers building on [`DeviceWatcher`]'s list (e.g. mapping it to deck
 /// connect/disconnect events) can filter our own entry out the same way.
 pub fn is_own_broadcast(device: &DiscoveredDevice) -> bool {
-    match ANNOUNCED_MAC.get() {
-        Some(&mac) => device.mac_address == mac_string(mac),
+    let guard = ANNOUNCED_MAC.read().unwrap_or_else(|p| p.into_inner());
+    match *guard {
+        Some(mac) => device.mac_address == mac_string(mac),
         // Not announcing (yet): fall back to recognizing the synthetic MAC
         // shape, so callers behave as they did before presence started.
         None => device.mac_address == mac_string(presence_mac(device.device_number)),
@@ -317,9 +319,8 @@ impl Presence {
             }
         };
 
-        // Resolved once, before the first keep-alive goes out: this is the
-        // identity every player on the network will file us under, and
-        // changing it mid-session would leave stale peer entries behind.
+        // Resolved before the first keep-alive goes out for this interface:
+        // this is the identity players on this network will file us under.
         let mac = match interface_mac(bind_ip) {
             Some(mac) => mac,
             None => {
@@ -327,8 +328,7 @@ impl Presence {
                 presence_mac(PREFERRED_DEVICE_NUMBER)
             }
         };
-        let _ = ANNOUNCED_MAC.set(mac);
-        let mac = *ANNOUNCED_MAC.get().unwrap_or(&mac);
+        *ANNOUNCED_MAC.write().unwrap_or_else(|p| p.into_inner()) = Some(mac);
         tracing::info!(mac = %mac_string(mac), %bind_ip, "announcing decktective's presence");
 
         let mut devices_rx = device_watcher.subscribe();

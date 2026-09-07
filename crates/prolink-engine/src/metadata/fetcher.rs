@@ -24,7 +24,7 @@
 
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
 use std::time::{Duration, Instant};
 
 use decktective_core::model::{DeckId, TrackInfo};
@@ -89,7 +89,7 @@ pub struct FetchRequest {
 /// before it reports a stale result.
 pub struct MetadataFetcher {
     presence: Arc<Presence>,
-    bind_ip: Ipv4Addr,
+    bind_ip: RwLock<Ipv4Addr>,
     /// Pooled dbserver connections, keyed by the player whose media is
     /// being read — [`FetchRequest::source_device`], never [`DeckId`].
     /// A deck-keyed pool is wrong on exactly the network this whole module
@@ -130,13 +130,30 @@ impl MetadataFetcher {
     pub fn new(presence: Arc<Presence>, bind_ip: Ipv4Addr) -> Arc<Self> {
         Arc::new(Self {
             presence,
-            bind_ip,
+            bind_ip: RwLock::new(bind_ip),
             connections: Mutex::new(HashMap::new()),
             nfs_failures: Mutex::new(HashMap::new()),
             dbserver_failures: Mutex::new(HashMap::new()),
             current_track: Mutex::new(HashMap::new()),
             tasks: Mutex::new(Vec::new()),
         })
+    }
+
+    /// Updates the local source IP for metadata fetches (e.g. when the
+    /// network interface is resolved or changes). Clears any cached
+    /// connections and failures so the new interface starts with a clean slate.
+    pub fn set_bind_ip(&self, ip: Ipv4Addr) {
+        let mut current = self.bind_ip.write().unwrap_or_else(|p| p.into_inner());
+        if *current != ip {
+            *current = ip;
+            self.lock(&self.connections).clear();
+            self.lock(&self.nfs_failures).clear();
+            self.lock(&self.dbserver_failures).clear();
+        }
+    }
+
+    pub fn bind_ip(&self) -> Ipv4Addr {
+        *self.bind_ip.read().unwrap_or_else(|p| p.into_inner())
     }
 
     pub fn note_current_track(&self, deck_id: DeckId, track_id: Option<u32>) {
@@ -263,7 +280,7 @@ impl MetadataFetcher {
         if self.is_failing(&self.nfs_failures, source_device) {
             return None;
         }
-        let fetch = nfs::fetch_track_info(player_ip, self.bind_ip, slot, track_id, status_bpm);
+        let fetch = nfs::fetch_track_info(player_ip, self.bind_ip(), slot, track_id, status_bpm);
         match timeout(NFS_CONNECT_TIMEOUT + NFS_FILE_TIMEOUT, fetch).await {
             Ok(Ok(Some(track_info))) => Some(track_info),
             Ok(Ok(None)) => None, // Connected fine; this track just isn't in this media's database.
@@ -369,7 +386,7 @@ impl MetadataFetcher {
         let our_number = self.presence.device_number()?;
         let opened = timeout(
             CONNECT_TIMEOUT,
-            Connection::open(player_ip, self.bind_ip, our_number),
+            Connection::open(player_ip, self.bind_ip(), our_number),
         )
         .await;
         match opened {
@@ -566,5 +583,21 @@ mod tests {
         fetcher.note_current_track(1, Some(4207));
         fetcher.note_current_track(1, Some(9999)); // The deck moved on before the fetch finished.
         assert!(fetcher.is_superseded(1, 4207));
+    }
+
+    #[test]
+    fn updating_bind_ip_changes_ip_and_clears_failure_records() {
+        let fetcher = fetcher();
+        assert_eq!(fetcher.bind_ip(), Ipv4Addr::LOCALHOST);
+
+        fetcher.mark_failed(&fetcher.nfs_failures, 2);
+        fetcher.mark_failed(&fetcher.dbserver_failures, 2);
+        assert!(fetcher.is_failing(&fetcher.nfs_failures, 2));
+
+        let new_ip: Ipv4Addr = "192.168.1.50".parse().unwrap();
+        fetcher.set_bind_ip(new_ip);
+        assert_eq!(fetcher.bind_ip(), new_ip);
+        assert!(!fetcher.is_failing(&fetcher.nfs_failures, 2));
+        assert!(!fetcher.is_failing(&fetcher.dbserver_failures, 2));
     }
 }
