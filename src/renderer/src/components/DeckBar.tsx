@@ -66,83 +66,91 @@ export function DeckBar({ deckId, track, fields, layout }: DeckBarProps): React.
         </div>
       )}
 
-      {fields.tcButton && (
-        <button
-          type="button"
-          className={`deck-tc-button${isTimecodeSource ? ' active' : ''}`}
-          title={
-            isTimecodeSource
-              ? 'Stop sending timecode from this deck'
-              : 'Send timecode from this deck'
-          }
-          aria-pressed={isTimecodeSource}
-          onClick={() => selectTimecodeSource(isTimecodeSource ? null : deckId)}
-        >
-          TC
-        </button>
-      )}
+      {(fields.tcButton || (allowTrackDownload && track) || fields.transport || fields.syncBadges) && (
+        <div className="deck-rail-actions">
+          {(fields.tcButton || (allowTrackDownload && track) || fields.transport) && (
+            <div className="deck-controls">
+              {fields.tcButton && (
+                <button
+                  type="button"
+                  className={`deck-tc-button${isTimecodeSource ? ' active' : ''}`}
+                  title={
+                    isTimecodeSource
+                      ? 'Stop sending timecode from this deck'
+                      : 'Send timecode from this deck'
+                  }
+                  aria-pressed={isTimecodeSource}
+                  onClick={() => selectTimecodeSource(isTimecodeSource ? null : deckId)}
+                >
+                  TC
+                </button>
+              )}
 
-      {allowTrackDownload && track && (
-        <button
-          type="button"
-          className={`deck-dl-button deck-dl-${downloadState.status}`}
-          title={
-            downloadState.status === 'downloading'
-              ? `Downloading track (${Math.round(downloadState.percent)}%)`
-              : downloadState.status === 'success'
-                ? `Downloaded: ${downloadState.filename}`
-                : downloadState.status === 'error'
-                  ? `Download failed: ${downloadState.message}`
-                  : 'Download track to Downloads/Decktective'
-          }
-          disabled={downloadState.status === 'downloading'}
-          onClick={() => void startDownload(deckId)}
-        >
-          {downloadState.status === 'downloading' ? (
-            <span className="deck-dl-progress">{Math.round(downloadState.percent)}%</span>
-          ) : downloadState.status === 'success' ? (
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          ) : downloadState.status === 'error' ? (
-            <span className="deck-dl-err">!</span>
-          ) : (
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
+              {allowTrackDownload && track && (
+                <button
+                  type="button"
+                  className={`deck-dl-button deck-dl-${downloadState.status}`}
+                  title={
+                    downloadState.status === 'downloading'
+                      ? `Downloading track (${Math.round(downloadState.percent)}%)`
+                      : downloadState.status === 'success'
+                        ? `Downloaded: ${downloadState.filename}`
+                        : downloadState.status === 'error'
+                          ? `Download failed: ${downloadState.message}`
+                          : 'Download track to Downloads/Decktective'
+                  }
+                  disabled={downloadState.status === 'downloading'}
+                  onClick={() => void startDownload(deckId)}
+                >
+                  {downloadState.status === 'downloading' ? (
+                    <span className="deck-dl-progress">{Math.round(downloadState.percent)}%</span>
+                  ) : downloadState.status === 'success' ? (
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : downloadState.status === 'error' ? (
+                    <span className="deck-dl-err">!</span>
+                  ) : (
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                  )}
+                </button>
+              )}
+
+              {fields.transport && (
+                <div className={`deck-transport state-${playState}`}>{TRANSPORT_GLYPHS[playState]}</div>
+              )}
+            </div>
           )}
-        </button>
-      )}
 
-      {fields.transport && (
-        <div className={`deck-transport state-${playState}`}>{TRANSPORT_GLYPHS[playState]}</div>
-      )}
-
-      {fields.syncBadges && (
-        <div className="deck-msync">
-          <span className={deck?.isOnAir ? 'lit lit-onair' : ''}>ON AIR</span>
-          <span className={deck?.isMaster ? 'lit lit-master' : ''}>MASTER</span>
-          <span className={deck?.isSynced ? 'lit lit-sync' : ''}>SYNC</span>
+          {fields.syncBadges && (
+            <div className="deck-msync">
+              <span className={deck?.isOnAir ? 'lit lit-onair' : ''}>ON AIR</span>
+              <span className={deck?.isMaster ? 'lit lit-master' : ''}>MASTER</span>
+              <span className={deck?.isSynced ? 'lit lit-sync' : ''}>SYNC</span>
+            </div>
+          )}
         </div>
       )}
 

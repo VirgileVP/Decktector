@@ -1337,23 +1337,49 @@ input[type='checkbox']:focus-visible {
   min-height: 40px;
 }
 
-/* With the artwork, title and tags all hidden, the bar has no
-   wide element left to justify a row of its own — it stands up as a rail
-   between the waveforms and the beat indicator instead.
+.deck-bar .deck-rail-actions,
+.deck-bar .deck-controls {
+  display: contents;
+}
 
-   It wraps: the readouts run top to bottom and spill into a second and third
-   column as the deck gets shorter, so a short deck costs the rail width —
-   which a booth screen has to spare — instead of costing readouts. Wrapping
-   goes off the room actually available, with no breakpoint to keep in step
-   with the readouts' own heights. `.deck-stats` goes `display: contents`
-   so TIME, PITCH and BPM wrap in their own right rather than as one block. */
+/* With the artwork, title and tags all hidden, the bar has no
+   wide element left to justify a row of its own — it stands up as a
+   rail between the waveforms and the beat indicator.
+
+   Adaptive columns:
+   - When the deck is tall (> 250px), it stays a clean single column (58px).
+   - When height shrinks (<= 250px), it spreads across two columns (actions &
+     badges on the left, time & BPM stats on the right), and across three
+     columns under 115px.
+   Because the rail uses flex-direction: row, its width grows natively to fit
+   the columns and `.deck-stack` (flex: 1) automatically shrinks to leave room,
+   scaling the waveform without any overlap or lost information.
+   Only in extremely narrow viewports (< 280px) where width cannot be spared
+   does it fall back to a single column with progressive readout drop-off. */
 .deck-bar-rail {
-  flex-flow: column wrap;
-  align-content: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 10px;
   min-height: 0;
+  width: 58px;
   flex-shrink: 0;
+}
+
+.deck-bar-rail .deck-rail-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.deck-bar-rail .deck-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
 }
 
 .deck-bar-rail .deck-msync {
@@ -1361,61 +1387,97 @@ input[type='checkbox']:focus-visible {
 }
 
 .deck-bar-rail .deck-stats {
-  display: contents;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
-@container deck (max-height: 290px) {
+/* 2 columns: controls/badges beside stats, preserving all readouts */
+@container deck (max-height: 250px) {
+  .deck-bar-rail {
+    flex-direction: row;
+    width: auto;
+    gap: 12px;
+  }
+
+  .deck-bar-rail .deck-rail-actions,
+  .deck-bar-rail .deck-stats {
+    gap: 6px;
+  }
+
+  .deck-bar-rail .deck-controls {
+    gap: 4px;
+  }
+}
+
+/* 3 columns: controls | badges | stats */
+@container deck (max-height: 115px) {
   .deck-bar-rail {
     gap: 8px;
   }
-}
 
-/* 280px of deck is where trading height for width stops paying: below it the
-   rail's second column would eat the waveform it sits next to (a phone on the
-   remote view, or a deck in a narrow window). So it stays one column, and the
-   readouts drop off instead, in reverse order of how much an operator needs
-   them at a glance: pitch first, then the transport glyph and the time
-   remaining, then the master/sync badges, and last the TC button — leaving
-   TIME and BPM, the two numbers the rail exists for. TC goes last because it
-   is a control rather than a readout, and only because `TimecodeSourceButtons`
-   in the header selects the same source. */
-@container deck (max-width: 279.98px) {
-  .deck-bar-rail {
-    flex-wrap: nowrap;
+  .deck-bar-rail .deck-rail-actions {
+    display: contents;
+  }
+
+  .deck-bar-rail .deck-controls,
+  .deck-bar-rail .deck-msync,
+  .deck-bar-rail .deck-stats {
+    gap: 3px;
   }
 }
 
-@container deck (max-height: 235px) and (max-width: 279.98px) {
+@container deck (max-height: 85px) {
   .deck-bar-rail .deck-stat-pitch {
     display: none;
   }
 }
 
-@container deck (max-height: 195px) and (max-width: 279.98px) {
+@container deck (max-height: 70px) {
+  .deck-bar-rail {
+    overflow: hidden;
+  }
+}
+
+/* Narrow deck fallback (e.g. mobile remote view): no horizontal space to trade,
+   so stays single-column with progressive drop-off */
+@container deck (max-width: 279.98px) {
+  .deck-bar-rail {
+    flex-direction: column !important;
+    width: 58px !important;
+    gap: 6px;
+  }
+
+  .deck-bar-rail .deck-rail-actions {
+    display: flex !important;
+  }
+}
+
+@container deck (max-width: 279.98px) and (max-height: 235px) {
+  .deck-bar-rail .deck-stat-pitch {
+    display: none;
+  }
+}
+
+@container deck (max-width: 279.98px) and (max-height: 195px) {
   .deck-bar-rail .deck-transport,
   .deck-bar-rail .deck-stat-remain {
     display: none;
   }
 }
 
-@container deck (max-height: 155px) and (max-width: 279.98px) {
+@container deck (max-width: 279.98px) and (max-height: 155px) {
   .deck-bar-rail .deck-msync {
     display: none;
   }
 }
 
-@container deck (max-height: 110px) and (max-width: 279.98px) {
+@container deck (max-width: 279.98px) and (max-height: 110px) {
   .deck-bar-rail .deck-tc-button,
   .deck-bar-rail .deck-dl-button {
     display: none;
-  }
-}
-
-/* Floor: below the height TIME and BPM themselves need, the rail is clipped
-   rather than allowed to paint over the neighbouring deck. */
-@container deck (max-height: 75px) {
-  .deck-bar-rail {
-    overflow: hidden;
   }
 }
 
