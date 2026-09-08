@@ -2,7 +2,6 @@ import { useSettings } from '../state/settings'
 
 /** Which pieces of `DeckBar` are shown — one flag per `showDeck*` setting. */
 export interface DeckBarFields {
-  number: boolean
   artwork: boolean
   trackInfo: boolean
   trackTags: boolean
@@ -25,7 +24,6 @@ export type DeckBarLayout = 'bar' | 'rail' | 'hidden'
 /** Reads the bar's slice of the settings store. */
 export function useDeckBarFields(): DeckBarFields {
   return {
-    number: useSettings((s) => s.showDeckNumber),
     artwork: useSettings((s) => s.showDeckArtwork),
     trackInfo: useSettings((s) => s.showDeckTrackInfo),
     trackTags: useSettings((s) => s.showDeckTrackTags),
@@ -40,13 +38,13 @@ export function useDeckBarFields(): DeckBarFields {
 }
 
 /**
- * The identity block — deck number, artwork, title/artist and tags — is what
- * needs the deck's full width. With all four of those hidden, what's left is a
+ * The identity block — artwork, title/artist and tags — is what
+ * needs the deck's full width. With all three of those hidden, what's left is a
  * handful of narrow readouts that would leave a near-empty row above the
  * waveforms, so they stand up as a rail beside them instead.
  */
 export function deckBarLayout(fields: DeckBarFields): DeckBarLayout {
-  if (fields.number || fields.artwork || fields.trackInfo || fields.trackTags) return 'bar'
+  if (fields.artwork || fields.trackInfo || fields.trackTags) return 'bar'
 
   const hasReadouts =
     fields.tcButton ||

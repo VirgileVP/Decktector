@@ -30,8 +30,6 @@ export function DeckBar({ deckId, track, fields, layout }: DeckBarProps): React.
 
   return (
     <div className={layout === 'rail' ? 'deck-bar deck-bar-rail' : 'deck-bar'}>
-      {fields.number && <div className="deck-no">{deckId}</div>}
-
       {fields.artwork && (
         <div className="deck-art">
           {artworkUrl ? <img src={artworkUrl} alt="" /> : <span>♪</span>}

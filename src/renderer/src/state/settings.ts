@@ -165,6 +165,9 @@ export interface Settings {
   waveformDesaturation: number
   /** Whether waveforms are rendered symmetrically around the center line (CDJ-style) or bottom-aligned. */
   waveformMirrored: boolean
+  /** Blurs the detail waveform slightly so neighbouring rekordbox colors blend
+   *  into a gradient instead of a hard-edged patchwork of solid columns. */
+  waveformSmoothing: boolean
   /** Fade decks that are not on air so the live ones read at a glance. */
   dimIdleDecks: boolean
   /** Renderer zoom factor, for booth screens from 13" to 27". */
@@ -200,7 +203,7 @@ export interface Settings {
   remoteUseTls: boolean
   /** Maximum number of concurrent client devices allowed to connect. */
   remoteMaxClients: number
-  /** Whether the deck bar shows the deck number badge. */
+  /** Whether the waveform view shows the deck number badge. */
   showDeckNumber: boolean
   /** Whether the deck bar shows the track title and artist. */
   showDeckTrackInfo: boolean
@@ -240,6 +243,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: DEFAULT_THEME,
   waveformDesaturation: 0.45,
   waveformMirrored: true,
+  waveformSmoothing: true,
   dimIdleDecks: true,
   uiScale: 1,
   lineupView: 'full',
@@ -308,6 +312,7 @@ function pickSettings(state: Settings): Settings {
     theme,
     waveformDesaturation,
     waveformMirrored,
+    waveformSmoothing,
     dimIdleDecks,
     uiScale,
     lineupView,
@@ -346,6 +351,7 @@ function pickSettings(state: Settings): Settings {
     theme,
     waveformDesaturation,
     waveformMirrored,
+    waveformSmoothing,
     dimIdleDecks,
     uiScale,
     lineupView,

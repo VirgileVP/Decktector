@@ -29,6 +29,7 @@ export function DeckPanel({
   const deck = useDecktectiveStore((s) => s.decks[deckId])
   const track = useDecktectiveStore((s) => s.tracks[deckId] ?? null)
   const barFields = useDeckBarFields()
+  const showDeckNumber = useSettings((s) => s.showDeckNumber)
   const showCueList = useSettings((s) => s.showDeckCueList)
   const showEventList = useSettings((s) => s.showDeckEventList)
   const showWaveformOverview = useSettings((s) => s.showDeckWaveformOverview)
@@ -133,6 +134,7 @@ export function DeckPanel({
               {showWaveformDetail && (
                 <WaveformDetail deckId={deckId} track={track} accentColor={accentColor} />
               )}
+              {showDeckNumber && <div className="deck-no">{deckId}</div>}
             </div>
           )}
         </div>

@@ -224,6 +224,12 @@ export function SettingsDialog({
                   onChange={update('waveformMirrored')}
                 />
                 <ToggleRow
+                  label="Smooth waveform colors"
+                  hint="Blends neighboring columns into a gradient instead of a hard-edged patchwork"
+                  checked={settings.waveformSmoothing}
+                  onChange={update('waveformSmoothing')}
+                />
+                <ToggleRow
                   label="Dim decks that are off air"
                   hint="Fades idle decks so the live ones read at a glance"
                   checked={settings.dimIdleDecks}
@@ -282,14 +288,8 @@ export function SettingsDialog({
 
                 <h3>Deck bar</h3>
                 <ToggleRow
-                  label="Deck number"
-                  hint="The deck's number badge"
-                  checked={settings.showDeckNumber}
-                  onChange={update('showDeckNumber')}
-                />
-                <ToggleRow
                   label="Artwork"
-                  hint="Album art thumbnail next to the deck number"
+                  hint="Album art thumbnail next to the track info"
                   checked={settings.showDeckArtwork}
                   onChange={update('showDeckArtwork')}
                 />
@@ -372,6 +372,12 @@ export function SettingsDialog({
                   hint="Zoomed-in waveform around the playhead"
                   checked={settings.showDeckWaveformDetail}
                   onChange={update('showDeckWaveformDetail')}
+                />
+                <ToggleRow
+                  label="Deck number"
+                  hint="The deck's number badge in the waveform view"
+                  checked={settings.showDeckNumber}
+                  onChange={update('showDeckNumber')}
                 />
               </details>
             </section>

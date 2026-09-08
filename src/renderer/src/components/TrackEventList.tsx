@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type { DeckId, TrackEvent, TrackInfo } from '../model'
+import { startFrameLoop } from '../lib/frame-loop'
 import { estimatePlayheadMs } from '../lib/playhead'
 import {
   EVENT_CONFIDENCE_HEDGE,
@@ -9,6 +10,9 @@ import {
   formatEventSeconds
 } from '../lib/track-events'
 import { useDecktectiveStore } from '../state/store'
+
+/** Gauge positions the loop distinguishes; finer than a pixel on any rail width. */
+const GAUGE_STEPS = 1000
 
 interface TrackEventListProps {
   deckId: DeckId
@@ -24,23 +28,27 @@ interface TrackEventListProps {
  * The gauge and the countdown are written straight to the DOM from a
  * `requestAnimationFrame` loop. Re-rendering the whole list sixty times a
  * second to move one bar would cost far more than it buys, so React only
- * re-renders when the playhead crosses into the next section.
+ * re-renders when the playhead crosses into the next section — and the DOM is
+ * only written when the gauge or the countdown actually moves. The loop is
+ * idle while the rail is off-screen or the window is hidden.
  */
 export function TrackEventList({ deckId, track, width }: TrackEventListProps): React.JSX.Element {
   // Memoized so an empty list keeps its identity: the animation loop below
   // restarts whenever this changes.
   const events = useMemo(() => track?.events ?? [], [track])
   const [activeIndex, setActiveIndex] = useState(0)
+  const rootRef = useRef<HTMLElement>(null)
   const gaugeRef = useRef<HTMLDivElement>(null)
   const countdownRef = useRef<HTMLSpanElement>(null)
 
   useEffect(() => {
     if (events.length === 0) return undefined
 
-    let raf = 0
     let renderedIndex = -1
+    let renderedRatio = -1
+    let renderedCountdown = ''
+
     const tick = (): void => {
-      raf = requestAnimationFrame(tick)
       const deck = useDecktectiveStore.getState().decks[deckId]
       const playhead = estimatePlayheadMs(deck, Date.now())
       const progress = playhead !== null ? eventProgressAt(events, playhead) : null
@@ -52,19 +60,25 @@ export function TrackEventList({ deckId, track, width }: TrackEventListProps): R
       }
 
       const event = events[index]
-      if (gaugeRef.current) {
-        gaugeRef.current.style.transform = `scaleX(${progress?.ratio ?? 0})`
+      // A thousandth of the gauge is well under a pixel wide: rounding to it
+      // drops most of the writes without the bar ever visibly stepping.
+      const ratio = Math.round((progress?.ratio ?? 0) * GAUGE_STEPS) / GAUGE_STEPS
+      if (gaugeRef.current && ratio !== renderedRatio) {
+        renderedRatio = ratio
+        gaugeRef.current.style.transform = `scaleX(${ratio})`
       }
-      if (countdownRef.current) {
-        // A deck sitting on a cue point has no progress yet: show the section's
-        // full length, which is what it will count down from.
-        const remaining = progress?.remainingMs ?? event.endMs - event.startMs
-        countdownRef.current.textContent = formatEventSeconds(remaining)
+
+      // A deck sitting on a cue point has no progress yet: show the section's
+      // full length, which is what it will count down from.
+      const remaining = progress?.remainingMs ?? event.endMs - event.startMs
+      const countdown = formatEventSeconds(remaining)
+      if (countdownRef.current && countdown !== renderedCountdown) {
+        renderedCountdown = countdown
+        countdownRef.current.textContent = countdown
       }
     }
 
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
+    return startFrameLoop(tick, rootRef.current)
   }, [deckId, events])
 
   if (events.length === 0) {
@@ -78,7 +92,7 @@ export function TrackEventList({ deckId, track, width }: TrackEventListProps): R
   const active = events[Math.min(activeIndex, events.length - 1)]
 
   return (
-    <aside className="event-list" style={{ width }}>
+    <aside className="event-list" style={{ width }} ref={rootRef}>
       <div className={`event-active event-kind-${active.kind}`}>
         <div className="event-gauge" ref={gaugeRef} />
         <EventName event={active} />
