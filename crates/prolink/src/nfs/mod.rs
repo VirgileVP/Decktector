@@ -24,5 +24,5 @@ pub mod rpc;
 pub mod xdr;
 
 pub use client::NfsClient;
-pub use cues::{parse_anlz_cues, parse_pcob, parse_pco2, AnlzCue};
+pub use cues::{parse_anlz_cues, parse_pco2, parse_pcob, AnlzCue};
 pub use devicelibraryplus::parse_export_library;

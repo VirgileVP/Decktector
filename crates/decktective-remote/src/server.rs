@@ -228,26 +228,27 @@ impl RemoteService {
 
         let task_handle = if config.use_tls {
             let bind_ip = bind_ipv4(&config.interface);
-            let (cert_pem, key_pem) = match crate::tls::generate_self_signed_pem(Some(std::net::IpAddr::V4(bind_ip))) {
-                Ok(pair) => pair,
-                Err(error) => {
-                    tracing::error!(%error, "failed to generate self-signed TLS certificate");
-                    self.lock().token = None;
-                    self.publish_status(
-                        RemoteStatus {
-                            listening: false,
-                            port: bound_port,
-                            token: None,
-                            client_count: 0,
-                            error: Some(format!("TLS setup failed: {error}")),
-                            use_tls: config.use_tls,
-                            max_clients: config.max_clients,
-                        },
-                        config,
-                    );
-                    return Ok(());
-                }
-            };
+            let (cert_pem, key_pem) =
+                match crate::tls::generate_self_signed_pem(Some(std::net::IpAddr::V4(bind_ip))) {
+                    Ok(pair) => pair,
+                    Err(error) => {
+                        tracing::error!(%error, "failed to generate self-signed TLS certificate");
+                        self.lock().token = None;
+                        self.publish_status(
+                            RemoteStatus {
+                                listening: false,
+                                port: bound_port,
+                                token: None,
+                                client_count: 0,
+                                error: Some(format!("TLS setup failed: {error}")),
+                                use_tls: config.use_tls,
+                                max_clients: config.max_clients,
+                            },
+                            config,
+                        );
+                        return Ok(());
+                    }
+                };
             let rustls_config = match crate::tls::rustls_config_from_pem(cert_pem, key_pem).await {
                 Ok(cfg) => cfg,
                 Err(error) => {
@@ -600,7 +601,10 @@ fn cookie_token(headers: &axum::http::HeaderMap) -> Option<String> {
 /// the cookie to.
 fn token_cookie_header(token: &str, use_tls: bool) -> Option<axum::http::HeaderValue> {
     let secure = if use_tls { "; Secure" } else { "" };
-    axum::http::HeaderValue::from_str(&format!("{TOKEN_COOKIE}={token}; Path=/; SameSite=Lax{secure}")).ok()
+    axum::http::HeaderValue::from_str(&format!(
+        "{TOKEN_COOKIE}={token}; Path=/; SameSite=Lax{secure}"
+    ))
+    .ok()
 }
 
 /// Gates the asset routes behind the same token every other remote route

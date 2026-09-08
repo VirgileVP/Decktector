@@ -298,8 +298,8 @@ pub fn parse_anlz_cues(bytes: &[u8]) -> Vec<AnlzCue> {
     }
 
     let file_header_size = u32::from_be_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]) as usize;
-    let total_size = (u32::from_be_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]) as usize)
-        .min(bytes.len());
+    let total_size =
+        (u32::from_be_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]) as usize).min(bytes.len());
 
     let mut position = file_header_size;
     let mut pco2_cues = Vec::new();
@@ -308,12 +308,8 @@ pub fn parse_anlz_cues(bytes: &[u8]) -> Vec<AnlzCue> {
     while position + 12 <= total_size {
         let remaining = &bytes[position..total_size];
         let tag = &remaining[..4];
-        let sec_total_size = u32::from_be_bytes([
-            remaining[8],
-            remaining[9],
-            remaining[10],
-            remaining[11],
-        ]) as usize;
+        let sec_total_size =
+            u32::from_be_bytes([remaining[8], remaining[9], remaining[10], remaining[11]]) as usize;
 
         if sec_total_size < 12 || sec_total_size > remaining.len() {
             break;
@@ -380,15 +376,15 @@ mod tests {
         // Real bytes extracted from 2389.EXT loop cue (pad 6)
         let hex = concat!(
             "504350320000001000000058",
-            "00000006",                 // hot_cue = 6
-            "02",                       // cue_type = 2 (loop)
+            "00000006", // hot_cue = 6
+            "02",       // cue_type = 2 (loop)
             "0003e8",
-            "0000fe78",                 // time = 65144 ms
-            "00010532",                 // loop_time = 66866 ms
+            "0000fe78", // time = 65144 ms
+            "00010532", // loop_time = 66866 ms
             "000100000000000000040001",
-            "00000000",                 // len_comment = 0
-            "00",                       // color_code = 0
-            "ff8c00",                   // rgb = (255, 140, 0)
+            "00000000", // len_comment = 0
+            "00",       // color_code = 0
+            "ff8c00",   // rgb = (255, 140, 0)
             "00000000000000000000000000000000000000000000000000000000000000000000000000000000"
         );
         let bytes = decode_hex(hex);
@@ -407,10 +403,10 @@ mod tests {
             "504350540000001c00000038", // PCPT, hsize=28, len=56
             "00000003",                 // hot_cue = 3
             "0000000000010000ffffffff",
-            "01",                       // cue_type = 1
+            "01", // cue_type = 1
             "0003e8",
-            "0002cc50",                 // time = 183376 ms
-            "ffffffff",                 // loop_time = None
+            "0002cc50", // time = 183376 ms
+            "ffffffff", // loop_time = None
             "00000000000000000000000000000000"
         );
         let bytes = decode_hex(hex);

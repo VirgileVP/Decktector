@@ -78,9 +78,7 @@ fn open_connection(path: &Path, key: Option<&str>) -> Result<Connection> {
     }
     // Verify database readability and decryption
     let _: u32 = conn
-        .query_row("SELECT count(*) FROM sqlite_master;", [], |row| {
-            row.get(0)
-        })
+        .query_row("SELECT count(*) FROM sqlite_master;", [], |row| row.get(0))
         .context("database read test failed (incorrect key or corrupt database)")?;
     Ok(conn)
 }
@@ -227,7 +225,11 @@ fn read_content_table(
     } else {
         return Ok(());
     };
-    let title_col = if cols.contains("title") { "title" } else { "''" };
+    let title_col = if cols.contains("title") {
+        "title"
+    } else {
+        "''"
+    };
     let artist_col = if cols.contains("artist_id_artist") {
         "artist_id_artist"
     } else if cols.contains("artist_id") {

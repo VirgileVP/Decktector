@@ -61,6 +61,7 @@ const PDB_CACHE_TTL: Duration = Duration::from_secs(120);
 /// its address - see [`MetadataFetcher::connections`] for why both halves
 /// of the key matter.
 type ConnectionPool = HashMap<(u8, Ipv4Addr), Arc<AsyncMutex<Connection>>>;
+type PdbCache = HashMap<(Ipv4Addr, MediaSlot), (Arc<Pdb>, Instant)>;
 
 /// What one status packet supplies about the track it names — everything
 /// [`MetadataFetcher::spawn_fetch`] needs beyond what it already tracks
@@ -126,7 +127,7 @@ pub struct MetadataFetcher {
     /// avoids.
     current_track: Mutex<HashMap<DeckId, Option<u32>>>,
     in_flight: Mutex<HashSet<DeckId>>,
-    pdb_cache: Mutex<HashMap<(Ipv4Addr, MediaSlot), (Arc<Pdb>, Instant)>>,
+    pdb_cache: Mutex<PdbCache>,
     tasks: Mutex<Vec<JoinHandle<()>>>,
 }
 
@@ -272,7 +273,9 @@ impl MetadataFetcher {
         }
         impl Drop for InFlightGuard {
             fn drop(&mut self) {
-                self.fetcher.lock(&self.fetcher.in_flight).remove(&self.deck_id);
+                self.fetcher
+                    .lock(&self.fetcher.in_flight)
+                    .remove(&self.deck_id);
             }
         }
         let _guard = InFlightGuard {

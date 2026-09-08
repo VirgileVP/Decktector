@@ -72,10 +72,7 @@ impl Engine for ProlinkEngine {
         let beat_watcher = BeatWatcher::new();
         let presence = Presence::new(vcdj_id_override());
 
-        let metadata_fetcher = MetadataFetcher::new(
-            Arc::clone(&presence),
-            Ipv4Addr::UNSPECIFIED,
-        );
+        let metadata_fetcher = MetadataFetcher::new(Arc::clone(&presence), Ipv4Addr::UNSPECIFIED);
         *self
             .metadata_fetcher
             .lock()
@@ -170,9 +167,7 @@ fn sync_network_and_presence(
                         DEVICE_NAME.to_string(),
                         new_bind_ip,
                     ));
-                    *presence_task_slot
-                        .lock()
-                        .unwrap_or_else(|p| p.into_inner()) = Some(new_task);
+                    *presence_task_slot.lock().unwrap_or_else(|p| p.into_inner()) = Some(new_task);
                     *current_bind_ip = Some(new_bind_ip);
                 }
                 handle.set_network_state(NetworkState::Connected);
@@ -473,10 +468,7 @@ mod tests {
         let cdj = test_device(1, "192.168.1.10", "aa:bb:cc:dd:ee:01");
 
         assert_eq!(first_peer_ip(&[own]), None);
-        assert_eq!(
-            first_peer_ip(&[cdj]),
-            Some("192.168.1.10".parse().unwrap())
-        );
+        assert_eq!(first_peer_ip(&[cdj]), Some("192.168.1.10".parse().unwrap()));
     }
 
     #[tokio::test]

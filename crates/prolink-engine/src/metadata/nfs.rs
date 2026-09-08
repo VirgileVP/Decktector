@@ -387,9 +387,7 @@ fn map_anlz_cue(cue: &AnlzCue) -> TrackCue {
         (false, false) => CueKind::Memory,
     };
 
-    let button = cue
-        .hot_cue
-        .map(|num| hot_cue_button_letter(u32::from(num)));
+    let button = cue.hot_cue.map(|num| hot_cue_button_letter(u32::from(num)));
 
     let color = if let Some((r, g, b)) = cue.color_rgb {
         format!("#{r:02x}{g:02x}{b:02x}")
