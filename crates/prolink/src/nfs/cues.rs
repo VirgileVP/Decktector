@@ -147,8 +147,10 @@ fn parse_pcp2_entry(entry: &[u8]) -> Option<AnlzCue> {
             len_comment = comment_bytes_len;
             let raw_comment = &entry[44..44 + comment_bytes_len];
             let u16_chars: Vec<u16> = raw_comment
-                .chunks_exact(2)
-                .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|&chunk| u16::from_be_bytes(chunk))
                 .collect();
             let text = String::from_utf16_lossy(&u16_chars);
             let trimmed = text.trim_end_matches('\0').trim();
