@@ -27,6 +27,8 @@ async fn start_test_service() -> (Arc<RemoteService>, u16) {
             enabled: true,
             port: 0,
             interface: String::new(),
+            use_tls: false,
+            max_clients: 4,
         })
         .await
         .expect("set_config does not fail on a successful bind");
@@ -176,4 +178,114 @@ async fn an_unknown_tracks_artwork_and_waveform_are_not_found() {
         waveform_status.contains("404"),
         "expected a 404, got: {waveform_status}"
     );
+}
+
+#[tokio::test]
+async fn max_clients_limit_is_enforced() {
+    let engine: Arc<dyn Engine> = Arc::new(SimEngine::new(TEST_DECK_COUNT));
+    let service = RemoteService::new(engine, AssetSource::DevServer(1420));
+    service
+        .clone()
+        .set_config(RemoteConfig {
+            enabled: true,
+            port: 0,
+            interface: String::new(),
+            use_tls: false,
+            max_clients: 1,
+        })
+        .await
+        .expect("service binds");
+
+    let port = service.status().port;
+    let token = service.status().token.expect("service has a token");
+
+    // Client 1 connects successfully
+    let url = format!("ws://127.0.0.1:{port}/ws?token={token}");
+    let (mut socket1, _) = tokio::time::timeout(
+        Duration::from_secs(5),
+        tokio_tungstenite::connect_async(&url),
+    )
+    .await
+    .expect("client 1 did not hang")
+    .expect("client 1 connects");
+
+    // Client 2 should be rejected because max_clients == 1
+    let client2_res = tokio::time::timeout(
+        Duration::from_secs(5),
+        tokio_tungstenite::connect_async(&url),
+    )
+    .await
+    .expect("client 2 did not hang");
+
+    assert!(
+        client2_res.is_err(),
+        "second connection must be rejected when max_clients is reached"
+    );
+
+    // Close client 1 so we cleanly finish
+    let _ = socket1.close(None).await;
+}
+
+#[tokio::test]
+async fn rotating_token_disconnects_connected_clients() {
+    let (service, port) = start_test_service().await;
+    let initial_token = service.status().token.expect("service has a token");
+
+    let url = format!("ws://127.0.0.1:{port}/ws?token={initial_token}");
+    let (mut socket, _) = tokio::time::timeout(
+        Duration::from_secs(5),
+        tokio_tungstenite::connect_async(url),
+    )
+    .await
+    .expect("client did not hang")
+    .expect("client connects");
+
+    // Read initial snapshot frame
+    let _ = tokio::time::timeout(
+        Duration::from_secs(5),
+        futures_util::StreamExt::next(&mut socket),
+    )
+    .await
+    .expect("frame arrived");
+
+    // Rotate token on server
+    service.regenerate_token();
+
+    // The client socket should now receive a Close message or close immediately
+    let next_frame = tokio::time::timeout(
+        Duration::from_secs(5),
+        futures_util::StreamExt::next(&mut socket),
+    )
+    .await
+    .expect("frame or close arrived before timeout");
+
+    match next_frame {
+        Some(Ok(Message::Close(_))) | None => {
+            // Expected: client disconnected on token rotation
+        }
+        other => panic!("expected close frame after token rotation, got: {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn tls_server_starts_and_reports_listening() {
+    let engine: Arc<dyn Engine> = Arc::new(SimEngine::new(TEST_DECK_COUNT));
+    let service = RemoteService::new(engine, AssetSource::DevServer(1420));
+    service
+        .clone()
+        .set_config(RemoteConfig {
+            enabled: true,
+            port: 0,
+            interface: String::new(),
+            use_tls: true,
+            max_clients: 4,
+        })
+        .await
+        .expect("TLS service binds successfully");
+
+    let status = service.status();
+    assert!(status.listening);
+    assert!(status.use_tls);
+    assert!(status.token.is_some());
+    assert_ne!(status.port, 0);
 }

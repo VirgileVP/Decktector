@@ -11,7 +11,8 @@ pub mod assets;
 pub mod hub;
 pub mod qr;
 pub mod server;
+pub mod tls;
 pub mod wire;
 
 pub use assets::AssetSource;
-pub use server::{RemoteConfig, RemoteService, RemoteStatus, DEFAULT_REMOTE_PORT};
+pub use server::{RemoteConfig, RemoteService, RemoteStatus, DEFAULT_MAX_CLIENTS, DEFAULT_REMOTE_PORT};

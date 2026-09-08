@@ -15,4 +15,12 @@ enabled: boolean, port: number,
  * cannot be resolved (unplugged, renamed) — the server stays reachable
  * rather than failing over an adapter picked in a previous session.
  */
-interface: string, };
+interface: string, 
+/**
+ * Whether to serve over HTTPS (and WSS) with in-memory TLS encryption.
+ */
+useTls: boolean, 
+/**
+ * Maximum number of concurrent client devices allowed to connect.
+ */
+maxClients: number, };

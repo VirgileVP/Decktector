@@ -94,6 +94,7 @@ pub fn run() {
             remote::remote_status,
             remote::set_remote_config,
             remote::remote_qr_svg,
+            remote::regenerate_remote_token,
             devices::list_devices
         ])
         .setup(move |app| {

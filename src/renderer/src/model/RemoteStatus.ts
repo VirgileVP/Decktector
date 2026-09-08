@@ -16,4 +16,12 @@ clientCount: number,
 /**
  * Set when the last start attempt failed, e.g. the port is taken.
  */
-error: string | null, };
+error: string | null, 
+/**
+ * Whether the active listener is serving over HTTPS/TLS.
+ */
+useTls: boolean, 
+/**
+ * Maximum number of concurrent client devices allowed.
+ */
+maxClients: number, };

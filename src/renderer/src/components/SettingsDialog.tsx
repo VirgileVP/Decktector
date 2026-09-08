@@ -8,6 +8,7 @@ import {
   DECK_VIEW_PRESETS,
   matchingDeckViewPreset,
   NO_NETWORK_INTERFACE,
+  REMOTE_MAX_CLIENTS_RANGE,
   TIMECODE_FRAME_RATE_OPTIONS,
   TIMECODE_PROTOCOL_OPTIONS,
   UI_SCALE_RANGE,
@@ -97,7 +98,6 @@ export function SettingsDialog({
     // Mount-only: re-running this on every `onClose` identity change would
     // steal focus back from whatever field the user is typing into.
     panelRef.current?.focus()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -116,10 +116,18 @@ export function SettingsDialog({
     (networkInterface) => networkInterface.name === settings.remoteInterface
   )
   const remoteHost = selectedInterface?.ip ?? networkInterfaces[0]?.ip ?? 'localhost'
+  const scheme = remoteStatus.useTls ? 'https' : 'http'
   const remoteUrl =
     remoteStatus.listening && remoteStatus.token
-      ? `http://${remoteHost}:${remoteStatus.port}/?token=${remoteStatus.token}`
+      ? `${scheme}://${remoteHost}:${remoteStatus.port}/?token=${remoteStatus.token}`
       : null
+
+  const handleRegenerateToken = (): void => {
+    if (!isTauri()) return
+    invoke('regenerate_remote_token').catch((error) =>
+      console.error('Failed to regenerate remote token:', error)
+    )
+  }
 
   useEffect(() => {
     // A stale SVG from a previous URL is never shown: the `<img>` below only
@@ -450,6 +458,20 @@ export function SettingsDialog({
                 checked={settings.remoteEnabled}
                 onChange={update('remoteEnabled')}
               />
+              <ToggleRow
+                label="Encrypt traffic (HTTPS / WSS)"
+                hint="Secures HTTP and WebSocket streams with TLS. On local IP addresses, browsers will display a self-signed security prompt to accept on first visit."
+                checked={settings.remoteUseTls}
+                onChange={update('remoteUseTls')}
+              />
+              <SliderRow
+                label="Max connected devices"
+                hint="Limits simultaneous viewers to avoid overloading the network on open festival Wi-Fi"
+                value={settings.remoteMaxClients}
+                range={REMOTE_MAX_CLIENTS_RANGE}
+                format={(value) => `${value} device${value > 1 ? 's' : ''}`}
+                onChange={update('remoteMaxClients')}
+              />
               <TextRow
                 label="Port"
                 hint="Change only if this port is already used by something else"
@@ -461,7 +483,7 @@ export function SettingsDialog({
               />
               <ChoiceRow
                 label="Network interface"
-                hint="Adapter to bind to. Every interface means reachable from every network this machine is on."
+                hint="Adapter to bind to. Picking a specific interface prevents exposing the remote view on public Wi-Fi."
                 value={settings.remoteInterface}
                 options={[
                   { value: NO_NETWORK_INTERFACE, label: 'Every interface' },
@@ -472,6 +494,11 @@ export function SettingsDialog({
                 ]}
                 onChange={update('remoteInterface')}
               />
+              {settings.remoteInterface === NO_NETWORK_INTERFACE && (
+                <p className="setting-hint setting-warning">
+                  ⚠️ Binding to every interface exposes the server to all networks this computer is on, including public venue Wi-Fi. In festival setups, select your booth adapter or private hotspot.
+                </p>
+              )}
               {remoteStatus.error && (
                 <p className="setting-hint">Could not start: {remoteStatus.error}</p>
               )}
@@ -485,10 +512,25 @@ export function SettingsDialog({
                       src={`data:image/svg+xml;utf8,${encodeURIComponent(remoteQrSvg)}`}
                     />
                   )}
+                  {remoteStatus.useTls && (
+                    <p className="setting-hint">
+                      🔒 TLS Encrypted: Self-signed certificate. On first scan, tap &ldquo;Advanced / Show Details&rdquo; in the mobile browser to accept and connect.
+                    </p>
+                  )}
                   <p className="setting-hint">
-                    {remoteStatus.clientCount}{' '}
+                    {remoteStatus.clientCount} / {settings.remoteMaxClients}{' '}
                     {remoteStatus.clientCount === 1 ? 'browser' : 'browsers'} connected
                   </p>
+                  <div style={{ marginTop: '8px' }}>
+                    <button
+                      type="button"
+                      className="setting-btn"
+                      onClick={handleRegenerateToken}
+                      title="Generates a new token and disconnects all currently active browsers"
+                    >
+                      ↻ Rotate link & disconnect devices
+                    </button>
+                  </div>
                 </>
               )}
             </section>

@@ -3,14 +3,16 @@ import { listen } from '@tauri-apps/api/event'
 import { create } from 'zustand'
 
 import type { RemoteStatus } from '../model'
-import { REMOTE_DEFAULT_PORT } from './settings'
+import { REMOTE_DEFAULT_MAX_CLIENTS, REMOTE_DEFAULT_PORT } from './settings'
 
 const IDLE_STATUS: RemoteStatus = {
   listening: false,
   port: REMOTE_DEFAULT_PORT,
   token: null,
   clientCount: 0,
-  error: null
+  error: null,
+  useTls: false,
+  maxClients: REMOTE_DEFAULT_MAX_CLIENTS
 }
 
 export const useRemoteStore = create<RemoteStatus>(() => IDLE_STATUS)

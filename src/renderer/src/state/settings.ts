@@ -41,6 +41,12 @@ export const ART_NET_DEFAULT_PORT = 6454
 /** Port the remote view listens on unless the settings panel picks another — matches `DEFAULT_REMOTE_PORT` on the Rust side. */
 export const REMOTE_DEFAULT_PORT = 7420
 
+/** Default maximum concurrent clients for the remote server. */
+export const REMOTE_DEFAULT_MAX_CLIENTS = 4
+
+/** Bounds of the client count slider in the remote view settings. */
+export const REMOTE_MAX_CLIENTS_RANGE = { min: 1, max: 16, step: 1 } as const
+
 /** Placeholder interface name meaning "nothing picked yet". */
 export const NO_NETWORK_INTERFACE = ''
 
@@ -188,6 +194,10 @@ export interface Settings {
   /** Name of the network adapter the remote server binds to — picked from
    *  `list_network_interfaces`, not typed in. Empty means every interface. */
   remoteInterface: string
+  /** Whether the remote web view server is served over HTTPS/TLS. */
+  remoteUseTls: boolean
+  /** Maximum number of concurrent client devices allowed to connect. */
+  remoteMaxClients: number
   /** Whether the deck bar shows the deck number badge. */
   showDeckNumber: boolean
   /** Whether the deck bar shows the track title and artist. */
@@ -241,6 +251,8 @@ export const DEFAULT_SETTINGS: Settings = {
   remoteEnabled: false,
   remotePort: REMOTE_DEFAULT_PORT,
   remoteInterface: NO_NETWORK_INTERFACE,
+  remoteUseTls: false,
+  remoteMaxClients: REMOTE_DEFAULT_MAX_CLIENTS,
   showDeckNumber: true,
   showDeckTrackInfo: true,
   showDeckTrackTags: true,
@@ -306,6 +318,8 @@ function pickSettings(state: Settings): Settings {
     remoteEnabled,
     remotePort,
     remoteInterface,
+    remoteUseTls,
+    remoteMaxClients,
     showDeckNumber,
     showDeckTrackInfo,
     showDeckTrackTags,
@@ -341,6 +355,8 @@ function pickSettings(state: Settings): Settings {
     remoteEnabled,
     remotePort,
     remoteInterface,
+    remoteUseTls,
+    remoteMaxClients,
     showDeckNumber,
     showDeckTrackInfo,
     showDeckTrackTags,

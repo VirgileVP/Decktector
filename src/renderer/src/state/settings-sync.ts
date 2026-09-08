@@ -56,7 +56,9 @@ function toRemoteConfig(settings: Settings): RemoteConfig {
   return {
     enabled: settings.remoteEnabled,
     port: settings.remotePort,
-    interface: settings.remoteInterface
+    interface: settings.remoteInterface,
+    useTls: settings.remoteUseTls,
+    maxClients: settings.remoteMaxClients
   }
 }
 
@@ -119,7 +121,9 @@ function apply(scope: SettingsScope, settings: Settings, previous?: Settings): v
   if (
     previous?.remoteEnabled !== settings.remoteEnabled ||
     previous?.remotePort !== settings.remotePort ||
-    previous?.remoteInterface !== settings.remoteInterface
+    previous?.remoteInterface !== settings.remoteInterface ||
+    previous?.remoteUseTls !== settings.remoteUseTls ||
+    previous?.remoteMaxClients !== settings.remoteMaxClients
   ) {
     pushRemoteConfig(settings)
   }

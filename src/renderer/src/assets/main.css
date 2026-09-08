@@ -2120,6 +2120,36 @@ input[type='checkbox']:focus-visible {
   cursor: text;
 }
 
+.setting-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.setting-btn:hover {
+  background: var(--border-strong);
+}
+
+.setting-warning {
+  color: #e6a23c;
+  background: rgba(230, 162, 60, 0.1);
+  padding: 6px 10px;
+  border-radius: 4px;
+  border-left: 3px solid #e6a23c;
+  margin: 6px 0;
+}
+
 /* ---------- Panel windows ---------- */
 
 /* Every panel window is created `transparent: true` — on Windows that flag

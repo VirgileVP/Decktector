@@ -113,3 +113,10 @@ pub async fn set_remote_config(
 pub fn remote_qr_svg(url: String) -> Result<String, String> {
     decktective_remote::qr::qr_svg(&url).map_err(|error| error.to_string())
 }
+
+/// Immediately rotates the remote access token and disconnects any connected
+/// browsers, forcing re-authentication with the new token/QR code.
+#[tauri::command]
+pub fn regenerate_remote_token(service: State<'_, Arc<RemoteService>>) {
+    service.regenerate_token();
+}

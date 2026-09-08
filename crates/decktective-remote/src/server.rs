@@ -10,19 +10,19 @@
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use axum::extract::ws::{Message, WebSocket};
+use axum::extract::ws::{self, Message, WebSocket};
 use axum::extract::{Path, Query, Request, State, WebSocketUpgrade};
 use axum::http::header;
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::Router;
+type ServerHandle = axum_server::Handle<SocketAddr>;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine as _;
 use decktective_core::Engine;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::task::JoinHandle;
@@ -34,6 +34,13 @@ use crate::hub::RemoteHub;
 /// Default port for the remote view. Picked well clear of the Pro DJ Link
 /// range and of Vite's dev port.
 pub const DEFAULT_REMOTE_PORT: u16 = 7420;
+
+/// Default maximum number of concurrent client connections allowed.
+pub const DEFAULT_MAX_CLIENTS: u32 = 4;
+
+fn default_max_clients() -> u32 {
+    DEFAULT_MAX_CLIENTS
+}
 
 /// How many status updates a lagging subscriber may miss before it has to
 /// re-hydrate from [`RemoteService::status`].
@@ -57,6 +64,12 @@ pub struct RemoteConfig {
     /// cannot be resolved (unplugged, renamed) — the server stays reachable
     /// rather than failing over an adapter picked in a previous session.
     pub interface: String,
+    /// Whether to serve over HTTPS (and WSS) with in-memory TLS encryption.
+    #[serde(default)]
+    pub use_tls: bool,
+    /// Maximum number of concurrent client devices allowed to connect.
+    #[serde(default = "default_max_clients")]
+    pub max_clients: u32,
 }
 
 /// What the settings panel renders, and what remote browsers are told.
@@ -73,6 +86,10 @@ pub struct RemoteStatus {
     pub client_count: u32,
     /// Set when the last start attempt failed, e.g. the port is taken.
     pub error: Option<String>,
+    /// Whether the active listener is serving over HTTPS/TLS.
+    pub use_tls: bool,
+    /// Maximum number of concurrent client devices allowed.
+    pub max_clients: u32,
 }
 
 /// State a request needs to validate its token and reach the running hub.
@@ -80,7 +97,7 @@ struct Inner {
     config: RemoteConfig,
     token: Option<String>,
     client_count: u32,
-    listener: Option<JoinHandle<()>>,
+    listener: Option<(ServerHandle, JoinHandle<()>)>,
     last_status: RemoteStatus,
 }
 
@@ -92,12 +109,16 @@ impl Inner {
             token: None,
             client_count: 0,
             error: None,
+            use_tls: false,
+            max_clients: DEFAULT_MAX_CLIENTS,
         };
         Self {
             config: RemoteConfig {
                 enabled: false,
                 port: DEFAULT_REMOTE_PORT,
                 interface: String::new(),
+                use_tls: false,
+                max_clients: DEFAULT_MAX_CLIENTS,
             },
             token: None,
             client_count: 0,
@@ -115,6 +136,7 @@ pub struct RemoteService {
     assets: AssetSource,
     inner: Mutex<Inner>,
     status_tx: broadcast::Sender<RemoteStatus>,
+    disconnect_tx: broadcast::Sender<()>,
 }
 
 impl RemoteService {
@@ -124,6 +146,7 @@ impl RemoteService {
             assets,
             inner: Mutex::new(Inner::initial()),
             status_tx: broadcast::channel(STATUS_BUFFER).0,
+            disconnect_tx: broadcast::channel(STATUS_BUFFER).0,
         })
     }
 
@@ -148,6 +171,8 @@ impl RemoteService {
                     token: None,
                     client_count: 0,
                     error: None,
+                    use_tls: config.use_tls,
+                    max_clients: config.max_clients,
                 },
                 config,
             );
@@ -163,30 +188,13 @@ impl RemoteService {
 
         let router = build_router(self.clone());
         let address = SocketAddr::from((bind_ipv4(&config.interface), config.port));
-        match TcpListener::bind(address).await.and_then(|listener| {
-            let bound_port = listener.local_addr()?.port();
-            Ok((listener, bound_port))
-        }) {
-            Ok((listener, bound_port)) => {
-                let handle = tokio::spawn(async move {
-                    if let Err(error) = axum::serve(listener, router).await {
-                        tracing::error!(%error, "remote server stopped unexpectedly");
-                    }
-                });
-                self.lock().listener = Some(handle);
-                self.publish_status(
-                    RemoteStatus {
-                        listening: true,
-                        // The port actually bound, not the requested one —
-                        // they differ when the caller asked for port 0 (an
-                        // OS-assigned port, as tests do).
-                        port: bound_port,
-                        token: Some(token),
-                        client_count: 0,
-                        error: None,
-                    },
-                    config,
-                );
+
+        let std_listener = match std::net::TcpListener::bind(address) {
+            Ok(listener) => {
+                if let Err(error) = listener.set_nonblocking(true) {
+                    tracing::warn!(%error, "failed to set tcp listener nonblocking");
+                }
+                listener
             }
             Err(error) => {
                 tracing::warn!(%error, port = config.port, "failed to bind the remote server's port");
@@ -198,11 +206,134 @@ impl RemoteService {
                         token: None,
                         client_count: 0,
                         error: Some(error.to_string()),
+                        use_tls: config.use_tls,
+                        max_clients: config.max_clients,
                     },
                     config,
                 );
+                return Ok(());
             }
-        }
+        };
+
+        let bound_port = match std_listener.local_addr() {
+            Ok(addr) => addr.port(),
+            Err(error) => {
+                tracing::warn!(%error, "failed to get local addr of tcp listener");
+                config.port
+            }
+        };
+
+        let server_handle = ServerHandle::new();
+        let handle_for_task = server_handle.clone();
+
+        let task_handle = if config.use_tls {
+            let bind_ip = bind_ipv4(&config.interface);
+            let (cert_pem, key_pem) = match crate::tls::generate_self_signed_pem(Some(std::net::IpAddr::V4(bind_ip))) {
+                Ok(pair) => pair,
+                Err(error) => {
+                    tracing::error!(%error, "failed to generate self-signed TLS certificate");
+                    self.lock().token = None;
+                    self.publish_status(
+                        RemoteStatus {
+                            listening: false,
+                            port: bound_port,
+                            token: None,
+                            client_count: 0,
+                            error: Some(format!("TLS setup failed: {error}")),
+                            use_tls: config.use_tls,
+                            max_clients: config.max_clients,
+                        },
+                        config,
+                    );
+                    return Ok(());
+                }
+            };
+            let rustls_config = match crate::tls::rustls_config_from_pem(cert_pem, key_pem).await {
+                Ok(cfg) => cfg,
+                Err(error) => {
+                    tracing::error!(%error, "failed to build rustls config");
+                    self.lock().token = None;
+                    self.publish_status(
+                        RemoteStatus {
+                            listening: false,
+                            port: bound_port,
+                            token: None,
+                            client_count: 0,
+                            error: Some(format!("TLS setup failed: {error}")),
+                            use_tls: config.use_tls,
+                            max_clients: config.max_clients,
+                        },
+                        config,
+                    );
+                    return Ok(());
+                }
+            };
+            let server = match axum_server::from_tcp_rustls(std_listener, rustls_config) {
+                Ok(server) => server.handle(handle_for_task),
+                Err(error) => {
+                    tracing::error!(%error, "failed to create TLS server from tcp listener");
+                    self.lock().token = None;
+                    self.publish_status(
+                        RemoteStatus {
+                            listening: false,
+                            port: bound_port,
+                            token: None,
+                            client_count: 0,
+                            error: Some(format!("TLS server initialization failed: {error}")),
+                            use_tls: config.use_tls,
+                            max_clients: config.max_clients,
+                        },
+                        config,
+                    );
+                    return Ok(());
+                }
+            };
+            tokio::spawn(async move {
+                if let Err(error) = server.serve(router.into_make_service()).await {
+                    tracing::error!(%error, "remote TLS server stopped unexpectedly");
+                }
+            })
+        } else {
+            let server = match axum_server::from_tcp(std_listener) {
+                Ok(server) => server.handle(handle_for_task),
+                Err(error) => {
+                    tracing::error!(%error, "failed to create server from tcp listener");
+                    self.lock().token = None;
+                    self.publish_status(
+                        RemoteStatus {
+                            listening: false,
+                            port: bound_port,
+                            token: None,
+                            client_count: 0,
+                            error: Some(format!("Server initialization failed: {error}")),
+                            use_tls: config.use_tls,
+                            max_clients: config.max_clients,
+                        },
+                        config,
+                    );
+                    return Ok(());
+                }
+            };
+            tokio::spawn(async move {
+                if let Err(error) = server.serve(router.into_make_service()).await {
+                    tracing::error!(%error, "remote server stopped unexpectedly");
+                }
+            })
+        };
+
+        self.lock().listener = Some((server_handle, task_handle));
+        self.publish_status(
+            RemoteStatus {
+                listening: true,
+                port: bound_port,
+                token: Some(token),
+                client_count: 0,
+                error: None,
+                use_tls: config.use_tls,
+                max_clients: config.max_clients,
+            },
+            config,
+        );
         Ok(())
     }
 
@@ -218,11 +349,41 @@ impl RemoteService {
 
     fn stop_listener(&self) {
         let mut inner = self.lock();
-        if let Some(handle) = inner.listener.take() {
-            handle.abort();
+        if let Some((server_handle, task_handle)) = inner.listener.take() {
+            server_handle.shutdown();
+            task_handle.abort();
         }
         inner.token = None;
         inner.client_count = 0;
+    }
+
+    /// Rotates the access token immediately and disconnects all currently
+    /// connected clients, forcing re-authentication with the new token.
+    pub fn regenerate_token(&self) {
+        let mut inner = self.lock();
+        if !inner.last_status.listening {
+            return;
+        }
+        let token = generate_token();
+        inner.token = Some(token.clone());
+        inner.client_count = 0;
+        inner.last_status.token = Some(token);
+        inner.last_status.client_count = 0;
+        let status = inner.last_status.clone();
+        drop(inner);
+        let _ = self.disconnect_tx.send(());
+        let _ = self.status_tx.send(status);
+    }
+
+    /// Whether the connected client count has reached or exceeded max_clients.
+    pub fn is_client_limit_reached(&self) -> bool {
+        let inner = self.lock();
+        let limit = if inner.config.max_clients > 0 {
+            inner.config.max_clients
+        } else {
+            DEFAULT_MAX_CLIENTS
+        };
+        inner.client_count >= limit
     }
 
     fn token_matches(&self, provided: Option<&str>) -> bool {
@@ -437,8 +598,9 @@ fn cookie_token(headers: &axum::http::HeaderMap) -> Option<String> {
 /// `Strict`: the QR code and shared link both land here as a top-level
 /// navigation from outside the site, which `Strict` would refuse to attach
 /// the cookie to.
-fn token_cookie_header(token: &str) -> Option<axum::http::HeaderValue> {
-    axum::http::HeaderValue::from_str(&format!("{TOKEN_COOKIE}={token}; Path=/; SameSite=Lax")).ok()
+fn token_cookie_header(token: &str, use_tls: bool) -> Option<axum::http::HeaderValue> {
+    let secure = if use_tls { "; Secure" } else { "" };
+    axum::http::HeaderValue::from_str(&format!("{TOKEN_COOKIE}={token}; Path=/; SameSite=Lax{secure}")).ok()
 }
 
 /// Gates the asset routes behind the same token every other remote route
@@ -458,9 +620,10 @@ async fn require_token(
         )
             .into_response();
     }
+    let use_tls = service.lock().config.use_tls;
     let mut response = next.run(request).await;
     if let Some(token) = query.token.as_deref() {
-        if let Some(value) = token_cookie_header(token) {
+        if let Some(value) = token_cookie_header(token, use_tls) {
             response.headers_mut().insert(header::SET_COOKIE, value);
         }
     }
@@ -481,6 +644,14 @@ async fn ws_handler(
         )
             .into_response();
     }
+    if service.is_client_limit_reached() {
+        tracing::warn!("rejecting incoming WebSocket connection: client limit reached");
+        return (
+            axum::http::StatusCode::TOO_MANY_REQUESTS,
+            "maximum number of connected devices reached",
+        )
+            .into_response();
+    }
     upgrade.on_upgrade(move |socket| handle_socket(socket, service))
 }
 
@@ -489,6 +660,7 @@ async fn ws_handler(
 /// trying to replay what was missed.
 async fn handle_socket(mut socket: WebSocket, service: Arc<RemoteService>) {
     service.client_connected();
+    let mut disconnect_rx = service.disconnect_tx.subscribe();
 
     let (snapshot, mut receiver) = match service.hub.subscribe() {
         Ok(pair) => pair,
@@ -510,6 +682,14 @@ async fn handle_socket(mut socket: WebSocket, service: Arc<RemoteService>) {
 
     loop {
         tokio::select! {
+            _ = disconnect_rx.recv() => {
+                tracing::info!("remote client disconnected due to token rotation / session invalidation");
+                let _ = socket.send(Message::Close(Some(ws::CloseFrame {
+                    code: ws::close_code::POLICY,
+                    reason: "session invalidated".into(),
+                }))).await;
+                break;
+            }
             incoming = socket.recv() => {
                 match incoming {
                     None | Some(Err(_)) | Some(Ok(Message::Close(_))) => break,
@@ -564,6 +744,33 @@ mod tests {
         assert!(!status.listening);
         assert_eq!(status.port, DEFAULT_REMOTE_PORT);
         assert!(status.token.is_none());
+        assert!(!status.use_tls);
+        assert_eq!(status.max_clients, DEFAULT_MAX_CLIENTS);
+    }
+
+    #[tokio::test]
+    async fn token_rotation_invalidates_active_token() {
+        let engine: Arc<dyn Engine> = Arc::new(SimEngine::new(2));
+        let service = RemoteService::new(engine, AssetSource::DevServer(1420));
+        service
+            .clone()
+            .set_config(RemoteConfig {
+                enabled: true,
+                port: 0,
+                interface: String::new(),
+                use_tls: false,
+                max_clients: DEFAULT_MAX_CLIENTS,
+            })
+            .await
+            .expect("bind succeeds");
+
+        let initial_token = service.status().token.expect("service has a token");
+        service.regenerate_token();
+        let rotated_token = service.status().token.expect("service still has a token");
+
+        assert_ne!(initial_token, rotated_token);
+        assert!(service.token_matches(Some(&rotated_token)));
+        assert!(!service.token_matches(Some(&initial_token)));
     }
 
     /// A browser has no way to repeat a page's own query string onto the
@@ -593,6 +800,8 @@ mod tests {
                 enabled: true,
                 port: 0,
                 interface: String::new(),
+                use_tls: false,
+                max_clients: DEFAULT_MAX_CLIENTS,
             })
             .await
             .expect("bind succeeds");
@@ -631,5 +840,55 @@ mod tests {
             .await
             .expect("router does not error");
         assert_eq!(asset_request.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn an_asset_request_under_tls_sets_secure_cookie() {
+        use axum::body::Body;
+        use axum::http::{header, Request as HttpRequest, StatusCode};
+        use tower::ServiceExt;
+
+        let directory = tempfile::tempdir().expect("temp dir creates");
+        std::fs::write(directory.path().join("index.html"), "<html>hi</html>")
+            .expect("index.html writes");
+
+        let engine: Arc<dyn Engine> = Arc::new(SimEngine::new(2));
+        let service = RemoteService::new(
+            engine,
+            AssetSource::Directory(directory.path().to_path_buf()),
+        );
+        service
+            .clone()
+            .set_config(RemoteConfig {
+                enabled: true,
+                port: 0,
+                interface: String::new(),
+                use_tls: true,
+                max_clients: DEFAULT_MAX_CLIENTS,
+            })
+            .await
+            .expect("bind succeeds");
+        let token = service
+            .status()
+            .token
+            .expect("a listening service has a token");
+
+        let page_load = build_router(service.clone())
+            .oneshot(
+                HttpRequest::builder()
+                    .uri(format!("/?token={token}"))
+                    .body(Body::empty())
+                    .expect("request builds"),
+            )
+            .await
+            .expect("router does not error");
+        assert_eq!(page_load.status(), StatusCode::OK);
+        let set_cookie = page_load
+            .headers()
+            .get(header::SET_COOKIE)
+            .expect("the page load sets the token cookie")
+            .to_str()
+            .expect("header is valid utf-8");
+        assert!(set_cookie.contains("; Secure"));
     }
 }
