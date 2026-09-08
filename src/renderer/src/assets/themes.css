@@ -38,7 +38,6 @@
   --grid-beat: rgba(255, 255, 255, 0.18);
   --overlay-text: rgba(255, 255, 255, 0.35);
   --flag-text: #0a0b0d;
-  --wave-soften-target: 235;
 }
 
 [data-theme='dark'] {
@@ -68,7 +67,6 @@
   --grid-beat: rgba(255, 255, 255, 0.18);
   --overlay-text: rgba(255, 255, 255, 0.35);
   --flag-text: #101012;
-  --wave-soften-target: 235;
 }
 
 [data-theme='light'] {
@@ -99,7 +97,6 @@
   --grid-beat: rgba(0, 0, 0, 0.16);
   --overlay-text: rgba(0, 0, 0, 0.4);
   --flag-text: #ffffff;
-  --wave-soften-target: 40;
 }
 
 [data-theme='contrast'] {
@@ -129,7 +126,6 @@
   --grid-beat: rgba(255, 255, 255, 0.3);
   --overlay-text: rgba(255, 255, 255, 0.5);
   --flag-text: #000000;
-  --wave-soften-target: 255;
 }
 
 [data-theme='amber'] {
@@ -159,7 +155,6 @@
   --grid-beat: rgba(255, 181, 69, 0.16);
   --overlay-text: rgba(255, 181, 69, 0.35);
   --flag-text: #0b0803;
-  --wave-soften-target: 200;
 }
 
 [data-theme='midnight'] {
@@ -189,7 +184,6 @@
   --grid-beat: rgba(220, 230, 247, 0.18);
   --overlay-text: rgba(220, 230, 247, 0.35);
   --flag-text: #0a0f1c;
-  --wave-soften-target: 235;
 }
 
 /* No hue anywhere — every state reads through brightness/contrast alone. */
@@ -220,5 +214,4 @@
   --grid-beat: rgba(255, 255, 255, 0.18);
   --overlay-text: rgba(255, 255, 255, 0.35);
   --flag-text: #0c0c0c;
-  --wave-soften-target: 220;
 }

@@ -12,7 +12,7 @@ import {
   TIMECODE_FRAME_RATE_OPTIONS,
   TIMECODE_PROTOCOL_OPTIONS,
   UI_SCALE_RANGE,
-  WAVEFORM_DESATURATION_RANGE,
+  WAVEFORM_SATURATION_RANGE,
   useSettings,
   type DeckViewPreset,
   type Settings
@@ -210,12 +210,12 @@ export function SettingsDialog({
                   onChange={update('uiScale')}
                 />
                 <SliderRow
-                  label="Waveform wash"
-                  hint="Flattens the rekordbox colors; at 0 % they are left raw"
-                  value={settings.waveformDesaturation}
-                  range={WAVEFORM_DESATURATION_RANGE}
+                  label="Waveform saturation"
+                  hint="100 % shows the rekordbox color waveform as-is; 0 % is fully white, like a CDJ's White waveform display mode"
+                  value={settings.waveformSaturation}
+                  range={WAVEFORM_SATURATION_RANGE}
                   format={asPercent}
-                  onChange={update('waveformDesaturation')}
+                  onChange={update('waveformSaturation')}
                 />
                 <ToggleRow
                   label="Mirrored waveform"

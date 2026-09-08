@@ -3,7 +3,6 @@ import { useEffect, useRef } from 'react'
 import type { DeckId, TrackInfo, WaveformSegment } from '../model'
 import { prepareCanvas } from '../lib/canvas'
 import { startFrameLoop } from '../lib/frame-loop'
-import { rgbToHsl, hslToRgb } from '../lib/color'
 import { canvasInk, type CanvasInk } from '../lib/ink'
 import { estimatePlayheadMs } from '../lib/playhead'
 import { stripCovers, stripRangeFor, stripWidthPx, type StripRange } from '../lib/waveform-strip'
@@ -116,9 +115,9 @@ export function WaveformDetail({
       const playhead = estimatePlayheadMs(deck, Date.now())
       const ink = canvasInk()
       // Read straight from the store: the rAF loop must not depend on a render.
-      const wash = useSettings.getState().waveformDesaturation
       const mirrored = useSettings.getState().waveformMirrored
       const smoothing = useSettings.getState().waveformSmoothing
+      const saturation = useSettings.getState().waveformSaturation
 
       // A new palette repaints everything, including a deck sitting still that
       // would otherwise keep its signature — and its old colours — forever.
@@ -134,7 +133,7 @@ export function WaveformDetail({
       // the frame would come out identical to the one already on screen. Idle
       // decks settle on a fixed signature and stop drawing altogether.
       const playheadStep = hasWave ? Math.round(playhead / (msPerPx / dpr)) : 0
-      const paletteKey = `${mirrored}|${wash}|${ink.softenTarget}|${smoothing}`
+      const paletteKey = `${mirrored}|${smoothing}|${saturation}`
       const signature = `${width}|${height}|${dpr}|${windowSec}|${paletteKey}|${hasWave}|${playheadStep}`
       if (signature === lastSignature) return
       lastSignature = signature
@@ -177,9 +176,8 @@ export function WaveformDetail({
           dpr,
           msPerPx,
           mirrored,
-          wash,
           smoothing,
-          ink,
+          saturation,
           detail,
           msPerDetailSegment: waveform.msPerDetailSegment,
           durationMs: track.durationMs
@@ -235,9 +233,9 @@ interface StripPaintOptions {
   dpr: number
   msPerPx: number
   mirrored: boolean
-  wash: number
   smoothing: boolean
-  ink: CanvasInk
+  /** 1 = raw rekordbox colors, 0 = fully white. */
+  saturation: number
   detail: WaveformSegment[]
   msPerDetailSegment: number
   durationMs: number
@@ -253,7 +251,8 @@ function paintStrip(
   key: string,
   options: StripPaintOptions
 ): PaintedStrip | null {
-  const { widthPx, height, dpr, msPerPx, mirrored, wash, smoothing, ink, detail } = options
+  const { widthPx, height, dpr, msPerPx, mirrored, smoothing, saturation, detail } = options
+  const whiteMix = 1 - saturation
   const backingWidth = Math.round(widthPx * dpr)
   const backingHeight = Math.round(height * dpr)
   if (canvas.width !== backingWidth || canvas.height !== backingHeight) {
@@ -284,13 +283,13 @@ function paintStrip(
     const segB = detail[i0 + 1] ?? segA
     const frac = idx - i0
     const segHeight = segA.height + (segB.height - segA.height) * frac
-    const [r, g, b] = soften(
-      segA.color[0] + (segB.color[0] - segA.color[0]) * frac,
-      segA.color[1] + (segB.color[1] - segA.color[1]) * frac,
-      segA.color[2] + (segB.color[2] - segA.color[2]) * frac,
-      ink,
-      wash
-    )
+    // The rekordbox color is shown as-is — red/green/blue map to bass/mid/
+    // treble energy exactly like on a CDJ's own waveform display. Only the
+    // interpolation between neighboring columns (for smooth zoom), and the
+    // saturation slider's blend toward white, touch it.
+    const r = toWhite(segA.color[0] + (segB.color[0] - segA.color[0]) * frac, whiteMix)
+    const g = toWhite(segA.color[1] + (segB.color[1] - segA.color[1]) * frac, whiteMix)
+    const b = toWhite(segA.color[2] + (segB.color[2] - segA.color[2]) * frac, whiteMix)
     // Setting fillStyle re-parses a CSS colour, so neighbouring columns of the
     // same colour — most of them — are drawn without touching it again.
     const packed = (r << 16) | (g << 8) | b
@@ -310,6 +309,15 @@ function paintStrip(
   if (smoothing) blendColumns(canvas, ctx, dpr)
 
   return { canvas, range, key }
+}
+
+/**
+ * Blends a color channel toward white. `mix` is how far to go: 0 leaves the
+ * rekordbox color untouched, 1 turns it fully white — a crossfade between a
+ * CDJ's "Color" and "White" waveform display modes.
+ */
+function toWhite(channel: number, mix: number): number {
+  return Math.round(channel + (255 - channel) * mix)
 }
 
 /**
@@ -377,25 +385,6 @@ function blitStrip(
 
   ctx.globalAlpha = 1
   ctx.imageSmoothingEnabled = smoothing
-}
-
-/**
- * Pulls a color's lightness toward the theme's target for a flatter look,
- * leaving hue and saturation alone. `wash` is how far to go: 0 leaves the
- * rekordbox color untouched, 1 pins it to the target lightness.
- *
- * Blending R/G/B independently toward the same neutral target (the previous
- * approach) drags every hue toward that one grey, which crushes the
- * differences between bands and turns anything with two bands active at once
- * — bass-and-mid heavy sections, mostly — into the same muddy brown. Moving
- * only lightness in HSL space keeps the rekordbox red/green/blue frequency
- * coding legible at any wash amount.
- */
-function soften(r: number, g: number, b: number, ink: CanvasInk, wash: number): [number, number, number] {
-  if (wash <= 0) return [Math.round(r), Math.round(g), Math.round(b)]
-  const hsl = rgbToHsl(r, g, b)
-  const targetL = ink.softenTarget / 255
-  return hslToRgb({ h: hsl.h, s: hsl.s, l: hsl.l + (targetL - hsl.l) * wash })
 }
 
 function drawLoopRegions(

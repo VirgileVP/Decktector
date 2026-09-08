@@ -5,8 +5,8 @@ import { DEFAULT_THEME, type ThemeId } from '../lib/theme'
 import type { FrameRate } from '../model'
 
 /** Bounds of the sliders in the settings panel. */
-export const WAVEFORM_DESATURATION_RANGE = { min: 0, max: 1, step: 0.05 } as const
 export const UI_SCALE_RANGE = { min: 0.8, max: 1.6, step: 0.05 } as const
+export const WAVEFORM_SATURATION_RANGE = { min: 0, max: 1, step: 0.05 } as const
 
 /** Drag bounds for the cue list / track structure rails in the deck body. */
 export const DECK_RAIL_WIDTH_RANGE = { min: 96, max: 360 } as const
@@ -161,8 +161,9 @@ export function matchingDeckViewPreset(settings: DeckViewToggles): DeckViewPrese
 
 export interface Settings {
   theme: ThemeId
-  /** 0 = raw rekordbox waveform colors, 1 = fully washed to the theme's target. */
-  waveformDesaturation: number
+  /** 1 = raw rekordbox waveform colors, 0 = fully white — a CDJ-style
+   *  crossfade between the "Color" and "White" waveform display modes. */
+  waveformSaturation: number
   /** Whether waveforms are rendered symmetrically around the center line (CDJ-style) or bottom-aligned. */
   waveformMirrored: boolean
   /** Blurs the detail waveform slightly so neighbouring rekordbox colors blend
@@ -241,7 +242,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: DEFAULT_THEME,
-  waveformDesaturation: 0.45,
+  waveformSaturation: 1,
   waveformMirrored: true,
   waveformSmoothing: true,
   dimIdleDecks: true,
@@ -310,7 +311,7 @@ export const useSettings = create<Settings & SettingsActions>()(
 function pickSettings(state: Settings): Settings {
   const {
     theme,
-    waveformDesaturation,
+    waveformSaturation,
     waveformMirrored,
     waveformSmoothing,
     dimIdleDecks,
@@ -349,7 +350,7 @@ function pickSettings(state: Settings): Settings {
   } = state
   return {
     theme,
-    waveformDesaturation,
+    waveformSaturation,
     waveformMirrored,
     waveformSmoothing,
     dimIdleDecks,

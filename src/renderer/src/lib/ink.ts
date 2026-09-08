@@ -19,17 +19,9 @@ export interface CanvasInk {
   overlayText: string
   /** Letter inside a hot cue flag, on top of the cue color. */
   flagText: string
-  /**
-   * Channel value the rekordbox waveform colors are pulled towards, to flatten
-   * them: near-white on dark themes, near-black on light ones.
-   */
-  softenTarget: number
 }
 
-const SOFTEN_TARGET_VAR = '--wave-soften-target'
-const DEFAULT_SOFTEN_TARGET = 235
-
-const INK_VARS: Record<Exclude<keyof CanvasInk, 'softenTarget'>, string> = {
+const INK_VARS: Record<keyof CanvasInk, string> = {
   empty: '--wave-empty',
   played: '--wave-played',
   unplayed: '--wave-unplayed',
@@ -51,14 +43,7 @@ export function canvasInk(): CanvasInk {
     key,
     styles.getPropertyValue(property).trim()
   ])
-  // An undeclared property reads back as an empty string, which Number() would
-  // happily turn into 0 — i.e. black — so the emptiness is checked first.
-  const rawSoftenTarget = styles.getPropertyValue(SOFTEN_TARGET_VAR).trim()
-  const softenTarget = rawSoftenTarget === '' ? NaN : Number(rawSoftenTarget)
-  const ink: CanvasInk = {
-    ...(Object.fromEntries(entries) as Omit<CanvasInk, 'softenTarget'>),
-    softenTarget: Number.isFinite(softenTarget) ? softenTarget : DEFAULT_SOFTEN_TARGET
-  }
+  const ink = Object.fromEntries(entries) as CanvasInk
 
   cache = { theme, ink }
   return ink

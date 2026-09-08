@@ -319,27 +319,20 @@ fn build_waveform(detail: &rekordcrate::anlz::WaveformColorDetail) -> Option<Wav
     if detail.data.is_empty() {
         return None;
     }
-    // `.height()`/`.red()`/`.green()`/`.blue()` are `modular_bitfield`
-    // -generated accessors on `rekordcrate`'s `WaveformColorDetailColumn` —
-    // deliberately not hand-unpacking these bits ourselves (unlike
-    // `prolink::dbserver::waveform`, which has to, since it reads the same
-    // physical format off a raw dbserver blob with no such accessor
-    // available): trusting the dependency's own generated bit-extraction
-    // is strictly safer than re-deriving the bit order by hand a second
-    // time.
-    let scale_3bit = |value: u8| (f32::from(value) / 7.0 * 255.0).round() as u8;
-    let detail_segments: Vec<WaveformSegment> = detail
-        .data
-        .iter()
-        .map(|column| WaveformSegment {
-            height: f32::from(column.height()) / 31.0,
-            color: [
-                scale_3bit(column.red()),
-                scale_3bit(column.green()),
-                scale_3bit(column.blue()),
-            ],
-        })
-        .collect();
+    // `WaveformColorDetailColumn`'s own `.height()`/`.red()`/`.green()`/`.blue()`
+    // accessors do NOT match the on-disk bit layout: `modular_bitfield`
+    // defaults to packing the first-declared field into the *least*
+    // significant bits, while the format (confirmed against Deep Symmetry's
+    // spec and against `prolink::dbserver::waveform`'s independently
+    // hand-verified, tested decode of the same 2-byte column read live off
+    // a dbserver) actually stores red/green/blue/height from the *most*
+    // significant bit down. Trusting the generated accessors silently
+    // scrambles the channels — blue in particular reads far too low, which
+    // is why the detail waveform looked red/orange/yellow-heavy with almost
+    // no blue compared to a real CDJ. `into_bytes()` still round-trips the
+    // original file bytes faithfully (it's the same bitfield, just
+    // re-encoded), so recover those and unpack them by hand instead.
+    let detail_segments: Vec<WaveformSegment> = detail.data.iter().map(decode_column).collect();
 
     let preview = build_preview_from_detail(&detail_segments, PREVIEW_SEGMENT_COUNT);
     Some(WaveformData {
@@ -350,6 +343,29 @@ fn build_waveform(detail: &rekordcrate::anlz::WaveformColorDetail) -> Option<Wav
         ms_per_detail_segment: 1000.0 / 150.0,
         preview: Some(preview),
     })
+}
+
+/// `WaveformColorDetailColumn`'s own `.height()`/`.red()`/`.green()`/`.blue()`
+/// accessors do NOT match the on-disk bit layout: `modular_bitfield`
+/// defaults to packing the first-declared field into the *least* significant
+/// bits, while the format (confirmed against Deep Symmetry's spec and against
+/// `prolink::dbserver::waveform`'s independently hand-verified, tested decode
+/// of the same 2-byte column read live off a dbserver) actually stores
+/// red/green/blue/height from the *most* significant bit down. Trusting the
+/// generated accessors silently scrambles the channels — blue in particular
+/// reads far too low, which is why the detail waveform looked
+/// red/orange/yellow-heavy with almost no blue compared to a real CDJ.
+/// `into_bytes()` still round-trips the original file bytes faithfully (it's
+/// the same bitfield, just re-encoded), so recover those and unpack them by
+/// hand instead.
+fn decode_column(column: &rekordcrate::anlz::WaveformColorDetailColumn) -> WaveformSegment {
+    let bits = u16::from_be_bytes(column.into_bytes());
+    let height = f32::from((bits >> 2) & 0x1f) / 31.0;
+    let scale_channel = |shift: u16| (f32::from((bits >> shift) & 0x7) / 7.0 * 255.0).round() as u8;
+    WaveformSegment {
+        height,
+        color: [scale_channel(13), scale_channel(10), scale_channel(7)],
+    }
 }
 
 fn cue_kind(hot_cue: u32, cue_type: &CueType) -> CueKind {
@@ -474,6 +490,31 @@ async fn fetch_artwork(client: &mut NfsClient, pdb: &Pdb, track: &Track) -> Opti
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Bit layout per Deep Symmetry's spec (MSB->LSB): red3 green3 blue3
+    /// height5 pad2 — matches `prolink::dbserver::waveform`'s own test helper.
+    fn column_bytes(height5: u16, red3: u16, green3: u16, blue3: u16) -> [u8; 2] {
+        let bits = (height5 << 2) | (red3 << 13) | (green3 << 10) | (blue3 << 7);
+        bits.to_be_bytes()
+    }
+
+    #[test]
+    fn decode_column_reads_a_full_height_white_column() {
+        let column =
+            rekordcrate::anlz::WaveformColorDetailColumn::from_bytes(column_bytes(31, 7, 7, 7));
+        let segment = decode_column(&column);
+        assert_eq!(segment.height, 1.0);
+        assert_eq!(segment.color, [255, 255, 255]);
+    }
+
+    #[test]
+    fn decode_column_reads_a_low_blue_leaning_column_without_scrambling_channels() {
+        let column =
+            rekordcrate::anlz::WaveformColorDetailColumn::from_bytes(column_bytes(8, 0, 0, 7));
+        let segment = decode_column(&column);
+        assert!((segment.height - 8.0 / 31.0).abs() < 0.001);
+        assert_eq!(segment.color, [0, 0, 255]);
+    }
 
     #[test]
     fn a_dat_path_becomes_its_ext_sibling() {
