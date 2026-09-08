@@ -141,6 +141,60 @@ impl NfsClient {
         Ok(data)
     }
 
+    /// Downloads a whole file directly to a destination file on disk, streaming in chunks
+    /// rather than buffering the entire file in RAM, and invokes `on_progress(bytes_downloaded, total_bytes)`
+    /// as chunks arrive.
+    pub async fn download_file_to_path<F>(
+        &mut self,
+        path: &str,
+        destination: &std::path::Path,
+        mut on_progress: F,
+    ) -> std::io::Result<u64>
+    where
+        F: FnMut(u64, u64) + Send,
+    {
+        use tokio::io::AsyncWriteExt;
+
+        let mut handle = self.root_handle;
+        let mut size = 0u32;
+        for segment in path.split('/').filter(|part| !part.is_empty()) {
+            let xid = self.fresh_xid();
+            let call = procedures::build_lookup_call(xid, handle, segment);
+            let reply = self.call(self.nfs_port, &call).await?;
+            let result = procedures::parse_lookup_reply(&reply, xid)
+                .ok_or_else(|| protocol_error("lookup", segment))?;
+            handle = result.handle;
+            size = result.attributes.size;
+        }
+
+        if let Some(parent) = destination.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+        let mut file = tokio::fs::File::create(destination).await?;
+
+        let mut offset = 0u32;
+        on_progress(0, size as u64);
+
+        while offset < size {
+            let count = READ_CHUNK_SIZE.min(size - offset);
+            let xid = self.fresh_xid();
+            let call = procedures::build_read_call(xid, handle, offset, count);
+            let reply = self.call(self.nfs_port, &call).await?;
+            let result = procedures::parse_read_reply(&reply, xid)
+                .ok_or_else(|| protocol_error("read", path))?;
+            if result.data.is_empty() {
+                break;
+            }
+            file.write_all(&result.data).await?;
+            offset += result.data.len() as u32;
+            on_progress(offset as u64, size as u64);
+            tokio::task::yield_now().await;
+        }
+
+        file.flush().await?;
+        Ok(offset as u64)
+    }
+
     async fn get_port(&mut self, program: u32, version: u32) -> std::io::Result<u16> {
         let xid = self.fresh_xid();
         let call = portmap::build_getport_call(xid, program, version);

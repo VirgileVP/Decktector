@@ -179,6 +179,8 @@ export interface Settings {
   alwaysOnTop: boolean
   /** Hold off the screen saver while a set is running. */
   preventSleep: boolean
+  /** Whether track downloading from the deck's media is enabled (hidden by default). */
+  allowTrackDownload: boolean
   /** Protocol the timecode generator sends to; the deck it reads from is
    *  picked from the header, not here — see `state/timecode.ts`. */
   timecodeProtocol: TimecodeProtocolChoice
@@ -250,6 +252,7 @@ export const DEFAULT_SETTINGS: Settings = {
   lineupView: 'full',
   alwaysOnTop: false,
   preventSleep: false,
+  allowTrackDownload: false,
   timecodeProtocol: 'off',
   timecodeFrameRate: 'smpte30',
   timecodeArtNetInterface: NO_NETWORK_INTERFACE,
@@ -319,6 +322,7 @@ function pickSettings(state: Settings): Settings {
     lineupView,
     alwaysOnTop,
     preventSleep,
+    allowTrackDownload,
     timecodeProtocol,
     timecodeFrameRate,
     timecodeArtNetInterface,
@@ -358,6 +362,7 @@ function pickSettings(state: Settings): Settings {
     lineupView,
     alwaysOnTop,
     preventSleep,
+    allowTrackDownload,
     timecodeProtocol,
     timecodeFrameRate,
     timecodeArtNetInterface,

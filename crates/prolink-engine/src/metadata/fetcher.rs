@@ -126,9 +126,17 @@ pub struct MetadataFetcher {
     /// `run_reporting`'s hot path, which its own design deliberately
     /// avoids.
     current_track: Mutex<HashMap<DeckId, Option<u32>>>,
+    active_sources: Mutex<HashMap<DeckId, ActiveMediaSource>>,
     in_flight: Mutex<HashSet<DeckId>>,
     pdb_cache: Mutex<PdbCache>,
     tasks: Mutex<Vec<JoinHandle<()>>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ActiveMediaSource {
+    pub player_ip: Ipv4Addr,
+    pub slot: MediaSlot,
+    pub track_id: u32,
 }
 
 impl MetadataFetcher {
@@ -140,6 +148,7 @@ impl MetadataFetcher {
             nfs_failures: Mutex::new(HashMap::new()),
             dbserver_failures: Mutex::new(HashMap::new()),
             current_track: Mutex::new(HashMap::new()),
+            active_sources: Mutex::new(HashMap::new()),
             in_flight: Mutex::new(HashSet::new()),
             pdb_cache: Mutex::new(HashMap::new()),
             tasks: Mutex::new(Vec::new()),
@@ -156,6 +165,7 @@ impl MetadataFetcher {
             self.lock(&self.connections).clear();
             self.lock(&self.nfs_failures).clear();
             self.lock(&self.dbserver_failures).clear();
+            self.lock(&self.active_sources).clear();
             self.lock(&self.pdb_cache).clear();
         }
     }
@@ -166,6 +176,9 @@ impl MetadataFetcher {
 
     pub fn note_current_track(&self, deck_id: DeckId, track_id: Option<u32>) {
         self.lock(&self.current_track).insert(deck_id, track_id);
+        if track_id.is_none() {
+            self.lock(&self.active_sources).remove(&deck_id);
+        }
     }
 
     /// Whether a background metadata fetch is currently in progress for `deck_id`.
@@ -207,6 +220,7 @@ impl MetadataFetcher {
         self.lock(&self.nfs_failures).remove(&device);
         self.lock(&self.dbserver_failures).remove(&device);
         self.lock(&self.current_track).remove(&device);
+        self.lock(&self.active_sources).remove(&device);
         self.lock(&self.in_flight).remove(&device);
     }
 
@@ -311,7 +325,100 @@ impl MetadataFetcher {
         if self.is_superseded(deck_id, track_id) {
             return;
         }
+        self.lock(&self.active_sources).insert(
+            deck_id,
+            ActiveMediaSource {
+                player_ip,
+                slot,
+                track_id,
+            },
+        );
         handle.update_deck_track(deck_id, Some(track_info));
+    }
+
+    /// Downloads the audio file currently loaded on `deck_id` over NFS into `destination_dir`.
+    pub async fn download_track(
+        &self,
+        deck_id: DeckId,
+        destination_dir: std::path::PathBuf,
+        handle: &EngineHandle,
+        progress_callback: Box<dyn Fn(u64, u64) + Send + Sync>,
+    ) -> anyhow::Result<std::path::PathBuf> {
+        let active_source = self
+            .lock(&self.active_sources)
+            .get(&deck_id)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("no active media source known for deck {deck_id}"))?;
+
+        let cached_pdb = self.cached_pdb(active_source.player_ip, active_source.slot);
+        let pdb = match cached_pdb {
+            Some(pdb) => pdb,
+            None => {
+                let mut client = prolink::nfs::NfsClient::open(
+                    active_source.player_ip,
+                    self.bind_ip(),
+                    active_source.slot,
+                )
+                .await?;
+                let fresh_pdb = Arc::new(super::nfs::fetch_pdb(&mut client).await?);
+                self.update_cached_pdb(
+                    active_source.player_ip,
+                    active_source.slot,
+                    Arc::clone(&fresh_pdb),
+                );
+                fresh_pdb
+            }
+        };
+
+        let track = pdb.tracks.get(&active_source.track_id).ok_or_else(|| {
+            anyhow::anyhow!("track {} not found in database", active_source.track_id)
+        })?;
+
+        let raw_file_path = track.file_path.as_deref().ok_or_else(|| {
+            anyhow::anyhow!("no audio file path recorded in database for this track")
+        })?;
+
+        let extension = std::path::Path::new(raw_file_path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("mp3");
+
+        let current_track_info = handle
+            .snapshot()
+            .tracks
+            .into_iter()
+            .find(|t| t.deck_id == deck_id)
+            .and_then(|t| t.track);
+
+        let artist = current_track_info
+            .as_ref()
+            .and_then(|t| t.artist.as_deref())
+            .unwrap_or("Unknown Artist");
+        let title = current_track_info
+            .as_ref()
+            .map(|t| t.title.as_str())
+            .unwrap_or(&track.title);
+
+        let clean_artist = artist.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
+        let clean_title = title.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
+        let filename = format!("{clean_artist} - {clean_title}.{extension}");
+        let dest_file = destination_dir.join(&filename);
+
+        tokio::fs::create_dir_all(&destination_dir).await?;
+
+        let mut client = prolink::nfs::NfsClient::open(
+            active_source.player_ip,
+            self.bind_ip(),
+            active_source.slot,
+        )
+        .await?;
+        client
+            .download_file_to_path(raw_file_path, &dest_file, move |downloaded, total| {
+                progress_callback(downloaded, total);
+            })
+            .await?;
+
+        Ok(dest_file)
     }
 
     /// The NFS route — see [`super::nfs`]. Uses in-memory caching of `export.pdb` /

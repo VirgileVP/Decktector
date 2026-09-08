@@ -1405,7 +1405,8 @@ input[type='checkbox']:focus-visible {
 }
 
 @container deck (max-height: 110px) and (max-width: 279.98px) {
-  .deck-bar-rail .deck-tc-button {
+  .deck-bar-rail .deck-tc-button,
+  .deck-bar-rail .deck-dl-button {
     display: none;
   }
 }
@@ -1661,6 +1662,71 @@ input[type='checkbox']:focus-visible {
   color: #39ff14;
   border-color: #39ff14;
   box-shadow: 0 0 8px rgba(57, 255, 20, 0.35);
+}
+
+/* Discreet track download button */
+.deck-dl-button {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.deck-dl-button:hover:not(:disabled) {
+  background: var(--row-highlight);
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.deck-dl-button:disabled {
+  cursor: default;
+}
+
+.deck-dl-button.deck-dl-downloading {
+  width: auto;
+  min-width: 36px;
+  padding: 0 5px;
+  color: var(--primary, #3b82f6);
+  border-color: var(--primary, #3b82f6);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.deck-dl-progress {
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.deck-dl-button.deck-dl-success {
+  color: #10b981;
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.deck-dl-button.deck-dl-error {
+  color: #ef4444;
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.deck-dl-err {
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 /* ---------- Deck stats: TIME / PITCH / BPM, label above value ---------- */

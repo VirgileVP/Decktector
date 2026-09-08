@@ -20,7 +20,7 @@ still documented at the bottom, for when something needs to be done by hand.
 
 - [ ] The repo checked out on the laptop coming to the venue, on the branch
       with this tooling (`git fetch && git checkout feat/rust-tauri-rewrite
-    && git pull`), confirmed up to date — these tools only exist on that
+  && git pull`), confirmed up to date — these tools only exist on that
       branch.
 - [ ] Release binaries built: `cargo build --release`. No compilation
       on-site. This produces `prolink-session`, `prolink-capture` and

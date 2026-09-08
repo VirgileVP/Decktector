@@ -12,6 +12,7 @@ import { remoteFocusedDeck } from './lib/remote-url'
 import { connectMainWindowCloseCascade } from './panels/close-panel-windows-on-exit'
 import { restorePanelWindows } from './panels/restore-panel-windows'
 import { connectDevicesToEngine, useDevicesStore } from './state/devices'
+import { connectDownloadToEngine } from './state/download'
 import { connectPanelWindowRegistry } from './state/panel-windows'
 import { connectRemoteToEngine } from './state/remote'
 import { connectSettingsBroadcast } from './state/settings-broadcast'
@@ -56,6 +57,7 @@ function App(): React.JSX.Element {
   useEffect(() => connectSettingsBroadcast(), [])
   useEffect(() => connectTimecodeToEngine(), [])
   useEffect(() => connectDevicesToEngine(), [])
+  useEffect(() => connectDownloadToEngine(), [])
   useEffect(() => connectRemoteToEngine(), [])
   useEffect(() => connectPanelWindowRegistry(), [])
   useEffect(() => connectMainWindowCloseCascade(), [])

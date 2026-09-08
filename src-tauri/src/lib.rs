@@ -5,6 +5,7 @@
 //! wires it to Tauri.
 
 mod devices;
+mod download;
 mod events;
 mod remote;
 mod timecode;
@@ -95,7 +96,8 @@ pub fn run() {
             remote::set_remote_config,
             remote::remote_qr_svg,
             remote::regenerate_remote_token,
-            devices::list_devices
+            devices::list_devices,
+            download::download_deck_track
         ])
         .setup(move |app| {
             // Resolving the asset source needs the resource-dir lookup,

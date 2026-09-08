@@ -222,6 +222,48 @@ impl Engine for SimEngine {
     fn handle(&self) -> &EngineHandle {
         &self.handle
     }
+
+    async fn download_track(
+        &self,
+        deck_id: DeckId,
+        destination_dir: std::path::PathBuf,
+        progress_callback: Box<dyn Fn(u64, u64) + Send + Sync>,
+    ) -> anyhow::Result<std::path::PathBuf> {
+        let track = self
+            .handle
+            .snapshot()
+            .tracks
+            .into_iter()
+            .find(|t| t.deck_id == deck_id)
+            .and_then(|t| t.track)
+            .ok_or_else(|| anyhow::anyhow!("no track loaded on deck {deck_id}"))?;
+
+        let artist = track.artist.as_deref().unwrap_or("Unknown Artist");
+        let title = &track.title;
+        let clean_artist = artist.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
+        let clean_title = title.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
+        let filename = format!("{clean_artist} - {clean_title}.mp3");
+        let dest_file = destination_dir.join(&filename);
+
+        tokio::fs::create_dir_all(&destination_dir).await?;
+
+        let total_size: u64 = 4 * 1024 * 1024; // 4 MB simulated track
+        let chunk_size: u64 = 512 * 1024;
+        let mut downloaded: u64 = 0;
+
+        while downloaded < total_size {
+            downloaded = (downloaded + chunk_size).min(total_size);
+            progress_callback(downloaded, total_size);
+            tokio::time::sleep(Duration::from_millis(60)).await;
+        }
+
+        tokio::fs::write(
+            &dest_file,
+            b"ID3\x03\x00\x00\x00\x00\x00\x00SIMULATED_AUDIO_DECKTECTIVE",
+        )
+        .await?;
+        Ok(dest_file)
+    }
 }
 
 /// Drives every simulated deck. The task owns the decks outright, so no deck

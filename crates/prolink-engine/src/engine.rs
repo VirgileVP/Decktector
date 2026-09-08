@@ -122,6 +122,25 @@ impl Engine for ProlinkEngine {
     fn handle(&self) -> &EngineHandle {
         &self.handle
     }
+
+    async fn download_track(
+        &self,
+        deck_id: DeckId,
+        destination_dir: std::path::PathBuf,
+        progress_callback: Box<dyn Fn(u64, u64) + Send + Sync>,
+    ) -> anyhow::Result<std::path::PathBuf> {
+        let fetcher = self
+            .metadata_fetcher
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("engine not running"))?;
+
+        fetcher
+            .download_track(deck_id, destination_dir, &self.handle, progress_callback)
+            .await
+    }
 }
 
 fn first_peer_ip(devices: &[DiscoveredDevice]) -> Option<Ipv4Addr> {

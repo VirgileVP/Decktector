@@ -96,6 +96,8 @@ pub struct Track {
     /// `.2EX` variants (waveform/color/song-structure data) share this
     /// path with their extension swapped.
     pub analyze_path: String,
+    /// Relative path to the audio file on media (e.g. `Contents/Artist/Album/Track.mp3`).
+    pub file_path: Option<String>,
 }
 
 /// Every row this phase looks up by id, indexed after one parsing pass —
@@ -371,6 +373,8 @@ fn parse_track_row(row: &[u8]) -> Option<Track> {
     /// variants share the path with the extension swapped. Deliberately
     /// not entry 20, which is the audio file itself.
     const ANALYZE_PATH_INDEX: usize = 14;
+    /// The audio file path on the media (e.g. `/Contents/...`).
+    const FILE_PATH_INDEX: usize = 20;
 
     let string_offset = |index: usize| -> Option<usize> {
         read_u16_le(row, STRING_TABLE_OFFSET + index * 2).map(usize::from)
@@ -386,6 +390,10 @@ fn parse_track_row(row: &[u8]) -> Option<Track> {
     let analyze_path = device_sql_string::read(row, string_offset(ANALYZE_PATH_INDEX)?)
         .map(|(text, _)| text)
         .unwrap_or_default();
+    let file_path = string_offset(FILE_PATH_INDEX)
+        .and_then(|offset| device_sql_string::read(row, offset))
+        .map(|(text, _)| text)
+        .filter(|text| !text.trim().is_empty());
 
     Some(Track {
         id,
@@ -399,6 +407,7 @@ fn parse_track_row(row: &[u8]) -> Option<Track> {
         duration_sec,
         tempo_centibpm,
         analyze_path,
+        file_path,
     })
 }
 

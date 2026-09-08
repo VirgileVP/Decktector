@@ -642,6 +642,7 @@ mod tests {
             duration_sec: 180,
             tempo_centibpm: 12500,
             analyze_path: String::new(),
+            file_path: None,
         };
 
         let db_cue1 = AnlzCue {

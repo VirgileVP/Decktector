@@ -254,6 +254,18 @@ export function SettingsDialog({
                   />
                 </section>
               )}
+
+              {IS_TAURI && (
+                <section className="settings-section">
+                  <h3>Media & Downloads</h3>
+                  <ToggleRow
+                    label="Allow track downloads (experimental)"
+                    hint="Shows a discreet download button on each deck to fetch audio files directly from the player's USB drive over the network"
+                    checked={settings.allowTrackDownload}
+                    onChange={update('allowTrackDownload')}
+                  />
+                </section>
+              )}
             </>
           )}
 

@@ -1,10 +1,15 @@
 import type { DeckId, TrackInfo } from '../model'
 import { formatTimeMs } from '../lib/playhead'
 import { TRANSPORT_GLYPHS } from '../lib/transport'
+import type { DownloadState } from '../state/download'
+import { useTrackDownloadStore } from '../state/download'
+import { useSettings } from '../state/settings'
 import { useDecktectiveStore } from '../state/store'
 import { selectTimecodeSource, useTimecodeStore } from '../state/timecode'
 import type { DeckBarFields, DeckBarLayout } from './DeckBarLayout'
 import { DeckStat } from './DeckStat'
+
+const IDLE_DOWNLOAD_STATE: DownloadState = { status: 'idle' }
 
 interface DeckBarProps {
   deckId: DeckId
@@ -17,6 +22,9 @@ interface DeckBarProps {
 export function DeckBar({ deckId, track, fields, layout }: DeckBarProps): React.JSX.Element {
   const deck = useDecktectiveStore((s) => s.decks[deckId])
   const isTimecodeSource = useTimecodeStore((s) => s.sourceDeckId === deckId)
+  const allowTrackDownload = useSettings((s) => s.allowTrackDownload)
+  const downloadState = useTrackDownloadStore((s) => s.downloads[deckId] ?? IDLE_DOWNLOAD_STATE)
+  const startDownload = useTrackDownloadStore((s) => s.startDownload)
 
   const playState = deck?.playState ?? 'empty'
   const playhead = deck?.playheadMs ?? null
@@ -71,6 +79,58 @@ export function DeckBar({ deckId, track, fields, layout }: DeckBarProps): React.
           onClick={() => selectTimecodeSource(isTimecodeSource ? null : deckId)}
         >
           TC
+        </button>
+      )}
+
+      {allowTrackDownload && track && (
+        <button
+          type="button"
+          className={`deck-dl-button deck-dl-${downloadState.status}`}
+          title={
+            downloadState.status === 'downloading'
+              ? `Downloading track (${Math.round(downloadState.percent)}%)`
+              : downloadState.status === 'success'
+                ? `Downloaded: ${downloadState.filename}`
+                : downloadState.status === 'error'
+                  ? `Download failed: ${downloadState.message}`
+                  : 'Download track to Downloads/Decktective'
+          }
+          disabled={downloadState.status === 'downloading'}
+          onClick={() => void startDownload(deckId)}
+        >
+          {downloadState.status === 'downloading' ? (
+            <span className="deck-dl-progress">{Math.round(downloadState.percent)}%</span>
+          ) : downloadState.status === 'success' ? (
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          ) : downloadState.status === 'error' ? (
+            <span className="deck-dl-err">!</span>
+          ) : (
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+          )}
         </button>
       )}
 

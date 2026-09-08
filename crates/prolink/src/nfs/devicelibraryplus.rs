@@ -283,9 +283,16 @@ fn read_content_table(
     } else {
         "''"
     };
+    let file_path_col = if cols.contains("file_path") {
+        "file_path"
+    } else if cols.contains("path") {
+        "path"
+    } else {
+        "''"
+    };
 
     let sql = format!(
-        "SELECT {id_col}, {title_col}, {artist_col}, {album_col}, {genre_col}, {key_col}, {label_col}, {image_col}, {bpm_col}, {len_col}, {anlz_col} FROM content;"
+        "SELECT {id_col}, {title_col}, {artist_col}, {album_col}, {genre_col}, {key_col}, {label_col}, {image_col}, {bpm_col}, {len_col}, {anlz_col}, {file_path_col} FROM content;"
     );
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map([], |row| {
@@ -300,6 +307,7 @@ fn read_content_table(
         let bpm: Option<u32> = row.get(8)?;
         let length: Option<u32> = row.get(9)?;
         let anlz_path: Option<String> = row.get(10)?;
+        let raw_file_path: Option<String> = row.get(11)?;
 
         let duration_sec = match length {
             Some(raw) if raw > 1000 => raw / 1000,
@@ -311,6 +319,8 @@ fn read_content_table(
             .filter(|p| !p.trim().is_empty())
             .map(|p| normalize_device_path(&p))
             .unwrap_or_default();
+
+        let file_path = raw_file_path.filter(|p| !p.trim().is_empty());
 
         Ok(Track {
             id,
@@ -324,6 +334,7 @@ fn read_content_table(
             duration_sec,
             tempo_centibpm: bpm.unwrap_or(0),
             analyze_path,
+            file_path,
         })
     })?;
 

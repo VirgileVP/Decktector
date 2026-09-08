@@ -45,7 +45,7 @@ socket2 = "0.6"
 # used by that dev tool alone — never linked into the app itself.
 symphonia = { version = "0.5", features = ["mp3"] }
 thiserror = "2"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util", "fs"] }
 tracing = "0.1"
 ts-rs = "10"
 

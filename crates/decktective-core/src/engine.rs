@@ -187,6 +187,19 @@ pub trait Engine: Send + Sync {
     async fn stop(&self) -> anyhow::Result<()>;
     /// The handle carrying this engine's snapshot and event stream.
     fn handle(&self) -> &EngineHandle;
+
+    /// Downloads the audio file of the track currently loaded on `deck_id` into `destination_dir`.
+    /// Invokes `progress_callback(bytes_downloaded, total_bytes)` during the transfer.
+    /// Returns the path of the saved file.
+    async fn download_track(
+        &self,
+        deck_id: DeckId,
+        destination_dir: std::path::PathBuf,
+        progress_callback: Box<dyn Fn(u64, u64) + Send + Sync>,
+    ) -> anyhow::Result<std::path::PathBuf> {
+        let _ = (deck_id, destination_dir, progress_callback);
+        anyhow::bail!("track download is not supported by this engine")
+    }
 }
 
 #[cfg(test)]
