@@ -49,15 +49,14 @@ use crate::ANNOUNCE_PORT;
 /// [`crate::discovery`]'s module doc).
 const KEEPALIVE_INTERVAL: Duration = Duration::from_millis(1500);
 
-/// Decktective's default virtual player number — chosen to stay clear of the
-/// XDJ-XZ's self-claimed 1+2 while remaining in the 1-6 range CDJs accept
-/// database queries from (see the project's README).
-const PREFERRED_DEVICE_NUMBER: u8 = 5;
+/// Decktective's default virtual player number when available — chosen in the
+/// 1-4 range so both NFS and dbserver metadata queries are accepted by CDJs.
+const PREFERRED_DEVICE_NUMBER: u8 = 4;
 
-/// Fallback order when the preferred number is taken: try 6 next (still
-/// outside the 1-4 range four-CDJ setups fill), then fall back through 1-4
-/// as a last resort for larger/unusual networks.
-const CANDIDATE_DEVICE_NUMBERS: [u8; 6] = [PREFERRED_DEVICE_NUMBER, 6, 1, 2, 3, 4];
+/// Candidate order for virtual player identity: prefer 1-4 (in descending
+/// order 4, 3, 2, 1 to leave lower numbers for main physical players),
+/// then fall back to 5 and 6 when a four-CDJ setup fills 1-4.
+const CANDIDATE_DEVICE_NUMBERS: [u8; 6] = [PREFERRED_DEVICE_NUMBER, 3, 2, 1, 5, 6];
 
 const BROADCAST_ADDR: Ipv4Addr = Ipv4Addr::new(255, 255, 255, 255);
 
@@ -409,14 +408,17 @@ mod tests {
 
     #[test]
     fn prefers_the_default_number_when_free() {
-        assert_eq!(pick_device_number(&[], None), Some(PREFERRED_DEVICE_NUMBER));
+        assert_eq!(pick_device_number(&[], None), Some(4));
+        assert_eq!(pick_device_number(&[1, 2], None), Some(4));
     }
 
     #[test]
-    fn falls_back_to_six_then_one_through_four() {
-        assert_eq!(pick_device_number(&[5], None), Some(6));
-        assert_eq!(pick_device_number(&[5, 6], None), Some(1));
-        assert_eq!(pick_device_number(&[5, 6, 1, 2, 3], None), Some(4));
+    fn falls_back_through_four_three_two_one_then_five_six() {
+        assert_eq!(pick_device_number(&[4], None), Some(3));
+        assert_eq!(pick_device_number(&[4, 3], None), Some(2));
+        assert_eq!(pick_device_number(&[4, 3, 2], None), Some(1));
+        assert_eq!(pick_device_number(&[1, 2, 3, 4], None), Some(5));
+        assert_eq!(pick_device_number(&[1, 2, 3, 4, 5], None), Some(6));
     }
 
     #[test]
@@ -427,48 +429,40 @@ mod tests {
     #[test]
     fn an_override_is_tried_before_the_default() {
         assert_eq!(pick_device_number(&[], Some(2)), Some(2));
+        assert_eq!(pick_device_number(&[], Some(5)), Some(5));
     }
 
     #[test]
     fn a_taken_override_falls_back_to_the_normal_order() {
-        assert_eq!(
-            pick_device_number(&[2], Some(2)),
-            Some(PREFERRED_DEVICE_NUMBER)
-        );
+        assert_eq!(pick_device_number(&[2], Some(2)), Some(4));
     }
 
     #[test]
     fn an_out_of_range_override_is_ignored() {
-        assert_eq!(
-            pick_device_number(&[], Some(33)),
-            Some(PREFERRED_DEVICE_NUMBER)
-        );
-        assert_eq!(
-            pick_device_number(&[], Some(0)),
-            Some(PREFERRED_DEVICE_NUMBER)
-        );
+        assert_eq!(pick_device_number(&[], Some(33)), Some(4));
+        assert_eq!(pick_device_number(&[], Some(0)), Some(4));
     }
 
     #[test]
     fn our_own_broadcast_does_not_look_like_a_conflict() {
         let presence = Presence::new(None);
-        let devices = vec![device(5, &mac_string(presence_mac(5)))];
+        let devices = vec![device(4, &mac_string(presence_mac(4)))];
         presence.ensure_claimed(&devices);
-        assert_eq!(presence.device_number(), Some(5));
+        assert_eq!(presence.device_number(), Some(4));
 
         // Seeing our own keep-alive echoed back must not trigger a re-pick.
         presence.ensure_claimed(&devices);
-        assert_eq!(presence.device_number(), Some(5));
+        assert_eq!(presence.device_number(), Some(4));
     }
 
     #[test]
     fn a_real_device_taking_our_number_triggers_a_reclaim() {
         let presence = Presence::new(None);
-        presence.ensure_claimed(&[device(5, &mac_string(presence_mac(5)))]);
-        assert_eq!(presence.device_number(), Some(5));
+        presence.ensure_claimed(&[device(4, &mac_string(presence_mac(4)))]);
+        assert_eq!(presence.device_number(), Some(4));
 
         // A different MAC on our number is a genuine conflict, not us.
-        presence.ensure_claimed(&[device(5, "aa:bb:cc:dd:ee:ff")]);
-        assert_eq!(presence.device_number(), Some(6));
+        presence.ensure_claimed(&[device(4, "aa:bb:cc:dd:ee:ff")]);
+        assert_eq!(presence.device_number(), Some(3));
     }
 }

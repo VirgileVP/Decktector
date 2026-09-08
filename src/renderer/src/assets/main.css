@@ -1004,6 +1004,126 @@ input[type='checkbox']:focus-visible {
   cursor: pointer;
 }
 
+.device-topology-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-top: 10px;
+  margin-bottom: 12px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.device-topology-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.device-topology-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+
+.device-topology-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.device-topology-dot.dot-connected {
+  background: var(--ok);
+  box-shadow: 0 0 6px rgba(var(--ok-rgb), 0.6);
+}
+
+.device-topology-dot.dot-searching {
+  background: var(--warn);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.device-topology-dot.dot-standby {
+  background: var(--text-faint);
+}
+
+.device-topology-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border-radius: 10px;
+  text-transform: uppercase;
+}
+
+.device-topology-badge.badge-dual-route {
+  color: var(--ok);
+  background: rgba(var(--ok-rgb), 0.12);
+  border: 1px solid rgba(var(--ok-rgb), 0.35);
+}
+
+.device-topology-badge.badge-nfs-only {
+  color: var(--sync);
+  background: rgba(183, 193, 212, 0.12);
+  border: 1px solid rgba(183, 193, 212, 0.35);
+}
+
+.device-topology-badge.badge-standby {
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+}
+
+.device-topology-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.device-topology-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.device-topology-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.device-virtual-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 5px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 4px;
+  background: rgba(var(--ok-rgb), 0.15);
+  color: var(--ok);
+  border: 1px solid rgba(var(--ok-rgb), 0.3);
+}
+
+.device-row-virtual td {
+  background: rgba(var(--ok-rgb), 0.04);
+}
+
 .device-table {
   width: 100%;
   margin-top: 4px;
