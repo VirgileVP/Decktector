@@ -163,6 +163,8 @@ export interface Settings {
   theme: ThemeId
   /** 0 = raw rekordbox waveform colors, 1 = fully washed to the theme's target. */
   waveformDesaturation: number
+  /** Whether waveforms are rendered symmetrically around the center line (CDJ-style) or bottom-aligned. */
+  waveformMirrored: boolean
   /** Fade decks that are not on air so the live ones read at a glance. */
   dimIdleDecks: boolean
   /** Renderer zoom factor, for booth screens from 13" to 27". */
@@ -237,6 +239,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   theme: DEFAULT_THEME,
   waveformDesaturation: 0.45,
+  waveformMirrored: true,
   dimIdleDecks: true,
   uiScale: 1,
   lineupView: 'full',
@@ -304,6 +307,7 @@ function pickSettings(state: Settings): Settings {
   const {
     theme,
     waveformDesaturation,
+    waveformMirrored,
     dimIdleDecks,
     uiScale,
     lineupView,
@@ -341,6 +345,7 @@ function pickSettings(state: Settings): Settings {
   return {
     theme,
     waveformDesaturation,
+    waveformMirrored,
     dimIdleDecks,
     uiScale,
     lineupView,

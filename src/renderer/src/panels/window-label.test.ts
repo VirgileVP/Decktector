@@ -19,7 +19,9 @@ describe('panelWindowLabel', () => {
   })
 
   it('uses the placeholder segment for non-deck panels', () => {
-    expect(panelWindowLabel({ panelId: 'clock', deckId: null, instance: 0 })).toBe('panel-clock-x-0')
+    expect(panelWindowLabel({ panelId: 'clock', deckId: null, instance: 0 })).toBe(
+      'panel-clock-x-0'
+    )
   })
 
   it('carries the deck id for deck panels', () => {

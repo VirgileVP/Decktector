@@ -20,7 +20,7 @@ still documented at the bottom, for when something needs to be done by hand.
 
 - [ ] The repo checked out on the laptop coming to the venue, on the branch
       with this tooling (`git fetch && git checkout feat/rust-tauri-rewrite
-      && git pull`), confirmed up to date — these tools only exist on that
+    && git pull`), confirmed up to date — these tools only exist on that
       branch.
 - [ ] Release binaries built: `cargo build --release`. No compilation
       on-site. This produces `prolink-session`, `prolink-capture` and
@@ -52,7 +52,7 @@ still documented at the bottom, for when something needs to be done by hand.
    into a CDJ's LINK port if there's no switch).
 
 3. **Start Wireshark** on that Ethernet interface and leave it running for
-   the *entire* session. This is the backstop: if the capture tooling has a
+   the _entire_ session. This is the backstop: if the capture tooling has a
    bug on the day, the `.pcapng` still has every byte. Save it alongside the
    capture directory before leaving.
 
@@ -87,7 +87,7 @@ still documented at the bottom, for when something needs to be done by hand.
    up.
 
 5. **Before disconnecting anything:** the tool prints the session directory
-   at the end. Copy that whole directory *and* the Wireshark `.pcapng` to
+   at the end. Copy that whole directory _and_ the Wireshark `.pcapng` to
    the second storage device. The final verdict lists what it captured and
    flags what's missing — read it while the kit is still on hand to
    recapture from. In particular, `export.pdb` missing means `nfs/pdb.rs`
@@ -114,7 +114,7 @@ throughout.
 Two of these need the rig set up a particular way, or they capture nothing
 even though the session looks fine:
 
-- **On-air** is reported by the mixer per *channel*, and a player only
+- **On-air** is reported by the mixer per _channel_, and a player only
   lights up as on-air when its **player number matches the mixer channel
   it is plugged into**. The 2026-08-19 session ran two CDJ-3000s numbered 3
   and 4 through channels 1 and 2: the mixer dutifully announced channels 1
@@ -171,7 +171,7 @@ prolink-capture --out capture --duration-sec 5
 ```
 
 Add `--player IP --slot usb` pairs if a player isn't being discovered. Write
-the wall-clock time and each action into `notes.md` inside the *first*
+the wall-clock time and each action into `notes.md` inside the _first_
 session's directory as you go; that correlation is what
 `prolink-session` otherwise does for you, and reconstructing it from memory
 afterwards does not work.

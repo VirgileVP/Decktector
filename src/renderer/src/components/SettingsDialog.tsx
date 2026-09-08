@@ -218,6 +218,12 @@ export function SettingsDialog({
                   onChange={update('waveformDesaturation')}
                 />
                 <ToggleRow
+                  label="Mirrored waveform"
+                  hint="Centers waveforms symmetrically around their center line like on a CDJ"
+                  checked={settings.waveformMirrored}
+                  onChange={update('waveformMirrored')}
+                />
+                <ToggleRow
                   label="Dim decks that are off air"
                   hint="Fades idle decks so the live ones read at a glance"
                   checked={settings.dimIdleDecks}
@@ -496,7 +502,9 @@ export function SettingsDialog({
               />
               {settings.remoteInterface === NO_NETWORK_INTERFACE && (
                 <p className="setting-hint setting-warning">
-                  ⚠️ Binding to every interface exposes the server to all networks this computer is on, including public venue Wi-Fi. In festival setups, select your booth adapter or private hotspot.
+                  ⚠️ Binding to every interface exposes the server to all networks this computer is
+                  on, including public venue Wi-Fi. In festival setups, select your booth adapter or
+                  private hotspot.
                 </p>
               )}
               {remoteStatus.error && (
@@ -514,7 +522,8 @@ export function SettingsDialog({
                   )}
                   {remoteStatus.useTls && (
                     <p className="setting-hint">
-                      🔒 TLS Encrypted: Self-signed certificate. On first scan, tap &ldquo;Advanced / Show Details&rdquo; in the mobile browser to accept and connect.
+                      🔒 TLS Encrypted: Self-signed certificate. On first scan, tap &ldquo;Advanced
+                      / Show Details&rdquo; in the mobile browser to accept and connect.
                     </p>
                   )}
                   <p className="setting-hint">

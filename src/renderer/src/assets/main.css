@@ -1785,17 +1785,63 @@ input[type='checkbox']:focus-visible {
   color: var(--text-faint);
 }
 
+/* The cue arriving now: marker, name, countdown, and a gauge behind them. */
+.cue-active {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  flex-shrink: 0;
+  padding: 8px;
+  border-radius: 3px;
+  border: 1px solid var(--cue-color);
+  background: color-mix(in srgb, var(--cue-color) 12%, transparent);
+  overflow: hidden;
+}
+
+.cue-active.cue-passed {
+  opacity: 0.45;
+  border-color: var(--border);
+}
+
+.cue-gauge {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--cue-color) 30%, transparent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
+}
+
+/* Above the gauge, which is absolutely positioned behind them. */
+.cue-active .cue-marker,
+.cue-active .cue-name,
+.cue-countdown {
+  position: relative;
+}
+
+.cue-active .cue-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.cue-countdown {
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
 .cue-row {
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 3px 6px;
+  min-height: 28px;
+  flex-shrink: 0;
+  padding: 5px 6px;
   border-radius: 3px;
-  border: 1px solid transparent;
-  transition:
-    opacity 0.2s ease,
-    border-color 0.2s ease,
-    background 0.2s ease;
 }
 
 .cue-marker {
@@ -1819,30 +1865,13 @@ input[type='checkbox']:focus-visible {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--text);
+  color: var(--text-muted);
 }
 
 .cue-time {
   font-size: 9px;
   font-variant-numeric: tabular-nums;
-  color: var(--text-muted);
-}
-
-.cue-passed {
-  opacity: 0.32;
-}
-
-.cue-current {
-  background: var(--row-highlight);
-  border-color: var(--border-strong);
-}
-
-.cue-current .cue-name {
-  font-weight: 700;
-}
-
-.cue-upcoming .cue-name {
-  color: var(--text-muted);
+  color: var(--text-faint);
 }
 
 /* ---------- Track structure ---------- */

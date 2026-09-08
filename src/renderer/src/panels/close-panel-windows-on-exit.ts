@@ -20,7 +20,9 @@ export function connectMainWindowCloseCascade(): () => void {
     .onCloseRequested(async () => {
       const windows = await getAllWebviewWindows()
       await Promise.all(
-        windows.filter((window) => parsePanelLabel(window.label) !== null).map((window) => window.close())
+        windows
+          .filter((window) => parsePanelLabel(window.label) !== null)
+          .map((window) => window.close())
       )
     })
     .then((stopListening) => {

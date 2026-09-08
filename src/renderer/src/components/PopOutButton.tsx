@@ -16,7 +16,11 @@ interface PopOutButtonProps {
  * nothing in the remote browser view (no window API to call) or inside a
  * panel window itself (no popping a pop-out out of a pop-out).
  */
-export function PopOutButton({ panelId, deckId, title }: PopOutButtonProps): React.JSX.Element | null {
+export function PopOutButton({
+  panelId,
+  deckId,
+  title
+}: PopOutButtonProps): React.JSX.Element | null {
   if (!isTauri() || isPanelWindow(window.location)) return null
 
   const handleClick = (): void => {

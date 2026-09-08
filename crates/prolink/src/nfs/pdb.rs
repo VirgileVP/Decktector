@@ -103,7 +103,7 @@ pub struct Track {
 /// (artist name, album name, ...) with plain `HashMap` lookups against
 /// this, the same pattern `metadata::normalize` already uses for dbserver
 /// menu items.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Pdb {
     pub tracks: HashMap<u32, Track>,
     pub artists: HashMap<u32, String>,
@@ -114,6 +114,8 @@ pub struct Pdb {
     /// Artwork row id -> relative path to the artwork file, another
     /// `NfsClient::read_file` call away.
     pub artwork_paths: HashMap<u32, String>,
+    /// Optional cues indexed by track id (e.g. from Rekordbox 7 DeviceLibraryPlus).
+    pub cues: HashMap<u32, Vec<crate::nfs::AnlzCue>>,
 }
 
 /// Parses a whole `export.pdb` file's bytes; `None` on any structural

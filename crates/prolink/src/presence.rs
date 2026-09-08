@@ -49,14 +49,16 @@ use crate::ANNOUNCE_PORT;
 /// [`crate::discovery`]'s module doc).
 const KEEPALIVE_INTERVAL: Duration = Duration::from_millis(1500);
 
-/// Decktective's default virtual player number when available — chosen in the
-/// 1-4 range so both NFS and dbserver metadata queries are accepted by CDJs.
-const PREFERRED_DEVICE_NUMBER: u8 = 4;
+/// Decktective's default virtual player number when available — chosen as 7
+/// (the standard virtual CDJ identifier, used by Rekordbox Link Export and
+/// ShowKontrol) so it never collides with physical CDJ hardware (which only
+/// supports player numbers 1 to 6).
+const PREFERRED_DEVICE_NUMBER: u8 = 7;
 
-/// Candidate order for virtual player identity: prefer 1-4 (in descending
-/// order 4, 3, 2, 1 to leave lower numbers for main physical players),
-/// then fall back to 5 and 6 when a four-CDJ setup fills 1-4.
-const CANDIDATE_DEVICE_NUMBERS: [u8; 6] = [PREFERRED_DEVICE_NUMBER, 3, 2, 1, 5, 6];
+/// Candidate order for virtual player identity: prefer 7 first (never assigned
+/// to physical CDJs), then fall back to 6 and 5 (only used on expanded 6-deck setups),
+/// and finally 4, 3, 2, 1 if all higher slots are occupied.
+const CANDIDATE_DEVICE_NUMBERS: [u8; 7] = [PREFERRED_DEVICE_NUMBER, 6, 5, 4, 3, 2, 1];
 
 const BROADCAST_ADDR: Ipv4Addr = Ipv4Addr::new(255, 255, 255, 255);
 
@@ -213,7 +215,7 @@ fn interface_entries<T>(
 }
 
 fn pick_device_number(taken: &[u8], preferred_override: Option<u8>) -> Option<u8> {
-    let valid_override = preferred_override.filter(|number| (1..=6).contains(number));
+    let valid_override = preferred_override.filter(|number| (1..=7).contains(number));
     valid_override
         .into_iter()
         .chain(CANDIDATE_DEVICE_NUMBERS)
@@ -227,6 +229,9 @@ fn pick_device_number(taken: &[u8], preferred_override: Option<u8>) -> Option<u8
 /// callers building on [`DeviceWatcher`]'s list (e.g. mapping it to deck
 /// connect/disconnect events) can filter our own entry out the same way.
 pub fn is_own_broadcast(device: &DiscoveredDevice) -> bool {
+    if device.name.eq_ignore_ascii_case("decktective") {
+        return true;
+    }
     let guard = ANNOUNCED_MAC.read().unwrap_or_else(|p| p.into_inner());
     match *guard {
         Some(mac) => device.mac_address == mac_string(mac),
@@ -249,7 +254,7 @@ pub struct Presence {
     /// from decktective's `DECKTECTIVE_VCDJ_ID` escape hatch (see the
     /// project's README) for claiming a number in the 1-4 range metadata
     /// queries need once a real device frees one up. Out-of-range values
-    /// (outside 1-6) are ignored rather than rejected here — the caller
+    /// (outside 1-7) are ignored rather than rejected here — the caller
     /// owns validating user input; this just quietly falls back to the
     /// normal default instead of ever transmitting garbage.
     preferred_override: Option<u8>,
@@ -382,7 +387,7 @@ impl Presence {
             }
             None => {
                 tracing::warn!(
-                    "no free Pro DJ Link player number (1-6); presence disabled until one frees up"
+                    "no free Pro DJ Link player number (1-7); presence disabled until one frees up"
                 );
                 let _ = self.device_number_tx.send(None);
             }
@@ -408,22 +413,23 @@ mod tests {
 
     #[test]
     fn prefers_the_default_number_when_free() {
-        assert_eq!(pick_device_number(&[], None), Some(4));
-        assert_eq!(pick_device_number(&[1, 2], None), Some(4));
+        assert_eq!(pick_device_number(&[], None), Some(7));
+        assert_eq!(pick_device_number(&[1, 2, 3, 4], None), Some(7));
     }
 
     #[test]
-    fn falls_back_through_four_three_two_one_then_five_six() {
-        assert_eq!(pick_device_number(&[4], None), Some(3));
-        assert_eq!(pick_device_number(&[4, 3], None), Some(2));
-        assert_eq!(pick_device_number(&[4, 3, 2], None), Some(1));
-        assert_eq!(pick_device_number(&[1, 2, 3, 4], None), Some(5));
-        assert_eq!(pick_device_number(&[1, 2, 3, 4, 5], None), Some(6));
+    fn falls_back_through_seven_six_five_then_four_three_two_one() {
+        assert_eq!(pick_device_number(&[7], None), Some(6));
+        assert_eq!(pick_device_number(&[7, 6], None), Some(5));
+        assert_eq!(pick_device_number(&[7, 6, 5], None), Some(4));
+        assert_eq!(pick_device_number(&[7, 6, 5, 4], None), Some(3));
+        assert_eq!(pick_device_number(&[7, 6, 5, 4, 3], None), Some(2));
+        assert_eq!(pick_device_number(&[7, 6, 5, 4, 3, 2], None), Some(1));
     }
 
     #[test]
     fn none_free_when_the_whole_range_is_taken() {
-        assert_eq!(pick_device_number(&[1, 2, 3, 4, 5, 6], None), None);
+        assert_eq!(pick_device_number(&[1, 2, 3, 4, 5, 6, 7], None), None);
     }
 
     #[test]
@@ -434,35 +440,42 @@ mod tests {
 
     #[test]
     fn a_taken_override_falls_back_to_the_normal_order() {
-        assert_eq!(pick_device_number(&[2], Some(2)), Some(4));
+        assert_eq!(pick_device_number(&[2], Some(2)), Some(7));
     }
 
     #[test]
     fn an_out_of_range_override_is_ignored() {
-        assert_eq!(pick_device_number(&[], Some(33)), Some(4));
-        assert_eq!(pick_device_number(&[], Some(0)), Some(4));
+        assert_eq!(pick_device_number(&[], Some(33)), Some(7));
+        assert_eq!(pick_device_number(&[], Some(0)), Some(7));
     }
 
     #[test]
     fn our_own_broadcast_does_not_look_like_a_conflict() {
         let presence = Presence::new(None);
-        let devices = vec![device(4, &mac_string(presence_mac(4)))];
+        let devices = vec![device(7, &mac_string(presence_mac(7)))];
         presence.ensure_claimed(&devices);
-        assert_eq!(presence.device_number(), Some(4));
+        assert_eq!(presence.device_number(), Some(7));
 
         // Seeing our own keep-alive echoed back must not trigger a re-pick.
         presence.ensure_claimed(&devices);
-        assert_eq!(presence.device_number(), Some(4));
+        assert_eq!(presence.device_number(), Some(7));
+    }
+
+    #[test]
+    fn our_own_broadcast_recognized_by_name() {
+        let mut d = device(7, "aa:bb:cc:dd:ee:ff");
+        d.name = "decktective".to_string();
+        assert!(is_own_broadcast(&d));
     }
 
     #[test]
     fn a_real_device_taking_our_number_triggers_a_reclaim() {
         let presence = Presence::new(None);
-        presence.ensure_claimed(&[device(4, &mac_string(presence_mac(4)))]);
-        assert_eq!(presence.device_number(), Some(4));
+        presence.ensure_claimed(&[device(7, &mac_string(presence_mac(7)))]);
+        assert_eq!(presence.device_number(), Some(7));
 
         // A different MAC on our number is a genuine conflict, not us.
-        presence.ensure_claimed(&[device(4, "aa:bb:cc:dd:ee:ff")]);
-        assert_eq!(presence.device_number(), Some(3));
+        presence.ensure_claimed(&[device(7, "aa:bb:cc:dd:ee:ff")]);
+        assert_eq!(presence.device_number(), Some(6));
     }
 }

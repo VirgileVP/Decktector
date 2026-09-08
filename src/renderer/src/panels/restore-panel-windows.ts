@@ -27,7 +27,10 @@ async function readMonitorBounds(): Promise<MonitorBounds[]> {
   })
 }
 
-async function restoreOne(record: PanelWindowRecord, monitors: readonly MonitorBounds[]): Promise<void> {
+async function restoreOne(
+  record: PanelWindowRecord,
+  monitors: readonly MonitorBounds[]
+): Promise<void> {
   const webview = createPanelWebviewWindow(record.label, record.params)
   if (record.geometry === null) return
 

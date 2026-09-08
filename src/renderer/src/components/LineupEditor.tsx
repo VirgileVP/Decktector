@@ -67,7 +67,11 @@ function findProblems(
 }
 
 /** The position, on the axis, that a line before `index` is already anchored to. */
-function anchorBefore(ordered: LineupSlot[], index: number, doorsOffset: AxisMinutes | null): AxisMinutes | null {
+function anchorBefore(
+  ordered: LineupSlot[],
+  index: number,
+  doorsOffset: AxisMinutes | null
+): AxisMinutes | null {
   for (let i = index - 1; i >= 0; i--) {
     if (ordered[i].startOffset !== null) return ordered[i].startOffset
   }
@@ -184,7 +188,9 @@ export function LineupEditor(): React.JSX.Element {
                 <input
                   type="time"
                   className="lineup-time-field"
-                  value={toTimeInput(slot.startOffset === null ? null : axisClock(slot.startOffset))}
+                  value={toTimeInput(
+                    slot.startOffset === null ? null : axisClock(slot.startOffset)
+                  )}
                   aria-label={`Start time of set ${index + 1}`}
                   onChange={(event) => {
                     const clock = parseTimeInput(event.target.value)

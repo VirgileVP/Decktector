@@ -1,6 +1,9 @@
 import { useRef } from 'react'
 
-import { DEFAULT_HEADER_BLOCK_VISIBILITY, type HeaderBlockVisibility } from './HeaderBlockVisibility'
+import {
+  DEFAULT_HEADER_BLOCK_VISIBILITY,
+  type HeaderBlockVisibility
+} from './HeaderBlockVisibility'
 import { HeaderClock } from './HeaderClock'
 import { LineupNow } from './LineupNow'
 import { PopOutButton } from './PopOutButton'
@@ -35,14 +38,18 @@ export function HeaderBlock({
 
   return (
     <div className="header-center poppable" ref={boxRef}>
-      <PopOutButton panelId="header-block" deckId={null} title="Open the lineup header in its own window" />
+      <PopOutButton
+        panelId="header-block"
+        deckId={null}
+        title="Open the lineup header in its own window"
+      />
       {/* `.header-block-content` is `display: contents` until `.header-block-fit`
           joins it, so the app header's own layout sees no extra box. */}
       <div
         ref={contentRef}
         className={`header-block-content${fitToWindow ? ' header-block-fit' : ''}`}
         data-layout={wide ? 'row' : 'stacked'}
-        style={fitToWindow ? ({ ['--fit-scale' as string]: String(scale) }) : undefined}
+        style={fitToWindow ? { ['--fit-scale' as string]: String(scale) } : undefined}
       >
         <div className="header-clocks">
           {visibility.clock && <HeaderClock />}

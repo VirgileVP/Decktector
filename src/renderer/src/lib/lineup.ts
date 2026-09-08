@@ -7,12 +7,7 @@
  * body stretches or shrinks its predecessor, since the rail has no gaps.
  */
 
-import {
-  AXIS_MINUTES,
-  axisFromClock,
-  clampToAxis,
-  type AxisMinutes
-} from './lineup-axis'
+import { AXIS_MINUTES, axisFromClock, clampToAxis, type AxisMinutes } from './lineup-axis'
 
 export interface LineupSlot {
   /** Stable across edits so the editor can reorder rows without losing focus. */
@@ -198,7 +193,12 @@ export function lineupBoundaries(
   const boundaries: Boundary[] = []
 
   if (doorsOffset !== null) {
-    boundaries.push({ id: DOORS_OPEN_ID, kind: 'doors', artist: 'Doors opening', minutes: doorsOffset })
+    boundaries.push({
+      id: DOORS_OPEN_ID,
+      kind: 'doors',
+      artist: 'Doors opening',
+      minutes: doorsOffset
+    })
   }
 
   for (const slot of sortSlots(slots)) {
@@ -305,7 +305,12 @@ export function buildLineup(
 
   return lineupBlocks(slots, endOffset, doorsOffset).map((slot) => ({
     ...slot,
-    state: now < slot.startOffset ? 'upcoming' : slot.endOffset !== null && now >= slot.endOffset ? 'passed' : 'current'
+    state:
+      now < slot.startOffset
+        ? 'upcoming'
+        : slot.endOffset !== null && now >= slot.endOffset
+          ? 'passed'
+          : 'current'
   }))
 }
 

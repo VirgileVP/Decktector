@@ -27,11 +27,13 @@ interface MinSize {
 function overlapArea(geometry: WindowGeometry, monitor: MonitorBounds): number {
   const overlapWidth = Math.max(
     0,
-    Math.min(geometry.x + geometry.width, monitor.x + monitor.width) - Math.max(geometry.x, monitor.x)
+    Math.min(geometry.x + geometry.width, monitor.x + monitor.width) -
+      Math.max(geometry.x, monitor.x)
   )
   const overlapHeight = Math.max(
     0,
-    Math.min(geometry.y + geometry.height, monitor.y + monitor.height) - Math.max(geometry.y, monitor.y)
+    Math.min(geometry.y + geometry.height, monitor.y + monitor.height) -
+      Math.max(geometry.y, monitor.y)
   )
   return overlapWidth * overlapHeight
 }

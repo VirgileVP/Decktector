@@ -13,6 +13,8 @@
 //! module in this crate already uses.
 
 pub mod client;
+pub mod cues;
+pub mod devicelibraryplus;
 pub mod extract;
 pub mod mount;
 pub mod pdb;
@@ -22,3 +24,5 @@ pub mod rpc;
 pub mod xdr;
 
 pub use client::NfsClient;
+pub use cues::{parse_anlz_cues, parse_pcob, parse_pco2, AnlzCue};
+pub use devicelibraryplus::parse_export_library;

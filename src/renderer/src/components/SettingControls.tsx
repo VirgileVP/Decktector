@@ -71,7 +71,13 @@ interface TextRowProps {
 }
 
 /** Single free-text or numeric field, one per line. */
-export function TextRow({ label, hint, value, type = 'text', onChange }: TextRowProps): React.JSX.Element {
+export function TextRow({
+  label,
+  hint,
+  value,
+  type = 'text',
+  onChange
+}: TextRowProps): React.JSX.Element {
   return (
     <label className="setting-row">
       <span className="setting-text">

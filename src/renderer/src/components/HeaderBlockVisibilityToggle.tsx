@@ -40,9 +40,7 @@ export function HeaderBlockVisibilityToggle({
       >
         <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
           <circle cx="6" cy="6" r="1.6" />
-          <path
-            d="M6 1v1.8M6 9.2V11M1 6h1.8M9.2 6H11M2.76 2.76l1.27 1.27M7.97 7.97l1.27 1.27M2.76 9.24l1.27-1.27M7.97 4.03l1.27-1.27"
-          />
+          <path d="M6 1v1.8M6 9.2V11M1 6h1.8M9.2 6H11M2.76 2.76l1.27 1.27M7.97 7.97l1.27 1.27M2.76 9.24l1.27-1.27M7.97 4.03l1.27-1.27" />
         </svg>
       </button>
       {open && (

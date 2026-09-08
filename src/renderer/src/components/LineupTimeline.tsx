@@ -102,15 +102,15 @@ export function LineupTimeline({ onSlotAdded }: LineupTimelineProps): React.JSX.
     onTrackDoubleClick,
     onRulerDoubleClick
   } = useBoundaryDrag({
-      viewportRef,
-      viewport,
-      setViewport,
-      boundaries,
-      moveBoundaries,
-      addSlotAt,
-      onSlotAdded: (id) => onSlotAdded?.(id),
-      fitViewport
-    })
+    viewportRef,
+    viewport,
+    setViewport,
+    boundaries,
+    moveBoundaries,
+    addSlotAt,
+    onSlotAdded: (id) => onSlotAdded?.(id),
+    fitViewport
+  })
 
   if (boundaries.length === 0) {
     return (
@@ -175,7 +175,8 @@ export function LineupTimeline({ onSlotAdded }: LineupTimelineProps): React.JSX.
               onKeyDown={(event) => {
                 const arrowStep = event.shiftKey ? 60 : 5
                 let next: number | null = null
-                if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') next = boundary.minutes - arrowStep
+                if (event.key === 'ArrowLeft' || event.key === 'ArrowDown')
+                  next = boundary.minutes - arrowStep
                 else if (event.key === 'ArrowRight' || event.key === 'ArrowUp')
                   next = boundary.minutes + arrowStep
                 else if (event.key === 'Home') next = limits.min
@@ -204,7 +205,12 @@ interface RailBlockProps {
   onPointerDown: (event: React.PointerEvent, block: ResolvedSlot) => void
 }
 
-function RailBlock({ block, viewport, isMoving, onPointerDown }: RailBlockProps): React.JSX.Element {
+function RailBlock({
+  block,
+  viewport,
+  isMoving,
+  onPointerDown
+}: RailBlockProps): React.JSX.Element {
   const left = minutesToPx(viewport, block.startOffset)
 
   if (block.id === END_SHOW_ID) {
@@ -243,7 +249,10 @@ function RailBlock({ block, viewport, isMoving, onPointerDown }: RailBlockProps)
   )
 }
 
-function buildTicks(viewport: TimelineViewport, step: number): { minutes: number; isDay: boolean }[] {
+function buildTicks(
+  viewport: TimelineViewport,
+  step: number
+): { minutes: number; isDay: boolean }[] {
   const start = Math.max(0, Math.ceil(viewport.originMinutes / step) * step)
   const end = Math.min(AXIS_MINUTES, viewport.originMinutes + visibleSpan(viewport))
   const ticks: { minutes: number; isDay: boolean }[] = []

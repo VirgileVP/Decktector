@@ -22,7 +22,7 @@
 //! a whole multi-call sequence) — reasonable starting points, not
 //! hardware-validated.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::Ipv4Addr;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
 use std::time::{Duration, Instant};
@@ -31,6 +31,7 @@ use decktective_core::model::{DeckId, TrackInfo};
 use decktective_core::structure::{self, StructureInput};
 use decktective_core::EngineHandle;
 use prolink::dbserver::{beatgrid, waveform as db_waveform, Connection};
+use prolink::nfs::pdb::Pdb;
 use prolink::presence::Presence;
 use prolink::status::MediaSlot;
 use tokio::sync::Mutex as AsyncMutex;
@@ -53,7 +54,8 @@ const NFS_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 /// of the menu-render round-trip overhead, but generous for a large
 /// library's database file over 2048-byte NFS reads.
 const NFS_FILE_TIMEOUT: Duration = Duration::from_secs(20);
-const RETRY_FAILED_SOURCE_AFTER: Duration = Duration::from_secs(60);
+const RETRY_FAILED_SOURCE_AFTER: Duration = Duration::from_secs(3);
+const PDB_CACHE_TTL: Duration = Duration::from_secs(120);
 
 /// Pooled dbserver connections, keyed by the player holding the media and
 /// its address - see [`MetadataFetcher::connections`] for why both halves
@@ -123,6 +125,8 @@ pub struct MetadataFetcher {
     /// `run_reporting`'s hot path, which its own design deliberately
     /// avoids.
     current_track: Mutex<HashMap<DeckId, Option<u32>>>,
+    in_flight: Mutex<HashSet<DeckId>>,
+    pdb_cache: Mutex<HashMap<(Ipv4Addr, MediaSlot), (Arc<Pdb>, Instant)>>,
     tasks: Mutex<Vec<JoinHandle<()>>>,
 }
 
@@ -135,6 +139,8 @@ impl MetadataFetcher {
             nfs_failures: Mutex::new(HashMap::new()),
             dbserver_failures: Mutex::new(HashMap::new()),
             current_track: Mutex::new(HashMap::new()),
+            in_flight: Mutex::new(HashSet::new()),
+            pdb_cache: Mutex::new(HashMap::new()),
             tasks: Mutex::new(Vec::new()),
         })
     }
@@ -149,6 +155,7 @@ impl MetadataFetcher {
             self.lock(&self.connections).clear();
             self.lock(&self.nfs_failures).clear();
             self.lock(&self.dbserver_failures).clear();
+            self.lock(&self.pdb_cache).clear();
         }
     }
 
@@ -158,6 +165,30 @@ impl MetadataFetcher {
 
     pub fn note_current_track(&self, deck_id: DeckId, track_id: Option<u32>) {
         self.lock(&self.current_track).insert(deck_id, track_id);
+    }
+
+    /// Whether a background metadata fetch is currently in progress for `deck_id`.
+    pub fn is_fetching(&self, deck_id: DeckId) -> bool {
+        self.lock(&self.in_flight).contains(&deck_id)
+    }
+
+    fn cached_pdb(&self, player_ip: Ipv4Addr, slot: MediaSlot) -> Option<Arc<Pdb>> {
+        let mut cache = self.lock(&self.pdb_cache);
+        match cache.get(&(player_ip, slot)) {
+            Some((pdb, fetched_at)) if fetched_at.elapsed() < PDB_CACHE_TTL => {
+                Some(Arc::clone(pdb))
+            }
+            Some(_) => {
+                cache.remove(&(player_ip, slot));
+                None
+            }
+            None => None,
+        }
+    }
+
+    fn update_cached_pdb(&self, player_ip: Ipv4Addr, slot: MediaSlot, pdb: Arc<Pdb>) {
+        self.lock(&self.pdb_cache)
+            .insert((player_ip, slot), (pdb, Instant::now()));
     }
 
     /// Drops everything held for a device that just left the network: its
@@ -175,11 +206,13 @@ impl MetadataFetcher {
         self.lock(&self.nfs_failures).remove(&device);
         self.lock(&self.dbserver_failures).remove(&device);
         self.lock(&self.current_track).remove(&device);
+        self.lock(&self.in_flight).remove(&device);
     }
 
     /// Spawns the fetch in the background — never blocks the caller
     /// (`crate::engine::run_reporting`'s status-handling path).
     pub fn spawn_fetch(self: &Arc<Self>, handle: Arc<EngineHandle>, request: FetchRequest) {
+        self.lock(&self.in_flight).insert(request.deck_id);
         let fetcher = Arc::clone(self);
         let task = tokio::spawn(async move {
             fetcher.fetch_and_report(handle, request).await;
@@ -233,6 +266,20 @@ impl MetadataFetcher {
             status_bpm,
         } = request;
 
+        struct InFlightGuard {
+            fetcher: Arc<MetadataFetcher>,
+            deck_id: DeckId,
+        }
+        impl Drop for InFlightGuard {
+            fn drop(&mut self) {
+                self.fetcher.lock(&self.fetcher.in_flight).remove(&self.deck_id);
+            }
+        }
+        let _guard = InFlightGuard {
+            fetcher: Arc::clone(&self),
+            deck_id,
+        };
+
         // Neither route takes `deck_id`: everything they key on — the
         // connection pool, both failure caches, every query field — belongs
         // to the player holding the media. Keeping the deck out of scope
@@ -264,11 +311,8 @@ impl MetadataFetcher {
         handle.update_deck_track(deck_id, Some(track_info));
     }
 
-    /// The NFS route — see [`super::nfs`]. No connection pooling (unlike
-    /// dbserver below): every call currently re-opens and re-downloads
-    /// `export.pdb`, a known, accepted inefficiency for this pass rather
-    /// than added caching complexity before the basic flow is even
-    /// hardware-validated — see this module's doc comment.
+    /// The NFS route — see [`super::nfs`]. Uses in-memory caching of `export.pdb` /
+    /// `exportLibrary.db` across requests to avoid hammering linked media sources.
     async fn try_nfs(
         &self,
         source_device: u8,
@@ -280,10 +324,22 @@ impl MetadataFetcher {
         if self.is_failing(&self.nfs_failures, source_device) {
             return None;
         }
-        let fetch = nfs::fetch_track_info(player_ip, self.bind_ip(), slot, track_id, status_bpm);
+        let cached_pdb = self.cached_pdb(player_ip, slot);
+        let fetch = nfs::fetch_track_info(
+            player_ip,
+            self.bind_ip(),
+            slot,
+            track_id,
+            status_bpm,
+            cached_pdb,
+        );
         match timeout(NFS_CONNECT_TIMEOUT + NFS_FILE_TIMEOUT, fetch).await {
-            Ok(Ok(Some(track_info))) => Some(track_info),
-            Ok(Ok(None)) => None, // Connected fine; this track just isn't in this media's database.
+            Ok(Ok((track_info, new_pdb))) => {
+                if let Some(pdb) = new_pdb {
+                    self.update_cached_pdb(player_ip, slot, pdb);
+                }
+                track_info
+            }
             Ok(Err(error)) => {
                 tracing::debug!(source_device, %error, "NFS metadata fetch failed");
                 self.mark_failed(&self.nfs_failures, source_device);
@@ -599,5 +655,27 @@ mod tests {
         assert_eq!(fetcher.bind_ip(), new_ip);
         assert!(!fetcher.is_failing(&fetcher.nfs_failures, 2));
         assert!(!fetcher.is_failing(&fetcher.dbserver_failures, 2));
+    }
+
+    #[test]
+    fn in_flight_and_pdb_cache_work_as_expected() {
+        let fetcher = fetcher();
+        assert!(!fetcher.is_fetching(1));
+
+        fetcher.lock(&fetcher.in_flight).insert(1);
+        assert!(fetcher.is_fetching(1));
+
+        fetcher.forget_device(1);
+        assert!(!fetcher.is_fetching(1));
+
+        let ip: Ipv4Addr = "192.168.1.4".parse().unwrap();
+        assert!(fetcher.cached_pdb(ip, MediaSlot::Usb).is_none());
+
+        let pdb = Arc::new(Pdb::default());
+        fetcher.update_cached_pdb(ip, MediaSlot::Usb, Arc::clone(&pdb));
+        assert!(fetcher.cached_pdb(ip, MediaSlot::Usb).is_some());
+
+        fetcher.set_bind_ip("192.168.1.100".parse().unwrap());
+        assert!(fetcher.cached_pdb(ip, MediaSlot::Usb).is_none());
     }
 }

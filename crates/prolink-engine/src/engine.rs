@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 use decktective_core::model::{DeckId, DeviceInfo, NetworkState};
@@ -208,6 +208,7 @@ async fn run_reporting(
     let mut position = PositionTracker::new();
     let mut known_players: HashMap<DeckId, DeviceInfo> = HashMap::new();
     let mut known_track_ids: HashMap<DeckId, Option<u32>> = HashMap::new();
+    let mut fetch_cooldown: HashMap<DeckId, Instant> = HashMap::new();
     let mut current_bind_ip: Option<Ipv4Addr> = None;
 
     // DeviceWatcher may already have been running a while (it's shared with
@@ -228,6 +229,8 @@ async fn run_reporting(
         &metadata_fetcher,
         &mut known_players,
         &mut position,
+        &mut known_track_ids,
+        &mut fetch_cooldown,
         &initial_devices,
     );
 
@@ -247,11 +250,27 @@ async fn run_reporting(
                     &mut current_bind_ip,
                     &devices,
                 );
-                sync_devices(&handle, &metadata_fetcher, &mut known_players, &mut position, &devices);
+                sync_devices(
+                    &handle,
+                    &metadata_fetcher,
+                    &mut known_players,
+                    &mut position,
+                    &mut known_track_ids,
+                    &mut fetch_cooldown,
+                    &devices,
+                );
             }
             status = status_rx.recv() => {
                 match status {
-                    Ok(status) => handle_status(&handle, &metadata_fetcher, &mut position, &known_players, &mut known_track_ids, status),
+                    Ok(status) => handle_status(
+                        &handle,
+                        &metadata_fetcher,
+                        &mut position,
+                        &known_players,
+                        &mut known_track_ids,
+                        &mut fetch_cooldown,
+                        status,
+                    ),
                     Err(broadcast::error::RecvError::Lagged(_)) => continue,
                     Err(broadcast::error::RecvError::Closed) => break,
                 }
@@ -285,6 +304,7 @@ fn handle_status(
     position: &mut PositionTracker,
     known_players: &HashMap<DeckId, DeviceInfo>,
     known_track_ids: &mut HashMap<DeckId, Option<u32>>,
+    fetch_cooldown: &mut HashMap<DeckId, Instant>,
     status: DeviceStatus,
 ) {
     if DeviceKind::from_device_number(status.device_number) != DeviceKind::Player {
@@ -295,12 +315,33 @@ fn handle_status(
     handle.update_deck_state(to_deck_state(&status, playhead_ms, now));
 
     let deck_id = status.device_number;
-    if known_track_ids.get(&deck_id) == Some(&status.track_id) {
-        return; // Same track as the last packet; nothing to fetch.
+
+    // Reset backoff if the track ID reported by the player changed
+    if known_track_ids.get(&deck_id) != Some(&status.track_id) {
+        fetch_cooldown.remove(&deck_id);
+    }
+
+    if let Some(track_id) = status.track_id {
+        if handle.track_id(deck_id) == Some(track_id) {
+            return; // Exact track metadata already loaded and present in handle; nothing to fetch.
+        }
+    } else if known_track_ids.get(&deck_id) == Some(&None) {
+        return; // Already known to have no track loaded.
+    }
+
+    if metadata_fetcher.is_fetching(deck_id) {
+        return; // Fetch currently in progress; avoid duplicate parallel requests.
+    }
+
+    if let Some(&attempted_at) = fetch_cooldown.get(&deck_id) {
+        if attempted_at.elapsed() < Duration::from_secs(3) {
+            return; // Back off briefly after an attempt before retrying.
+        }
     }
 
     let Some(track_id) = status.track_id else {
         known_track_ids.insert(deck_id, None);
+        fetch_cooldown.remove(&deck_id);
         metadata_fetcher.note_current_track(deck_id, None);
         handle.update_deck_track(deck_id, None);
         return;
@@ -330,6 +371,7 @@ fn handle_status(
     };
 
     known_track_ids.insert(deck_id, Some(track_id));
+    fetch_cooldown.insert(deck_id, Instant::now());
     metadata_fetcher.note_current_track(deck_id, Some(track_id));
     metadata_fetcher.spawn_fetch(
         Arc::clone(handle),
@@ -353,6 +395,8 @@ fn sync_devices(
     metadata_fetcher: &Arc<MetadataFetcher>,
     known: &mut HashMap<DeckId, DeviceInfo>,
     position: &mut PositionTracker,
+    known_track_ids: &mut HashMap<DeckId, Option<u32>>,
+    fetch_cooldown: &mut HashMap<DeckId, Instant>,
     devices: &[DiscoveredDevice],
 ) {
     let current: HashMap<DeckId, DeviceInfo> = devices
@@ -377,6 +421,8 @@ fn sync_devices(
             handle.device_disconnected(info.clone());
             position.forget(deck_id);
             metadata_fetcher.forget_device(deck_id);
+            known_track_ids.remove(&deck_id);
+            fetch_cooldown.remove(&deck_id);
         }
     }
     for (&deck_id, info) in &current {
@@ -504,5 +550,44 @@ mod tests {
             engine.handle().snapshot().network_state,
             NetworkState::Offline
         );
+    }
+
+    #[test]
+    fn sync_devices_disconnect_clears_known_track_ids_and_cooldown() {
+        let handle = EngineHandle::new();
+        let presence = Presence::new(None);
+        let metadata_fetcher = MetadataFetcher::new(presence, Ipv4Addr::LOCALHOST);
+        let mut known_players = HashMap::new();
+        let mut position = PositionTracker::new();
+        let mut known_track_ids = HashMap::new();
+        let mut fetch_cooldown = HashMap::new();
+
+        let peer = test_device(2, "192.168.1.20", "aa:bb:cc:dd:ee:02");
+        sync_devices(
+            &handle,
+            &metadata_fetcher,
+            &mut known_players,
+            &mut position,
+            &mut known_track_ids,
+            &mut fetch_cooldown,
+            &[peer],
+        );
+
+        known_track_ids.insert(2, Some(42));
+        fetch_cooldown.insert(2, Instant::now());
+
+        // Peer disappears:
+        sync_devices(
+            &handle,
+            &metadata_fetcher,
+            &mut known_players,
+            &mut position,
+            &mut known_track_ids,
+            &mut fetch_cooldown,
+            &[],
+        );
+
+        assert!(!known_track_ids.contains_key(&2));
+        assert!(!fetch_cooldown.contains_key(&2));
     }
 }

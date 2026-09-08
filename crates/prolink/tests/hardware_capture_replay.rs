@@ -366,9 +366,13 @@ fn analysis_fixtures_yield_a_beat_grid_and_a_waveform() {
                 match &section.content {
                     Content::BeatGrid(_) => saw_beat_grid = true,
                     Content::WaveformColorDetail(_) => saw_waveform = true,
-                    Content::CueList(list) if !list.cues.is_empty() => saw_cues = true,
                     _ => {}
                 }
+            }
+
+            let cues = prolink::nfs::parse_anlz_cues(&bytes);
+            if !cues.is_empty() {
+                saw_cues = true;
             }
         }
     }
@@ -385,18 +389,49 @@ fn analysis_fixtures_yield_a_beat_grid_and_a_waveform() {
         saw_waveform,
         "no .EXT fixture across any session yielded an HD color waveform section"
     );
+    assert!(
+        saw_cues,
+        "no analysis fixture across any session yielded cues via prolink::nfs::cues"
+    );
+}
 
-    // Cues are deliberately *not* asserted, and `saw_cues` is tracked only
-    // to document why. Neither cue format survives `rekordcrate` 0.3 on
-    // this hardware: the `.EXT`'s `PCO2` is rejected outright (an extended
-    // cue whose `cue_type` it doesn't know), and the `.DAT`'s older `PCOB`
-    // yields nothing either, even for a track whose raw bytes plainly hold
-    // three hot cues — `capture/reference-20260819/`'s `5.DAT` carries a
-    // 168-byte `PCOB` with `len_cues = 3`. Reading them needs cue parsers
-    // of our own, the same gap `prolink::dbserver::cues` already documents
-    // on the other route. Until then a track arrives with no cues rather
-    // than with wrong ones.
-    if saw_cues {
-        eprintln!("note: a fixture yielded cues — `rekordcrate` may have gained support; the assertion above can be tightened");
+#[test]
+fn analysis_fixtures_yield_cues_with_valid_metadata() {
+    let sessions = capture_sessions();
+    if sessions.is_empty() {
+        return;
     }
+    let mut total_cues = 0;
+    for session in &sessions {
+        let is_ext = |file: &Path| {
+            matches!(
+                file.extension().and_then(|e| e.to_str()),
+                Some("EXT" | "ext")
+            )
+        };
+        for ext_path in find_files(session, is_ext) {
+            let Ok(bytes) = std::fs::read(&ext_path) else {
+                continue;
+            };
+            let cues = prolink::nfs::parse_anlz_cues(&bytes);
+            for cue in &cues {
+                if let Some(num) = cue.hot_cue {
+                    assert!(
+                        (1..=8).contains(&num),
+                        "hot cue number {num} out of bounds in {}",
+                        ext_path.display()
+                    );
+                }
+                if cue.is_loop {
+                    assert!(
+                        cue.loop_time_ms.is_some(),
+                        "loop cue missing loop_time_ms in {}",
+                        ext_path.display()
+                    );
+                }
+            }
+            total_cues += cues.len();
+        }
+    }
+    assert!(total_cues > 0, "expected to parse cues across fixtures");
 }

@@ -46,7 +46,7 @@ Primary targets: **XDJ-XZ** and **XDJ-1000MK2** (works with 2 to 4 CDJ-2000-era 
 Decktective tries NFS first, which needs no virtual player number at all — this
 should just work on any network size, including four CDJs with all of 1-4 taken.
 dbserver is the fallback if NFS doesn't answer (e.g. an unsupported media slot),
-and *that* route only answers a virtual CDJ numbered 1-4 — Decktective defaults to
+and _that_ route only answers a virtual CDJ numbered 1-4 — Decktective defaults to
 5 to stay clear of numbers real hardware self-assigns, so on a full four-player
 network the dbserver fallback alone wouldn't get metadata either.
 
@@ -212,11 +212,11 @@ build rather than surfacing mid-set. The same engine layer also feeds the
 
 ### Porting status
 
-| Phase | Scope                                                                    | State |
-| ----- | ------------------------------------------------------------------------- | ----- |
-| 1     | App shell, domain model, simulation engine                                | done  |
-| 2     | UDP layer: announce, discovery, status, beat, precise position            | done  |
-| 3     | Metadata over dbserver: title/artist/album/genre/key/label/comment/bpm, beat grid, HD waveform | done (cues and artwork not implemented — see below) |
+| Phase | Scope                                                                                                                                        | State                                                      |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| 1     | App shell, domain model, simulation engine                                                                                                   | done                                                       |
+| 2     | UDP layer: announce, discovery, status, beat, precise position                                                                               | done                                                       |
+| 3     | Metadata over dbserver: title/artist/album/genre/key/label/comment/bpm, beat grid, HD waveform                                               | done (cues and artwork not implemented — see below)        |
 | 4     | Metadata over NFS: `export.pdb` + `.EXT`/`.DAT` analysis files, needs no virtual player number — the primary route, dbserver is the fallback | done — validated against a CDJ-3000's own media, see below |
 
 Phase 2 listens for real player traffic passively rather than running the full
@@ -272,7 +272,7 @@ hardware-validated Java reference for exactly this NFS-based read):
   (`crates/prolink/src/nfs/pdb.rs`). It was written from a reading of
   `rekordcrate`'s source — whose own row fields are private in the published
   version — and that reading got essentially every structural constant wrong: it
-  found *zero* tracks in the first real database it met. Every offset in it now
+  found _zero_ tracks in the first real database it met. Every offset in it now
   comes from that file, cross-checked field by field against the same tracks'
   metadata as answered independently by the player's dbserver. The file's module
   doc lists what was wrong, in case any of it resurfaces.

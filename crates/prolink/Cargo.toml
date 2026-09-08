@@ -33,6 +33,8 @@ tracing = { workspace = true }
 # comment) — the library itself just emits `tracing` events as before.
 tracing-subscriber = "0.3"
 ts-rs = { workspace = true }
+rusqlite = { version = "0.33", features = ["bundled-sqlcipher"] }
+tempfile = "3"
 
 # `getifaddrs` for the real hardware MAC of the booth adapter, which our
 # keep-alive has to announce (see `crates/prolink/src/presence.rs`). Unix
@@ -51,4 +53,3 @@ libc = "0.2"
 # cycle even for dev-only edges.
 binrw = "0.14"
 rekordcrate = { workspace = true }
-tempfile = "3"

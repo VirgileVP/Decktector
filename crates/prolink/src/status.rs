@@ -57,7 +57,7 @@ const BEAT_COUNT_UNKNOWN: u32 = 0xffff_ffff;
 /// What slot a track was loaded from — mirrors the byte at
 /// [`MEDIA_SLOT_OFFSET`]; kept as the raw protocol concept rather than
 /// mapped to a domain type here.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MediaSlot {
     Cd,
     Sd,

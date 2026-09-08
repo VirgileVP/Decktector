@@ -71,6 +71,7 @@ export function WaveformDetail({
       const midY = FLAG_STRIP + (height - FLAG_STRIP - TICK_STRIP) / 2
       const baselineY = height - TICK_STRIP
       const peakMax = height - FLAG_STRIP - TICK_STRIP - 2
+      const halfPeakMax = peakMax / 2
 
       const waveform = track?.waveform
       const deck = useDecktectiveStore.getState().decks[deckId]
@@ -78,12 +79,14 @@ export function WaveformDetail({
       const ink = canvasInk()
       // Read straight from the store: the rAF loop must not depend on a render.
       const wash = useSettings.getState().waveformDesaturation
+      const mirrored = useSettings.getState().waveformMirrored
 
       if (!track || !waveform?.detail || playhead === null) {
         ctx.strokeStyle = ink.empty
         ctx.beginPath()
-        ctx.moveTo(0, midY)
-        ctx.lineTo(width, midY)
+        const emptyY = mirrored ? midY : baselineY
+        ctx.moveTo(0, emptyY)
+        ctx.lineTo(width, emptyY)
         ctx.stroke()
         return
       }
@@ -107,14 +110,19 @@ export function WaveformDetail({
         if (!segA) continue
         const segB = detail[i0 + 1] ?? segA
         const frac = idx - i0
-        const height = segA.height + (segB.height - segA.height) * frac
-        const peak = Math.max(1, height * peakMax)
+        const segHeight = segA.height + (segB.height - segA.height) * frac
         const r = segA.color[0] + (segB.color[0] - segA.color[0]) * frac
         const g = segA.color[1] + (segB.color[1] - segA.color[1]) * frac
         const b = segA.color[2] + (segB.color[2] - segA.color[2]) * frac
         ctx.globalAlpha = x < centerX ? PLAYED_DIM_ALPHA : 0.95
         ctx.fillStyle = `rgb(${soften(r, ink, wash)},${soften(g, ink, wash)},${soften(b, ink, wash)})`
-        ctx.fillRect(x, baselineY - peak, 1, peak)
+        if (mirrored) {
+          const half = Math.max(0.5, segHeight * halfPeakMax)
+          ctx.fillRect(x, midY - half, 1, half * 2)
+        } else {
+          const peak = Math.max(1, segHeight * peakMax)
+          ctx.fillRect(x, baselineY - peak, 1, peak)
+        }
       }
       ctx.globalAlpha = 1
 

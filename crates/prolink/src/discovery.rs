@@ -23,10 +23,9 @@ use ts_rs::TS;
 
 use crate::{bind_udp_socket, ANNOUNCE_PORT, PROLINK_HEADER};
 
-/// Keep-alives arrive roughly every 1.5s; three missed beats is a safe
-/// margin before a device is considered gone, matching the ~10s a real
-/// player takes to drop a peer from its own count.
-const DEVICE_TIMEOUT: Duration = Duration::from_secs(5);
+/// Keep-alives arrive roughly every 1.5s; ~15s allows for network jitter
+/// and transient drops without false disconnects, matching real CDJs.
+const DEVICE_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// How often the device list is swept for timed-out entries.
 const SWEEP_INTERVAL: Duration = Duration::from_secs(1);
@@ -78,7 +77,7 @@ impl DeviceKind {
     /// match.
     pub fn from_device_number(device_number: u8) -> Self {
         match device_number {
-            1..=6 => Self::Player,
+            1..=7 => Self::Player,
             33 => Self::Mixer,
             _ => Self::Other,
         }

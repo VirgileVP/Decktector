@@ -143,7 +143,10 @@ export function useBoundaryDrag({
         const pointerPx = event.clientX - rect.left
         const desiredStartPx = pointerPx - state.grabOffsetPx
         const granularity = event.altKey ? FINE_SNAP_MINUTES : SNAP_MINUTES
-        const snappedStart = snapMinutes(pxToMinutes(viewportRefValue.current, desiredStartPx), granularity)
+        const snappedStart = snapMinutes(
+          pxToMinutes(viewportRefValue.current, desiredStartPx),
+          granularity
+        )
         const rawDelta = snappedStart - state.startOriginal
 
         // Both ends travel by the same amount, so the block's length never changes —
@@ -252,7 +255,12 @@ export function useBoundaryDrag({
     setDraggingId(boundary.id)
   }
 
-  const startMove = (event: React.PointerEvent, blockId: string, start: Boundary, end: Boundary): void => {
+  const startMove = (
+    event: React.PointerEvent,
+    blockId: string,
+    start: Boundary,
+    end: Boundary
+  ): void => {
     const el = viewportRef.current
     if (!el) return
     const rect = el.getBoundingClientRect()

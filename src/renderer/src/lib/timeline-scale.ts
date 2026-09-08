@@ -50,7 +50,11 @@ export function clampViewport(viewport: TimelineViewport): TimelineViewport {
 }
 
 /** Zooms by `factor`, keeping the axis minute under `anchorPx` fixed in place. */
-export function zoomAt(viewport: TimelineViewport, anchorPx: number, factor: number): TimelineViewport {
+export function zoomAt(
+  viewport: TimelineViewport,
+  anchorPx: number,
+  factor: number
+): TimelineViewport {
   const anchorMinutes = pxToMinutes(viewport, anchorPx)
   const visible = clampVisibleMinutes(viewport.widthPx / (viewport.pxPerMinute * factor))
   const pxPerMinute = viewport.widthPx / visible

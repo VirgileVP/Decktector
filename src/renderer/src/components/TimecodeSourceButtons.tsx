@@ -34,7 +34,9 @@ export function TimecodeSourceButtons(): React.JSX.Element | null {
             key={deckId}
             type="button"
             className={active ? 'active' : ''}
-            title={active ? 'Stop sending timecode from this deck' : `Send timecode from deck ${deckId}`}
+            title={
+              active ? 'Stop sending timecode from this deck' : `Send timecode from deck ${deckId}`
+            }
             aria-pressed={active}
             onClick={() => selectTimecodeSource(active ? null : deckId)}
           >

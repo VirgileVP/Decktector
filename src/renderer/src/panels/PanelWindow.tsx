@@ -32,11 +32,15 @@ export function PanelWindow({ params }: PanelWindowProps): React.JSX.Element {
 
   // Seeded from this window's own record — see `PanelChrome`'s matching
   // seed for its display options.
-  const [compact, setCompact] = useState<boolean>(() => currentPanelWindowRecord()?.compact ?? false)
+  const [compact, setCompact] = useState<boolean>(
+    () => currentPanelWindowRecord()?.compact ?? false
+  )
 
   // Only meaningful for `header-block` (`hasVisibilityToggle`), but a hook
   // cannot be called conditionally — it is simply unused for every other panel.
-  const [headerBlockVisibility, setHeaderBlockVisibility] = useState(DEFAULT_HEADER_BLOCK_VISIBILITY)
+  const [headerBlockVisibility, setHeaderBlockVisibility] = useState(
+    DEFAULT_HEADER_BLOCK_VISIBILITY
+  )
 
   const definition = PANELS[params.panelId]
 
@@ -50,7 +54,10 @@ export function PanelWindow({ params }: PanelWindowProps): React.JSX.Element {
     definition.render(params, compact)
   )
   const toolbarExtra = definition.hasVisibilityToggle ? (
-    <HeaderBlockVisibilityToggle visibility={headerBlockVisibility} onChange={setHeaderBlockVisibility} />
+    <HeaderBlockVisibilityToggle
+      visibility={headerBlockVisibility}
+      onChange={setHeaderBlockVisibility}
+    />
   ) : undefined
 
   return (

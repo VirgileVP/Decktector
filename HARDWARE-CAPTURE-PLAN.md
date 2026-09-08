@@ -15,7 +15,7 @@ each item invalidates something this document takes as read:
   now announces itself as a virtual CDJ by default. Without it there is no
   status traffic, and with no status there is no metadata either — every
   later phase keys off the currently-loaded track. The keep-alive has to
-  carry the adapter's real IP *and* its real MAC to work.
+  carry the adapter's real IP _and_ its real MAC to work.
 - **The dbserver framing was wrong end to end** — a missing connection
   greeting, untagged header fields, the wrong argument-type codes, and menu
   queries built from four separate byte arguments instead of one packed
@@ -72,7 +72,7 @@ Out of scope — do not touch these:
 ## House rules for this work
 
 - Follow the conventions already in `crates/prolink/`: module-level doc
-  comments explaining *why*, manual argument parsing (no `clap` — see
+  comments explaining _why_, manual argument parsing (no `clap` — see
   `crates/prolink/src/bin/cdj-sim.rs` for the established pattern), and
   `tracing` for diagnostics.
 - Conventional Commits, one commit per task below.
@@ -116,7 +116,7 @@ capture-YYYYMMDD-HHMMSS/
 `udp.jsonl` line format — one JSON object per line, payload hex-encoded:
 
 ```json
-{"t":1755400000123456,"port":50002,"src":"192.168.1.31","len":284,"hex":"5173707431..."}
+{ "t": 1755400000123456, "port": 50002, "src": "192.168.1.31", "len": 284, "hex": "5173707431..." }
 ```
 
 Requirements:
@@ -185,7 +185,7 @@ explicitly via `--player`/`--slot`:
    disk immediately**
 3. only then `pdb::parse(&bytes)`, wrapped in `std::panic::catch_unwind`,
    recording the outcome in `parse-report.json`
-4. if the parse succeeded, pull each track's `analyze_path` (the `.DAT`) *and*
+4. if the parse succeeded, pull each track's `analyze_path` (the `.DAT`) _and_
    its `.EXT` sibling, plus artwork, writing each raw before any parsing.
    Cap at `--max-tracks` (default 50) so a large library cannot eat the whole
    session; prefer the currently-loaded track ids seen in phase B first.

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { createApplyGuard, shouldApplyBroadcast, type SettingsBroadcast } from './settings-broadcast'
+import {
+  createApplyGuard,
+  shouldApplyBroadcast,
+  type SettingsBroadcast
+} from './settings-broadcast'
 import type { Settings } from './settings'
 
 // Only the `origin` field matters to the functions under test.

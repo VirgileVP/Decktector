@@ -35,7 +35,9 @@ export const tauriTransport: EngineTransport = {
 function subscribe(handlers: EngineHandlers): Promise<UnlistenFn>[] {
   return [
     listen<NetworkState>('engine:network:state', ({ payload }) => handlers.networkState(payload)),
-    listen<DeviceInfo>('engine:device:connected', ({ payload }) => handlers.deviceConnected(payload)),
+    listen<DeviceInfo>('engine:device:connected', ({ payload }) =>
+      handlers.deviceConnected(payload)
+    ),
     listen<DeviceInfo>('engine:device:disconnected', ({ payload }) =>
       handlers.deviceDisconnected(payload)
     ),

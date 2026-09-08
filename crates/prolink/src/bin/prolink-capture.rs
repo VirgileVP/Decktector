@@ -177,8 +177,8 @@ fn parse_args() -> Config {
                     .and_then(|v| v.parse().ok())
                     .expect("--device-number needs a number");
                 assert!(
-                    (1..=6).contains(&number),
-                    "--device-number must be between 1 and 6"
+                    (1..=7).contains(&number),
+                    "--device-number must be between 1 and 7"
                 );
                 config.device_number = Some(number);
             }

@@ -1,7 +1,12 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-import { MINUTES_PER_DAY, MINUTES_PER_HOUR, axisFromClock, type AxisMinutes } from '../lib/lineup-axis'
+import {
+  MINUTES_PER_DAY,
+  MINUTES_PER_HOUR,
+  axisFromClock,
+  type AxisMinutes
+} from '../lib/lineup-axis'
 import {
   DOORS_OPEN_ID,
   END_SHOW_ID,

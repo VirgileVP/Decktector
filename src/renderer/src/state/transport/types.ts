@@ -1,10 +1,4 @@
-import type {
-  DeckState,
-  DeckTrack,
-  DeviceInfo,
-  EngineSnapshot,
-  NetworkState
-} from '../../model'
+import type { DeckState, DeckTrack, DeviceInfo, EngineSnapshot, NetworkState } from '../../model'
 
 /** What the store needs from whatever is feeding it engine events. */
 export interface EngineHandlers {
