@@ -37,12 +37,23 @@ rusqlite = { version = "0.33", features = ["bundled-sqlcipher"] }
 tempfile = "3"
 
 # `getifaddrs` for the real hardware MAC of the booth adapter, which our
-# keep-alive has to announce (see `crates/prolink/src/presence.rs`). Unix
-# only: Windows needs `GetAdaptersInfo` instead, and `presence` falls back
-# to a synthetic MAC there rather than pulling in a whole win32 crate for
-# a platform no booth session has used yet.
+# keep-alive has to announce (see `crates/prolink/src/presence.rs`).
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+# The same hardware MAC on Windows, where `getifaddrs` doesn't exist:
+# `GetAdaptersAddresses` is the supported way to walk adapters and their
+# addresses. Announcing a synthetic MAC instead is not a cosmetic fallback —
+# players address their status packets to the MAC from our keep-alive, so a
+# made-up one means no status packets at all (see `presence::interface_mac`).
+# `Ndis` is not used directly; `IP_ADAPTER_ADDRESSES_LH` is gated behind it.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_NetworkManagement_Ndis",
+    "Win32_Networking_WinSock",
+] }
 
 [dev-dependencies]
 # Only `tests/hardware_capture_replay.rs`'s `.EXT` replay needs these — same
