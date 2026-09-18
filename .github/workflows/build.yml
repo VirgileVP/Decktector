@@ -90,6 +90,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
 
+      # `rusqlite`'s vendored OpenSSL (see `crates/prolink/Cargo.toml`)
+      # assembles itself with NASM on MSVC. Perl, its other build-time
+      # requirement, the image already has.
+      - name: Install NASM
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          choco install nasm --no-progress -y
+          # Chocolatey edits the machine PATH, which this shell has already
+          # read; GITHUB_PATH is what the *next* step sees.
+          "C:\Program Files\NASM" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
       - name: Install dependencies
         run: npm ci
 

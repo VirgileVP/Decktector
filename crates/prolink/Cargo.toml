@@ -33,13 +33,19 @@ tracing = { workspace = true }
 # comment) — the library itself just emits `tracing` events as before.
 tracing-subscriber = "0.3"
 ts-rs = { workspace = true }
-rusqlite = { version = "0.33", features = ["bundled-sqlcipher"] }
+# `rusqlite` is split across the two target blocks below rather than
+# declared here: SQLCipher needs OpenSSL, and where that OpenSSL comes
+# from has to differ per platform.
 tempfile = "3"
 
 # `getifaddrs` for the real hardware MAC of the booth adapter, which our
 # keep-alive has to announce (see `crates/prolink/src/presence.rs`).
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+# SQLCipher, for the encrypted DeviceLibraryPlus databases Rekordbox 7 and
+# the CDJ-3000 write (see `src/nfs/devicelibraryplus.rs`), links against
+# OpenSSL. On macOS and Linux the system copy is there to link.
+rusqlite = { version = "0.33", features = ["bundled-sqlcipher"] }
 
 # The same hardware MAC on Windows, where `getifaddrs` doesn't exist:
 # `GetAdaptersAddresses` is the supported way to walk adapters and their
@@ -54,6 +60,18 @@ windows-sys = { version = "0.61", features = [
     "Win32_NetworkManagement_Ndis",
     "Win32_Networking_WinSock",
 ] }
+
+# The same SQLCipher as the Unix block, but vendoring OpenSSL instead of
+# linking a system one. Windows has no system OpenSSL to link: the build
+# machine's copy (the CI image ships one) is a DLL build, so linking it
+# would leave the installer depending on a `libcrypto-3-x64.dll` that is
+# never shipped with it — the app would install and then fail to start on
+# a machine that has no OpenSSL. The vendored feature builds OpenSSL from
+# source and links it statically, which needs NASM on the build machine
+# (the `Build` workflow installs it).
+[target.'cfg(windows)'.dependencies.rusqlite]
+version = "0.33"
+features = ["bundled-sqlcipher-vendored-openssl"]
 
 [dev-dependencies]
 # Only `tests/hardware_capture_replay.rs`'s `.EXT` replay needs these — same
