@@ -143,6 +143,12 @@ npm run build
 Produces an NSIS installer on Windows, a `.dmg` on macOS and `.AppImage`/`.deb` on
 Linux — each must be built on its own platform.
 
+Without all three machines to hand, the `Build` workflow does it: run it from the
+Actions tab (or push a `v*` tag) and it builds every platform on its own runner,
+then attaches the installers to a GitHub release — the tag itself for a `v*` push,
+a `build-<short sha>` prerelease for anything else. Download from the Releases
+page rather than the run's page; these are release assets, not Actions artifacts.
+
 ## Remote view
 
 A second screen — a phone by the lighting desk, a laptop out front — can watch the

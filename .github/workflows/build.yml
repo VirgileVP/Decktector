@@ -55,18 +55,20 @@ jobs:
 
   build:
     needs: check
+    permissions:
+      # The installers go out as release assets rather than Actions
+      # artifacts (see the publish step) — creating and uploading to a
+      # release is what needs write access here.
+      contents: write
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: macos-latest
-            artifact: decktective-macos
             bundle: target/release/bundle/dmg/*.dmg
           - platform: windows-latest
-            artifact: decktective-windows
             bundle: target/release/bundle/nsis/*-setup.exe
           - platform: ubuntu-latest
-            artifact: decktective-linux
             bundle: target/release/bundle/appimage/*.AppImage
 
     runs-on: ${{ matrix.platform }}
@@ -94,9 +96,52 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.bundle }}
-          if-no-files-found: error
+      # Release assets rather than `actions/upload-artifact`: on a private
+      # repository Actions artifacts share a 500 MB quota that three
+      # platforms' installers fill in a handful of builds, and once it is
+      # full *every* upload fails with "Artifact storage quota has been
+      # hit" — which is what silently broke every build here from
+      # 2026-09-08 on, long after the code itself was fine. Release
+      # storage is not part of that quota.
+      #
+      # A `v*` tag publishes under that tag; any other build gets a
+      # prerelease named after its commit, so a branch build stays
+      # downloadable without pretending to be a release.
+      - name: Publish the installer to a release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # An unmatched glob would otherwise reach `gh` as a literal
+          # pattern and fail there with a confusing message; this is the
+          # `if-no-files-found: error` this step replaces.
+          shopt -s nullglob
+          installers=(${{ matrix.bundle }})
+          if [[ ${#installers[@]} -eq 0 ]]; then
+            echo "::error::no installer matched ${{ matrix.bundle }}"
+            exit 1
+          fi
+
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            tag="build-${GITHUB_SHA::7}"
+          fi
+
+          # The three platform jobs run in parallel and share one release,
+          # so whichever loses the race to create it must carry on rather
+          # than fail — hence the view/create/view sequence.
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            create=(--target "$GITHUB_SHA" --title "$tag"
+                    --notes "Automated build of \`$GITHUB_SHA\` on \`$GITHUB_REF_NAME\`.")
+            if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
+              create+=(--prerelease)
+            fi
+            gh release create "$tag" "${create[@]}" || gh release view "$tag" >/dev/null
+          fi
+
+          # `--clobber` so re-running a build replaces its own assets
+          # instead of erroring on the name already being there.
+          gh release upload "$tag" "${installers[@]}" --clobber
