@@ -36,6 +36,11 @@
     ],
     "resources": {
       "../dist": "web"
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "offlineInstaller"
+      }
     }
   }
 }

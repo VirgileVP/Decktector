@@ -143,6 +143,21 @@ npm run build
 Produces an NSIS installer on Windows, a `.dmg` on macOS and `.AppImage`/`.deb` on
 Linux — each must be built on its own platform.
 
+### Installing without an internet connection
+
+Windows apps render through the Edge WebView2 runtime, which the installer would
+normally fetch from Microsoft on first run. `bundle.windows.webviewInstallMode` is
+set to `offlineInstaller`, so the runtime is embedded instead: the resulting
+`Decktective_<version>_x64-setup.exe` (~270 MB) installs on a machine that has
+never been online, and needs no administrator rights — it installs per user.
+Building it does require an internet connection, since Tauri downloads the runtime
+at bundle time and caches it under `%LOCALAPPDATA%\tauri`.
+
+The macOS `.dmg` and the Linux `.AppImage` are self-contained in the same way —
+they render through the system WebKit and bundle what they need. The `.deb`, by
+contrast, resolves its dependencies through `apt` at install time, so prefer the
+`.AppImage` for offline machines.
+
 ## Remote view
 
 A second screen — a phone by the lighting desk, a laptop out front — can watch the
