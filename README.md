@@ -143,6 +143,20 @@ npm run build
 Produces an NSIS installer on Windows, a `.dmg` on macOS and `.AppImage`/`.deb` on
 Linux — each must be built on its own platform.
 
+The Rekordbox database `prolink` reads is SQLCipher-encrypted, so the build links a
+libcrypto. Nothing to run by hand on any platform:
+
+- **Windows** needs the OpenSSL development package, which `npm install` installs
+  through winget if it is missing, then stages statically under `target/` — so the
+  packaged app carries no `libcrypto` DLL alongside it. Every npm script that reaches
+  Cargo goes through `scripts/with-openssl.mjs`, and `.cargo/config.toml` points a
+  bare `cargo build` (and rust-analyzer) at the same staged archive.
+- **Linux** links the system libcrypto; `npm install` warns if the development
+  package — `libssl-dev`, `openssl-devel` or `openssl` — is missing.
+- **macOS** needs nothing: SQLCipher falls back to CommonCrypto.
+
+`scripts/openssl-linkage.mjs` holds that logic and explains the details.
+
 ### Installing without an internet connection
 
 Windows apps render through the Edge WebView2 runtime, which the installer would
@@ -235,13 +249,13 @@ build rather than surfacing mid-set. The same engine layer also feeds the
 | 4     | Metadata over NFS: `export.pdb` + `.EXT`/`.DAT` analysis files, needs no virtual player number — the primary route, dbserver is the fallback | done — validated against a CDJ-3000's own media, see below |
 
 Phase 2 listens for real player traffic passively rather than running the full
-virtual-CDJ channel-claim handshake Deep Symmetry documents: the handshake's exact
-byte layout isn't pinned down precisely enough to transmit safely onto a live
-network yet. Decktective picks a free virtual player number and broadcasts the
-same settled-state keep-alive a real player does — it just never contests a number
-another device claims first. That keep-alive is not optional: players send their
-status packets **unicast, only to peers whose keep-alive they have seen**, so a
-purely passive listener sees discovery and beats and no status at all (see
+virtual-CDJ channel-claim handshake: its exact byte layout isn't pinned down
+precisely enough to transmit safely onto a live network yet. Decktective picks a
+free virtual player number and broadcasts the same settled-state keep-alive a
+real player does — it just never contests a number another device claims first.
+That keep-alive is not optional: players send their status packets **unicast,
+only to peers whose keep-alive they have seen**, so a purely passive listener
+sees discovery and beats and no status at all (see
 `crates/prolink/src/presence.rs`'s module doc). It also has to announce the real
 address and MAC of the adapter facing the booth, which is why picking the right
 one matters on a multi-homed laptop.
@@ -262,14 +276,12 @@ means hand-rolling cue parsers for both formats, against the bytes the
 with wrong ones.
 
 **Phase 4 carries real, explicit confidence differences worth reading before
-trusting it at a gig.** Cross-checked against Deep Symmetry's `crate-digger` (the
-hardware-validated Java reference for exactly this NFS-based read):
+trusting it at a gig:**
 
 - **High confidence**: the transport itself. What was assumed to be a
   "non-standard NFSv2" server turned out to be standard ONC-RPC/portmapper/NFSv2
   (RFC 1057/1094) almost everywhere — only filenames/paths are encoded UTF-16LE
-  instead of ASCII, confirmed straight from `crate-digger`'s own hand-written
-  protocol spec. `crates/prolink/src/nfs/{xdr,rpc,portmap,mount,procedures,client}.rs`
+  instead of ASCII. `crates/prolink/src/nfs/{xdr,rpc,portmap,mount,procedures,client}.rs`
   implement this, tested against an in-process fake UDP server
   (`crates/prolink/tests/nfs_fake_server.rs`, not `#[ignore]`-gated) covering the
   full portmap → mount → lookup-chain → multi-chunk read flow and the
@@ -316,12 +328,6 @@ hardware-validated Java reference for exactly this NFS-based read):
 
 ## Credits
 
-- [Deep Symmetry's beat-link](https://github.com/Deep-Symmetry/beat-link) and the
-  [DJ Link packet analysis](https://djl-analysis.deepsymmetry.org/) — the protocol
-  research that makes all of this possible.
-- [prolink-connect](https://github.com/evanpurkhiser/prolink-connect) — the
-  TypeScript implementation this project ran on until the Rust port, and the
-  reference the port follows.
 - [rekordcrate](https://github.com/Holzhaus/rekordcrate) — Rust parser for
   Rekordbox analysis files (`.DAT`/`.EXT`, beat grid/waveform/cues), used as-is.
   Its own `export.pdb` parser's row fields are private in the published version,
@@ -329,7 +335,3 @@ hardware-validated Java reference for exactly this NFS-based read):
   using `rekordcrate`'s source as a layout reference — see
   [Porting status](#porting-status) for the confidence caveat that comes with
   that.
-- [crate-digger](https://github.com/Deep-Symmetry/crate-digger) — Deep
-  Symmetry's Java reference implementation for reading a player's database over
-  NFS, the source this port's `prolink::nfs` transport layer was cross-checked
-  against.

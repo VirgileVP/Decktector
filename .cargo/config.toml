@@ -3,3 +3,16 @@
 # Relative to this file's parent (the workspace root), so `cargo test` from
 # anywhere in the workspace lands the bindings in the renderer.
 TS_RS_EXPORT_DIR = { value = "src/renderer/src/model", relative = true }
+
+# Where `libsqlite3-sys` finds the libcrypto that `bundled-sqlcipher` links
+# (see `scripts/openssl-linkage.mjs`). The npm scripts export these too, but a
+# bare `cargo build` and rust-analyzer never go through npm, and without them
+# the build script panics on Windows. `npm install` stages the archive.
+#
+# The `X86_64_PC_WINDOWS_MSVC_` prefix is the target-specific form the build
+# script reads first, so these stay inert on every other platform — where
+# libcrypto is resolved without help. An OpenSSL installed somewhere other than
+# the path below still wins: Cargo lets the real environment override `[env]`,
+# and the npm scripts export the same target-prefixed pair.
+X86_64_PC_WINDOWS_MSVC_OPENSSL_LIB_DIR = { value = "target/openssl-static/lib", relative = true }
+X86_64_PC_WINDOWS_MSVC_OPENSSL_INCLUDE_DIR = "C:/Program Files/OpenSSL-Win64/include"
