@@ -29,7 +29,11 @@ anyhow = "1"
 async-trait = "0.1"
 chrono = "0.4"
 cpal = "0.15"
-if-addrs = "0.13"
+# `link-local`: without it, Windows builds silently drop every 169.254.x.x
+# address — the self-assigned range a DHCP-less Pro DJ Link network runs on,
+# so the booth adapter would never be listed or auto-picked. Unplugged
+# adapters' 169.254 addresses stay out: if-addrs skips non-"Preferred" ones.
+if-addrs = { version = "0.13", features = ["link-local"] }
 midir = "0.10"
 rand = { version = "0.9", features = ["small_rng"] }
 # `anlz` module only — its `pdb` module's row types are private in this

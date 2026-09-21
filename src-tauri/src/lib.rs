@@ -20,7 +20,7 @@ use decktective_core::Engine;
 use decktective_remote::RemoteService;
 use decktective_timecode::TimecodeService;
 use prolink::discovery::DeviceWatcher;
-use prolink_engine::ProlinkEngine;
+use prolink_engine::{InterfacePreference, ProlinkEngine};
 use tauri::{Manager, State, Window};
 
 use window_prefs::{SleepBlocker, WindowPrefs};
@@ -55,7 +55,12 @@ fn set_window_prefs(
 /// hardware nearby. `device_watcher` is shared with the real engine rather
 /// than each owning its own — both just want the same "who's on the
 /// network" read (see `prolink_engine::ProlinkEngine`'s doc comment).
-fn create_engine(device_watcher: Arc<DeviceWatcher>) -> Arc<dyn Engine> {
+/// `interface_preference` is likewise shared with the settings command that
+/// sets it; the simulation has no network and ignores it.
+fn create_engine(
+    device_watcher: Arc<DeviceWatcher>,
+    interface_preference: Arc<InterfacePreference>,
+) -> Arc<dyn Engine> {
     if std::env::var("DECKTECTIVE_SIM").as_deref() == Ok("1") {
         let deck_count = std::env::var("DECKTECTIVE_SIM_DECKS")
             .ok()
@@ -63,7 +68,7 @@ fn create_engine(device_watcher: Arc<DeviceWatcher>) -> Arc<dyn Engine> {
             .unwrap_or(DEFAULT_SIM_DECKS);
         return Arc::new(SimEngine::new(deck_count));
     }
-    Arc::new(ProlinkEngine::new(device_watcher))
+    Arc::new(ProlinkEngine::new(device_watcher, interface_preference))
 }
 
 pub fn run() {
@@ -75,13 +80,18 @@ pub fn run() {
         .init();
 
     let device_watcher = DeviceWatcher::new();
-    let engine = create_engine(Arc::clone(&device_watcher));
+    let interface_preference = InterfacePreference::new();
+    let engine = create_engine(
+        Arc::clone(&device_watcher),
+        Arc::clone(&interface_preference),
+    );
     let timecode = TimecodeService::new(Arc::clone(&engine));
 
     tauri::Builder::default()
         .manage(Arc::clone(&engine))
         .manage(Arc::clone(&timecode))
         .manage(Arc::clone(&device_watcher))
+        .manage(interface_preference)
         .manage(SleepBlocker::default())
         .invoke_handler(tauri::generate_handler![
             engine_snapshot,
@@ -97,6 +107,7 @@ pub fn run() {
             remote::remote_qr_svg,
             remote::regenerate_remote_token,
             devices::list_devices,
+            devices::set_prolink_interface,
             download::download_deck_track
         ])
         .setup(move |app| {

@@ -563,7 +563,27 @@ export function SettingsDialog({
             </section>
           )}
 
-          {IS_TAURI && activeTab === 'Devices' && <DevicesPanel />}
+          {IS_TAURI && activeTab === 'Devices' && (
+            <>
+              <section className="settings-section">
+                <h3>Pro DJ Link network</h3>
+                <ChoiceRow
+                  label="Network interface"
+                  hint="Adapter wired to the players. Automatic picks the one on the first player's subnet, which can land on the wrong adapter when several share it (169.254.x.x link-local)."
+                  value={settings.prolinkInterface}
+                  options={[
+                    { value: NO_NETWORK_INTERFACE, label: 'Automatic' },
+                    ...networkInterfaces.map((networkInterface) => ({
+                      value: networkInterface.name,
+                      label: `${networkInterface.name} (${networkInterface.ip})`
+                    }))
+                  ]}
+                  onChange={update('prolinkInterface')}
+                />
+              </section>
+              <DevicesPanel />
+            </>
+          )}
         </div>
       </div>
     </div>

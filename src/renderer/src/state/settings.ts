@@ -206,6 +206,10 @@ export interface Settings {
   remoteUseTls: boolean
   /** Maximum number of concurrent client devices allowed to connect. */
   remoteMaxClients: number
+  /** Name of the network adapter Pro DJ Link presence binds to — picked from
+   *  `list_network_interfaces`, not typed in. Empty means automatic: the
+   *  adapter on the first player's subnet. */
+  prolinkInterface: string
   /** Whether the waveform view shows the deck number badge. */
   showDeckNumber: boolean
   /** Whether the deck bar shows the track title and artist. */
@@ -264,6 +268,7 @@ export const DEFAULT_SETTINGS: Settings = {
   remoteInterface: NO_NETWORK_INTERFACE,
   remoteUseTls: false,
   remoteMaxClients: REMOTE_DEFAULT_MAX_CLIENTS,
+  prolinkInterface: NO_NETWORK_INTERFACE,
   showDeckNumber: true,
   showDeckTrackInfo: true,
   showDeckTrackTags: true,
@@ -334,6 +339,7 @@ function pickSettings(state: Settings): Settings {
     remoteInterface,
     remoteUseTls,
     remoteMaxClients,
+    prolinkInterface,
     showDeckNumber,
     showDeckTrackInfo,
     showDeckTrackTags,
@@ -374,6 +380,7 @@ function pickSettings(state: Settings): Settings {
     remoteInterface,
     remoteUseTls,
     remoteMaxClients,
+    prolinkInterface,
     showDeckNumber,
     showDeckTrackInfo,
     showDeckTrackTags,

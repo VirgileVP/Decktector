@@ -19,3 +19,4 @@ mod normalize;
 mod position;
 
 pub use engine::ProlinkEngine;
+pub use network::InterfacePreference;

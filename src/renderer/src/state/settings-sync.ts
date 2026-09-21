@@ -68,6 +68,12 @@ function pushRemoteConfig(settings: Settings): void {
   )
 }
 
+function pushProlinkInterface(settings: Settings): void {
+  invoke('set_prolink_interface', { interfaceName: settings.prolinkInterface }).catch((error) =>
+    console.error('Failed to apply the Pro DJ Link interface:', error)
+  )
+}
+
 /**
  * Which window `connectSettingsToApp` is running in. A panel window mirrors
  * one piece of the UI and must not re-apply — or fight the main window
@@ -126,6 +132,9 @@ function apply(scope: SettingsScope, settings: Settings, previous?: Settings): v
     previous?.remoteMaxClients !== settings.remoteMaxClients
   ) {
     pushRemoteConfig(settings)
+  }
+  if (previous?.prolinkInterface !== settings.prolinkInterface) {
+    pushProlinkInterface(settings)
   }
 }
 

@@ -19,7 +19,7 @@ use prolink::beat::build_beat_packet;
 use prolink::discovery::{build_keepalive, DeviceWatcher};
 use prolink::status::{build_status, RawPlayState};
 use prolink::{ANNOUNCE_PORT, BEAT_PORT, STATUS_PORT};
-use prolink_engine::ProlinkEngine;
+use prolink_engine::{InterfacePreference, ProlinkEngine};
 use tokio::net::UdpSocket;
 use tokio::time::{sleep, timeout};
 
@@ -35,7 +35,7 @@ async fn reports_a_playing_deck_from_simulated_wire_traffic() {
     let device_watcher = DeviceWatcher::new();
     tokio::spawn(device_watcher.clone().run());
 
-    let engine = ProlinkEngine::new(device_watcher);
+    let engine = ProlinkEngine::new(device_watcher, InterfacePreference::new());
     engine.start().await.expect("engine should start");
 
     let deck = timeout(Duration::from_secs(10), wait_for_deck(&engine))

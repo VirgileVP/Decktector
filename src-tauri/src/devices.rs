@@ -8,6 +8,7 @@
 use std::sync::Arc;
 
 use prolink::discovery::{DeviceWatcher, DiscoveredDevice};
+use prolink_engine::InterfacePreference;
 use tauri::{AppHandle, Emitter, State};
 
 /// Renderer's subscription key for device-list changes.
@@ -36,4 +37,14 @@ pub fn forward_to_renderer(app: AppHandle, watcher: Arc<DeviceWatcher>) {
 #[tauri::command]
 pub fn list_devices(watcher: State<'_, Arc<DeviceWatcher>>) -> Vec<DiscoveredDevice> {
     watcher.devices()
+}
+
+/// Pins Pro DJ Link presence to the adapter picked in the Devices settings
+/// tab, by name. Empty goes back to matching the first player's subnet.
+#[tauri::command]
+pub fn set_prolink_interface(
+    preference: State<'_, Arc<InterfacePreference>>,
+    interface_name: String,
+) {
+    preference.set(Some(interface_name).filter(|name| !name.is_empty()));
 }

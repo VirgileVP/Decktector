@@ -15,11 +15,11 @@ use prolink::beat::{BeatMessage, BeatWatcher};
 use prolink::discovery::{DeviceKind, DeviceWatcher, DiscoveredDevice};
 use prolink::presence::Presence;
 use prolink::status::{DeviceStatus, StatusWatcher};
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, watch};
 use tokio::task::JoinHandle;
 
 use crate::metadata::{FetchRequest, MetadataFetcher};
-use crate::network;
+use crate::network::{self, InterfacePreference};
 use crate::normalize::to_deck_state;
 use crate::position::PositionTracker;
 
@@ -33,6 +33,9 @@ const DEVICE_NAME: &str = "decktective";
 pub struct ProlinkEngine {
     handle: Arc<EngineHandle>,
     device_watcher: Arc<DeviceWatcher>,
+    /// Shared with the settings command (`src-tauri/src/devices.rs`) that
+    /// pins the adapter presence binds to.
+    interface_preference: Arc<InterfacePreference>,
     tasks: Mutex<Vec<JoinHandle<()>>>,
     /// Set once per `start()` — `None` until then. A field rather than a
     /// local of `start()` because `stop()` needs to reach it too, to abort
@@ -46,10 +49,14 @@ pub struct ProlinkEngine {
 }
 
 impl ProlinkEngine {
-    pub fn new(device_watcher: Arc<DeviceWatcher>) -> Self {
+    pub fn new(
+        device_watcher: Arc<DeviceWatcher>,
+        interface_preference: Arc<InterfacePreference>,
+    ) -> Self {
         Self {
             handle: Arc::new(EngineHandle::new()),
             device_watcher,
+            interface_preference,
             tasks: Mutex::new(Vec::new()),
             metadata_fetcher: Mutex::new(None),
             presence_task: Arc::new(Mutex::new(None)),
@@ -84,6 +91,7 @@ impl Engine for ProlinkEngine {
         tasks.push(tokio::spawn(run_reporting(
             Arc::clone(&self.handle),
             Arc::clone(&self.device_watcher),
+            self.interface_preference.subscribe(),
             status_watcher,
             beat_watcher,
             Arc::clone(&metadata_fetcher),
@@ -154,6 +162,7 @@ fn first_peer_ip(devices: &[DiscoveredDevice]) -> Option<Ipv4Addr> {
 /// discovered peer, binding presence keep-alives and metadata fetching to it.
 /// Sets [`NetworkState::Connected`] if peers exist, or [`NetworkState::Searching`]
 /// if none are currently present on the network.
+#[allow(clippy::too_many_arguments)]
 fn sync_network_and_presence(
     handle: &EngineHandle,
     device_watcher: &Arc<DeviceWatcher>,
@@ -161,11 +170,12 @@ fn sync_network_and_presence(
     metadata_fetcher: &Arc<MetadataFetcher>,
     presence_task_slot: &Arc<Mutex<Option<JoinHandle<()>>>>,
     current_bind_ip: &mut Option<Ipv4Addr>,
+    preferred_interface: Option<&str>,
     devices: &[DiscoveredDevice],
 ) {
     let peer_ip = first_peer_ip(devices);
     if let Some(peer_ip) = peer_ip {
-        match network::pick_interface(Some(peer_ip)) {
+        match network::pick_interface(Some(peer_ip), preferred_interface) {
             Ok(new_bind_ip) => {
                 if current_bind_ip.as_ref() != Some(&new_bind_ip) {
                     tracing::info!(
@@ -207,9 +217,11 @@ fn sync_network_and_presence(
 /// against local state. Metadata fetches themselves run on their own
 /// spawned tasks (see [`MetadataFetcher::spawn_fetch`]) so a slow player
 /// never blocks this loop from reporting everyone else's live status.
+#[allow(clippy::too_many_arguments)]
 async fn run_reporting(
     handle: Arc<EngineHandle>,
     device_watcher: Arc<DeviceWatcher>,
+    mut interface_preference: watch::Receiver<Option<String>>,
     status_watcher: Arc<StatusWatcher>,
     beat_watcher: Arc<BeatWatcher>,
     metadata_fetcher: Arc<MetadataFetcher>,
@@ -229,6 +241,7 @@ async fn run_reporting(
     // the diagnostics panel) — hydrate from what it already knows rather
     // than waiting for the next change.
     let initial_devices = device_watcher.devices();
+    let mut preferred_interface = interface_preference.borrow_and_update().clone();
     sync_network_and_presence(
         &handle,
         &device_watcher,
@@ -236,6 +249,7 @@ async fn run_reporting(
         &metadata_fetcher,
         &presence_task_slot,
         &mut current_bind_ip,
+        preferred_interface.as_deref(),
         &initial_devices,
     );
     sync_devices(
@@ -262,6 +276,7 @@ async fn run_reporting(
                     &metadata_fetcher,
                     &presence_task_slot,
                     &mut current_bind_ip,
+                    preferred_interface.as_deref(),
                     &devices,
                 );
                 sync_devices(
@@ -272,6 +287,24 @@ async fn run_reporting(
                     &mut known_track_ids,
                     &mut fetch_cooldown,
                     &devices,
+                );
+            }
+            changed = interface_preference.changed() => {
+                if changed.is_err() {
+                    break; // The preference's owner was dropped along with the app.
+                }
+                preferred_interface = interface_preference.borrow_and_update().clone();
+                // Only the binding depends on the preference — the device
+                // list itself is unchanged, so `sync_devices` has nothing to do.
+                sync_network_and_presence(
+                    &handle,
+                    &device_watcher,
+                    &presence,
+                    &metadata_fetcher,
+                    &presence_task_slot,
+                    &mut current_bind_ip,
+                    preferred_interface.as_deref(),
+                    &device_watcher.devices(),
                 );
             }
             status = status_rx.recv() => {
@@ -507,6 +540,7 @@ mod tests {
             &metadata_fetcher,
             &presence_task_slot,
             &mut current_bind_ip,
+            None,
             &[],
         );
         assert_eq!(handle.snapshot().network_state, NetworkState::Searching);
@@ -521,6 +555,7 @@ mod tests {
             &metadata_fetcher,
             &presence_task_slot,
             &mut current_bind_ip,
+            None,
             &[peer],
         );
         assert_eq!(handle.snapshot().network_state, NetworkState::Connected);
@@ -535,6 +570,7 @@ mod tests {
             &metadata_fetcher,
             &presence_task_slot,
             &mut current_bind_ip,
+            None,
             &[],
         );
         assert_eq!(handle.snapshot().network_state, NetworkState::Searching);
@@ -548,7 +584,7 @@ mod tests {
     #[tokio::test]
     async fn prolink_engine_starts_immediately_in_searching_state() {
         let device_watcher = DeviceWatcher::new();
-        let engine = ProlinkEngine::new(device_watcher);
+        let engine = ProlinkEngine::new(device_watcher, InterfacePreference::new());
         engine.start().await.expect("start should succeed");
 
         assert_eq!(
