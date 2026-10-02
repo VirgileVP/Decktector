@@ -270,34 +270,34 @@ export function SettingsDialog({
           )}
 
           {activeTab === 'Deck view' && (
-            <section className="settings-section">
-              <h3>Preset</h3>
-              <div className="setting-row">
-                <span className="setting-text">
-                  <span className="setting-label">What this deck view is for</span>
-                  <span className="setting-hint">
-                    A starting point for the fifteen toggles below — pick one, then fine-tune.
+            <>
+              <section className="settings-section">
+                <h3>Preset</h3>
+                <div className="setting-row">
+                  <span className="setting-text">
+                    <span className="setting-label">What this deck view is for</span>
+                    <span className="setting-hint">
+                      A starting point for the toggles below — pick one, then fine-tune.
+                    </span>
                   </span>
-                </span>
-                <div className="setting-choice" role="group" aria-label="Deck view preset">
-                  {(Object.keys(DECK_VIEW_PRESETS) as DeckViewPreset[]).map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      title={DECK_VIEW_PRESETS[preset].hint}
-                      className={activePreset === preset ? 'active' : ''}
-                      aria-pressed={activePreset === preset}
-                      onClick={() => settings.applyDeckViewPreset(preset)}
-                    >
-                      {DECK_VIEW_PRESETS[preset].label}
-                    </button>
-                  ))}
+                  <div className="setting-choice" role="group" aria-label="Deck view preset">
+                    {(Object.keys(DECK_VIEW_PRESETS) as DeckViewPreset[]).map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        title={DECK_VIEW_PRESETS[preset].hint}
+                        className={activePreset === preset ? 'active' : ''}
+                        aria-pressed={activePreset === preset}
+                        onClick={() => settings.applyDeckViewPreset(preset)}
+                      >
+                        {DECK_VIEW_PRESETS[preset].label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              </section>
 
-              <details className="settings-advanced">
-                <summary>Individual toggles{activePreset === null ? ' (customized)' : ''}</summary>
-
+              <section className="settings-section">
                 <h3>Deck bar</h3>
                 <ToggleRow
                   label="Artwork"
@@ -359,7 +359,9 @@ export function SettingsDialog({
                   checked={settings.showDeckBpm}
                   onChange={update('showDeckBpm')}
                 />
+              </section>
 
+              <section className="settings-section">
                 <h3>Deck body</h3>
                 <ToggleRow
                   label="Cue list"
@@ -391,8 +393,8 @@ export function SettingsDialog({
                   checked={settings.showDeckNumber}
                   onChange={update('showDeckNumber')}
                 />
-              </details>
-            </section>
+              </section>
+            </>
           )}
 
           {activeTab === 'Line up' && <LineupEditor />}

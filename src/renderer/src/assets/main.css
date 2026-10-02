@@ -510,46 +510,6 @@ input[type='checkbox']:focus-visible {
   margin-top: 18px;
 }
 
-/* Collapsed by default so a first-time VJ sees "pick a preset," not nine
-   independent decisions — Alex the power user still reaches every toggle,
-   one click away. */
-.settings-advanced {
-  margin-top: 14px;
-}
-
-.settings-advanced summary {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--text-faint);
-  cursor: pointer;
-  list-style: none;
-  transition: color 0.15s ease;
-}
-
-.settings-advanced summary::-webkit-details-marker {
-  display: none;
-}
-
-.settings-advanced summary::before {
-  content: '▸';
-  display: inline-block;
-  width: 1em;
-  transition: transform 0.15s ease;
-}
-
-.settings-advanced[open] summary::before {
-  transform: rotate(90deg);
-}
-
-.settings-advanced summary:hover {
-  color: var(--text);
-}
-
-.settings-advanced h3 {
-  margin-top: 14px;
-}
-
 .settings-section h3 {
   font-size: 10px;
   font-weight: 600;

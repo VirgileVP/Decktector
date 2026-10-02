@@ -94,7 +94,27 @@ const DECK_VIEW_TOGGLE_KEYS = [
   'showDeckWaveformDetail'
 ] as const satisfies readonly (keyof DeckViewToggles)[]
 
-export type DeckViewPreset = 'keying' | 'full'
+export type DeckViewPreset = 'simple' | 'full'
+
+/** Deck view toggles every new install starts with: everything but the track
+ *  structure, which is analysis-heavy and rarely wanted on a booth screen. */
+const FULL_DECK_VIEW: DeckViewToggles = {
+  showDeckNumber: true,
+  showDeckArtwork: true,
+  showDeckTrackInfo: true,
+  showDeckTrackTags: true,
+  showDeckTcButton: true,
+  showDeckTransport: true,
+  showDeckSyncBadges: true,
+  showDeckTime: true,
+  showDeckPitch: true,
+  showDeckTimeRemaining: true,
+  showDeckBpm: true,
+  showDeckCueList: true,
+  showDeckEventList: false,
+  showDeckWaveformOverview: true,
+  showDeckWaveformDetail: true
+}
 
 /** Named starting points for the Deck view tab's fifteen independent toggles —
  *  still fully overridable below, this is a fast path, not a new mode. */
@@ -102,47 +122,31 @@ export const DECK_VIEW_PRESETS: Record<
   DeckViewPreset,
   { label: string; hint: string; values: DeckViewToggles }
 > = {
-  keying: {
-    label: 'Keying',
-    hint: 'Clean composite for a transparent panel window — art, on-air state, waveform shape',
-    values: {
-      showDeckNumber: false,
-      showDeckArtwork: true,
-      showDeckTrackInfo: false,
-      showDeckTrackTags: false,
-      showDeckTcButton: false,
-      showDeckTransport: false,
-      showDeckSyncBadges: true,
-      showDeckTime: false,
-      showDeckPitch: false,
-      showDeckTimeRemaining: true,
-      showDeckBpm: false,
-      showDeckCueList: false,
-      showDeckEventList: false,
-      showDeckWaveformOverview: true,
-      showDeckWaveformDetail: false
-    }
-  },
-  full: {
-    label: 'Full',
-    hint: 'Everything a booth screen shows',
+  simple: {
+    label: 'Simple view',
+    hint: 'Timecode, transport, sync badges, timing, cue list and the detail waveform',
     values: {
       showDeckNumber: true,
-      showDeckArtwork: true,
-      showDeckTrackInfo: true,
-      showDeckTrackTags: true,
+      showDeckArtwork: false,
+      showDeckTrackInfo: false,
+      showDeckTrackTags: false,
       showDeckTcButton: true,
       showDeckTransport: true,
       showDeckSyncBadges: true,
       showDeckTime: true,
-      showDeckPitch: true,
+      showDeckPitch: false,
       showDeckTimeRemaining: true,
       showDeckBpm: true,
       showDeckCueList: true,
-      showDeckEventList: true,
-      showDeckWaveformOverview: true,
+      showDeckEventList: false,
+      showDeckWaveformOverview: false,
       showDeckWaveformDetail: true
     }
+  },
+  full: {
+    label: 'Full',
+    hint: 'Everything except the track structure',
+    values: FULL_DECK_VIEW
   }
 }
 
@@ -269,21 +273,7 @@ export const DEFAULT_SETTINGS: Settings = {
   remoteUseTls: false,
   remoteMaxClients: REMOTE_DEFAULT_MAX_CLIENTS,
   prolinkInterface: NO_NETWORK_INTERFACE,
-  showDeckNumber: true,
-  showDeckTrackInfo: true,
-  showDeckTrackTags: true,
-  showDeckTcButton: true,
-  showDeckTransport: true,
-  showDeckSyncBadges: true,
-  showDeckTime: true,
-  showDeckPitch: true,
-  showDeckTimeRemaining: true,
-  showDeckBpm: true,
-  showDeckCueList: true,
-  showDeckEventList: true,
-  showDeckArtwork: true,
-  showDeckWaveformOverview: true,
-  showDeckWaveformDetail: true,
+  ...FULL_DECK_VIEW,
   deckCueListWidth: 168,
   deckEventListWidth: 152
 }
