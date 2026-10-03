@@ -20,6 +20,7 @@ import {
 import { DeckLabelsEditor } from './DeckLabelsEditor'
 import { DevicesPanel } from './DevicesPanel'
 import { LineupEditor } from './LineupEditor'
+import { OnAirSourceSetting } from './OnAirSourceSetting'
 import { ChoiceRow, SliderRow, TextRow, ToggleRow } from './SettingControls'
 
 const asPercent = (value: number): string => `${Math.round(value * 100)} %`
@@ -236,6 +237,7 @@ export function SettingsDialog({
                   checked={settings.dimIdleDecks}
                   onChange={update('dimIdleDecks')}
                 />
+                <OnAirSourceSetting value={settings.onAirSource} onChange={update('onAirSource')} />
               </section>
 
               {IS_TAURI && (

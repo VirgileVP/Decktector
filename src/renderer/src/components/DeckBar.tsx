@@ -1,6 +1,7 @@
 import type { DeckId, TrackInfo } from '../model'
 import { formatTimeMs } from '../lib/playhead'
 import { TRANSPORT_GLYPHS } from '../lib/transport'
+import { useEffectiveOnAirSource } from '../state/deck-activity'
 import type { DownloadState } from '../state/download'
 import { useTrackDownloadStore } from '../state/download'
 import { useSettings } from '../state/settings'
@@ -25,6 +26,9 @@ export function DeckBar({ deckId, track, fields, layout }: DeckBarProps): React.
   const allowTrackDownload = useSettings((s) => s.allowTrackDownload)
   const downloadState = useTrackDownloadStore((s) => s.downloads[deckId] ?? IDLE_DOWNLOAD_STATE)
   const startDownload = useTrackDownloadStore((s) => s.startDownload)
+  // The light is the mixer's own flag: without a trusted mixer it would only
+  // ever read "off air" for a deck that may well be live, so it is left out.
+  const showOnAirLight = useEffectiveOnAirSource() === 'mixer'
 
   const playState = deck?.playState ?? 'empty'
   const playhead = deck?.playheadMs ?? null
@@ -146,7 +150,9 @@ export function DeckBar({ deckId, track, fields, layout }: DeckBarProps): React.
 
           {fields.syncBadges && (
             <div className="deck-msync">
-              <span className={deck?.isOnAir ? 'lit lit-onair' : ''}>ON AIR</span>
+              {showOnAirLight && (
+                <span className={deck?.isOnAir ? 'lit lit-onair' : ''}>ON AIR</span>
+              )}
               <span className={deck?.isMaster ? 'lit lit-master' : ''}>MASTER</span>
               <span className={deck?.isSynced ? 'lit lit-sync' : ''}>SYNC</span>
             </div>

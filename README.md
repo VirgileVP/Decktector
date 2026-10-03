@@ -328,7 +328,13 @@ trusting it at a gig:**
   over dbserver and a failed mount over NFS.
 - A player reports itself **on air** only when its player number matches the mixer
   channel it is plugged into — the mixer announces on-air per channel, not per
-  device.
+  device. That flag is only trustworthy with exactly one Pro DJ Link mixer on
+  the network (none: it is never set; two: both announce device 33 and the
+  mapping no longer matches the cabling), so the UI decides which decks look
+  live from the **Live deck detection** setting: `auto` (default) follows the
+  mixer flag with one mixer and playback otherwise, `mixer` always follows the
+  flag, `playback` treats a deck as live while it is playing. The remote view
+  never receives the device list, so `auto` follows playback there.
 
 ## Credits
 

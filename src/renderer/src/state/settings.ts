@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+import { DEFAULT_ON_AIR_SOURCE, parseOnAirSource, type OnAirSource } from '../lib/deck-activity'
 import { sanitizeDeckLabels, type DeckLabels } from '../lib/deck-labels'
 import { DEFAULT_THEME, type ThemeId } from '../lib/theme'
 import type { FrameRate } from '../model'
@@ -176,6 +177,9 @@ export interface Settings {
   waveformSmoothing: boolean
   /** Fade decks that are not on air so the live ones read at a glance. */
   dimIdleDecks: boolean
+  /** Which signal decides a deck is live — the mixer's on-air flag or
+   *  playback — see `lib/deck-activity.ts`. */
+  onAirSource: OnAirSource
   /** Renderer zoom factor, for booth screens from 13" to 27". */
   uiScale: number
   /** Whether the header shows the whole running order or only what is around now. */
@@ -260,6 +264,7 @@ export const DEFAULT_SETTINGS: Settings = {
   waveformMirrored: true,
   waveformSmoothing: true,
   dimIdleDecks: true,
+  onAirSource: DEFAULT_ON_AIR_SOURCE,
   uiScale: 1,
   lineupView: 'full',
   alwaysOnTop: false,
@@ -320,6 +325,7 @@ export function mergePersistedSettings<T extends Settings>(persisted: unknown, c
   return {
     ...current,
     ...stored,
+    onAirSource: parseOnAirSource(stored.onAirSource),
     deckLabels: sanitizeDeckLabels(stored.deckLabels)
   }
 }
@@ -331,6 +337,7 @@ function pickSettings(state: Settings): Settings {
     waveformMirrored,
     waveformSmoothing,
     dimIdleDecks,
+    onAirSource,
     uiScale,
     lineupView,
     alwaysOnTop,
@@ -373,6 +380,7 @@ function pickSettings(state: Settings): Settings {
     waveformMirrored,
     waveformSmoothing,
     dimIdleDecks,
+    onAirSource,
     uiScale,
     lineupView,
     alwaysOnTop,

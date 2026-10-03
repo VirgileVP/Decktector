@@ -1,6 +1,7 @@
 import type { DeckId } from '../model'
 import { formatTimeMs } from '../lib/playhead'
 import { TRANSPORT_GLYPHS } from '../lib/transport'
+import { useDeckActive } from '../state/deck-activity'
 import { DECK_RAIL_WIDTH_RANGE, useSettings } from '../state/settings'
 import { useDecktectiveStore } from '../state/store'
 import { BeatIndicator } from './BeatIndicator'
@@ -48,7 +49,7 @@ export function DeckPanel({
   const playState = deck?.playState ?? 'empty'
   const playhead = deck?.playheadMs ?? null
   const remaining = track && playhead !== null ? track.durationMs - playhead : null
-  const isOnAir = deck?.isOnAir ?? false
+  const isActive = useDeckActive(deckId)
   const bpmValue = deck?.effectiveBpm ?? deck?.trackBpm ?? null
   const bpmText = bpmValue !== null ? bpmValue.toFixed(1) : '--.-'
 
@@ -58,7 +59,7 @@ export function DeckPanel({
   if (variant === 'compact') {
     return (
       <section
-        className={`deck deck-compact ${isOnAir ? 'deck-onair' : 'deck-idle'}`}
+        className={`deck deck-compact ${isActive ? 'deck-onair' : 'deck-idle'}`}
         style={{ ['--deck-color' as string]: accentColor }}
       >
         <div className="deck-compact-art">
@@ -84,7 +85,7 @@ export function DeckPanel({
 
   return (
     <section
-      className={`deck deck-full poppable ${isOnAir ? 'deck-onair' : 'deck-idle'}`}
+      className={`deck deck-full poppable ${isActive ? 'deck-onair' : 'deck-idle'}`}
       style={{ ['--deck-color' as string]: accentColor }}
     >
       <PopOutButton
