@@ -7,6 +7,7 @@ import { BeatIndicator } from './BeatIndicator'
 import { CueList } from './CueList'
 import { DeckBar } from './DeckBar'
 import { deckBarLayout, useDeckBarFields } from './DeckBarLayout'
+import { DeckIdentity } from './DeckIdentity'
 import { DeckStat } from './DeckStat'
 import { PanelResizeHandle } from './PanelResizeHandle'
 import { PopOutButton } from './PopOutButton'
@@ -29,7 +30,7 @@ export function DeckPanel({
   const deck = useDecktectiveStore((s) => s.decks[deckId])
   const track = useDecktectiveStore((s) => s.tracks[deckId] ?? null)
   const barFields = useDeckBarFields()
-  const showDeckNumber = useSettings((s) => s.showDeckNumber)
+  const deckLabel = useSettings((s) => s.deckLabels[deckId] ?? '')
   const showCueList = useSettings((s) => s.showDeckCueList)
   const showEventList = useSettings((s) => s.showDeckEventList)
   const showWaveformOverview = useSettings((s) => s.showDeckWaveformOverview)
@@ -64,6 +65,7 @@ export function DeckPanel({
           {artworkUrl ? <img src={artworkUrl} alt="" /> : <span>♪</span>}
         </div>
         <div className="deck-compact-info">
+          {deckLabel !== '' && <div className="deck-compact-label">{deckLabel}</div>}
           <div className="deck-compact-title">{track?.title ?? 'No track loaded'}</div>
           <div className="deck-compact-sub">{track?.artist ?? '—'}</div>
           <div className="deck-compact-meta">
@@ -134,7 +136,7 @@ export function DeckPanel({
               {showWaveformDetail && (
                 <WaveformDetail deckId={deckId} track={track} accentColor={accentColor} />
               )}
-              {showDeckNumber && <div className="deck-no">{deckId}</div>}
+              <DeckIdentity deckId={deckId} />
             </div>
           )}
         </div>

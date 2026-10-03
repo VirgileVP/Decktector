@@ -17,6 +17,7 @@ import {
   type DeckViewPreset,
   type Settings
 } from '../state/settings'
+import { DeckLabelsEditor } from './DeckLabelsEditor'
 import { DevicesPanel } from './DevicesPanel'
 import { LineupEditor } from './LineupEditor'
 import { ChoiceRow, SliderRow, TextRow, ToggleRow } from './SettingControls'
@@ -394,6 +395,8 @@ export function SettingsDialog({
                   onChange={update('showDeckNumber')}
                 />
               </section>
+
+              <DeckLabelsEditor />
             </>
           )}
 

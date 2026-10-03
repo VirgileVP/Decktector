@@ -171,10 +171,10 @@ A single, intentionally fine-grained numeric ramp underlies the four roles above
 
 Booth-first, dense by default. Base font 13px, most UI text 9–13px; this is deliberate — the surface is read up close (booth screen, keyed overlay) or scaled up by the panel-window zoom, not browsed at arm's length like a marketing page.
 
-- **App shell**: fixed 55px header, flexible deck grid below (`flex: 1`, own scroll). Grid view (stacked, full detail) and quad view (2×2, secondary info hidden) are user-toggled.
+- **App shell**: fixed 55px header, flexible deck grid below (`flex: 1`, own scroll). Stacked view (one column, full detail), 3-column grid view (3×2 for six players) and 2-column quad view (secondary info hidden in both tiled views) are user-toggled.
 - **Interface scale**: a single `--ui-scale` CSS variable, applied via `zoom` (reflow, not a transform) on `.app` and on detached panel content, so the whole interface — not just text — grows and shrinks together.
 - **Detachable panels are a first-class layout, not a special case.** The clock, timecode, header block and any deck can pop into their own OS window; that window mirrors the main layout and gets its own `useFitToBox`-driven scale so content fills whatever size the operator resizes it to. Panel content must therefore be designed to scale as a block, not just reflow.
-- **Responsive floor is 640px** (`@media max-width: 640px`), tuned for the remote view on a phone: quad view collapses to a single column, the cue list and track-structure rail hide (no room), the header's clock pair and lineup stack vertically instead of sitting side by side.
+- **Responsive floor is 640px** (`@media max-width: 640px`), tuned for the remote view on a phone: the tiled views collapse to a single column, the cue list and track-structure rail hide (no room), the header's clock pair and lineup stack vertically instead of sitting side by side.
 - **Spacing rhythm** is tight and mostly sub-16px: 2–4px between tightly related items (badge to label, cue rows), 6–10px between elements within a group, 12–18px between groups. Nothing in the working deck view exceeds ~18px of gap.
 
 ## Elevation & Depth

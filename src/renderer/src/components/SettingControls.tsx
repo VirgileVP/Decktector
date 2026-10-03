@@ -67,7 +67,11 @@ interface TextRowProps {
   hint: string
   value: string
   type?: 'text' | 'number'
+  /** Caps what can be typed; only meaningful for `type="text"`. */
+  maxLength?: number
+  placeholder?: string
   onChange: (value: string) => void
+  onBlur?: () => void
 }
 
 /** Single free-text or numeric field, one per line. */
@@ -76,7 +80,10 @@ export function TextRow({
   hint,
   value,
   type = 'text',
-  onChange
+  maxLength,
+  placeholder,
+  onChange,
+  onBlur
 }: TextRowProps): React.JSX.Element {
   return (
     <label className="setting-row">
@@ -88,7 +95,10 @@ export function TextRow({
         type={type}
         className="setting-text-input"
         value={value}
+        maxLength={maxLength}
+        placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
       />
     </label>
   )

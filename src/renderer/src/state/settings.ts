@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+import { sanitizeDeckLabels, type DeckLabels } from '../lib/deck-labels'
 import { DEFAULT_THEME, type ThemeId } from '../lib/theme'
 import type { FrameRate } from '../model'
 
@@ -248,6 +249,9 @@ export interface Settings {
   deckCueListWidth: number
   /** Width in px of the track structure rail, user-dragged via its resize handle. */
   deckEventListWidth: number
+  /** Operator-chosen names shown next to the player number, e.g. the mixer
+   *  channel a player is plugged into. A missing entry means no label. */
+  deckLabels: DeckLabels
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -275,7 +279,8 @@ export const DEFAULT_SETTINGS: Settings = {
   prolinkInterface: NO_NETWORK_INTERFACE,
   ...FULL_DECK_VIEW,
   deckCueListWidth: 168,
-  deckEventListWidth: 152
+  deckEventListWidth: 152,
+  deckLabels: {}
 }
 
 interface SettingsActions {
@@ -301,10 +306,23 @@ export const useSettings = create<Settings & SettingsActions>()(
     {
       name: SETTINGS_STORAGE_KEY,
       // Actions are not state: keeping them out avoids writing dead keys to storage.
-      partialize: (state) => pickSettings(state)
+      partialize: (state) => pickSettings(state),
+      // Storage is an outside boundary: re-validate what was written before
+      // trusting it (hand-edited, or left by an older build).
+      merge: (persisted, current) => mergePersistedSettings(persisted, current)
     }
   )
 )
+
+/** Overlays what storage held onto `current`, re-validating the fields that have a closed set of values. */
+export function mergePersistedSettings<T extends Settings>(persisted: unknown, current: T): T {
+  const stored = (persisted ?? {}) as Partial<Settings>
+  return {
+    ...current,
+    ...stored,
+    deckLabels: sanitizeDeckLabels(stored.deckLabels)
+  }
+}
 
 function pickSettings(state: Settings): Settings {
   const {
@@ -346,7 +364,8 @@ function pickSettings(state: Settings): Settings {
     showDeckWaveformOverview,
     showDeckWaveformDetail,
     deckCueListWidth,
-    deckEventListWidth
+    deckEventListWidth,
+    deckLabels
   } = state
   return {
     theme,
@@ -387,6 +406,7 @@ function pickSettings(state: Settings): Settings {
     showDeckWaveformOverview,
     showDeckWaveformDetail,
     deckCueListWidth,
-    deckEventListWidth
+    deckEventListWidth,
+    deckLabels
   }
 }

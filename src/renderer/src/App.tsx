@@ -4,10 +4,12 @@ import { useShallow } from 'zustand/react/shallow'
 
 import neonLogo from './assets/neon-logo.png'
 import { DeckPanel } from './components/DeckPanel'
+import { DeckViewToggle } from './components/DeckViewToggle'
 import { HeaderBlock } from './components/HeaderBlock'
 import { RemoteLinkBanner } from './components/RemoteLinkBanner'
 import { SettingsDialog, type SettingsTab } from './components/SettingsDialog'
 import { DECK_ACCENT_COLOR } from './lib/deck-colors'
+import { loadDeckView, saveDeckView, type DeckView } from './lib/deck-view'
 import { remoteFocusedDeck } from './lib/remote-url'
 import { connectMainWindowCloseCascade } from './panels/close-panel-windows-on-exit'
 import { restorePanelWindows } from './panels/restore-panel-windows'
@@ -20,14 +22,6 @@ import { connectSettingsToApp } from './state/settings-sync'
 import { connectStoreToEngine, useDecktectiveStore } from './state/store'
 import { connectTimecodeToEngine } from './state/timecode'
 import { useClockNow } from './state/wall-clock'
-
-type DeckView = 'stack' | 'quad'
-
-const VIEW_STORAGE_KEY = 'decktective.view'
-
-function loadView(): DeckView {
-  return localStorage.getItem(VIEW_STORAGE_KEY) === 'quad' ? 'quad' : 'stack'
-}
 
 /** Evenly spaced teeth of the settings gear icon, in degrees. */
 const GEAR_TOOTH_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315] as const
@@ -66,10 +60,10 @@ function App(): React.JSX.Element {
   }, [])
 
   const [focusedDeckId] = useState<number | null>(() => remoteFocusedDeck(window.location))
-  const [view, setView] = useState<DeckView>(loadView)
+  const [view, setView] = useState<DeckView>(loadDeckView)
   const selectView = (next: DeckView): void => {
     setView(next)
-    localStorage.setItem(VIEW_STORAGE_KEY, next)
+    saveDeckView(next)
   }
 
   const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null)
@@ -93,7 +87,7 @@ function App(): React.JSX.Element {
     )
   )
   // Full-screen focus (via `?deck=N`) forces the single-column layout
-  // regardless of the view toggle — a `view-quad` grid would otherwise
+  // regardless of the view toggle — a multi-column grid would otherwise
   // leave the one visible deck sharing the screen with empty cells.
   const visibleDeckIds =
     focusedDeckId !== null && deckIds.includes(focusedDeckId) ? [focusedDeckId] : deckIds
@@ -127,32 +121,7 @@ function App(): React.JSX.Element {
               {NETWORK_LABELS[networkState]}
             </div>
           )}
-          <div className="view-toggle">
-            <button
-              type="button"
-              className={view === 'stack' ? 'active' : ''}
-              title="Stacked view"
-              onClick={() => selectView('stack')}
-            >
-              <svg viewBox="0 0 14 14" width="14" height="14">
-                <rect x="1" y="1.5" width="12" height="4.4" rx="1" />
-                <rect x="1" y="8.1" width="12" height="4.4" rx="1" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              className={view === 'quad' ? 'active' : ''}
-              title="Quad view (2×2)"
-              onClick={() => selectView('quad')}
-            >
-              <svg viewBox="0 0 14 14" width="14" height="14">
-                <rect x="1" y="1" width="5.4" height="5.4" rx="1" />
-                <rect x="7.6" y="1" width="5.4" height="5.4" rx="1" />
-                <rect x="1" y="7.6" width="5.4" height="5.4" rx="1" />
-                <rect x="7.6" y="7.6" width="5.4" height="5.4" rx="1" />
-              </svg>
-            </button>
-          </div>
+          <DeckViewToggle view={view} onSelect={selectView} />
           <button
             type="button"
             className="settings-button"
