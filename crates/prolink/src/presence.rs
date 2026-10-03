@@ -241,6 +241,18 @@ pub fn is_own_broadcast(device: &DiscoveredDevice) -> bool {
     }
 }
 
+/// The peer count our keep-alive reports: every other device on the network
+/// plus ourselves, matching how real players count (see
+/// [`DiscoveredDevice::peer_count`]). Counted per physical device, so two
+/// mixers announcing the same number 33 count as two peers.
+fn peer_count(devices: &[DiscoveredDevice]) -> u8 {
+    let others = devices
+        .iter()
+        .filter(|device| !is_own_broadcast(device))
+        .count();
+    u8::try_from(others + 1).unwrap_or(u8::MAX)
+}
+
 /// Owns decktective's claimed virtual player number, once one is picked.
 pub struct Presence {
     device_number_tx: watch::Sender<Option<u8>>,
@@ -345,8 +357,7 @@ impl Presence {
                     let devices = device_watcher.devices();
                     self.ensure_claimed(&devices);
                     if let Some(number) = self.device_number() {
-                        let peer_count = devices.iter().filter(|d| !is_own_broadcast(d)).count() as u8 + 1;
-                        let packet = build_keepalive(number, &name, mac, bind_ip, peer_count);
+                        let packet = build_keepalive(number, &name, mac, bind_ip, peer_count(&devices));
                         if let Err(error) = socket.send_to(&packet, (BROADCAST_ADDR, ANNOUNCE_PORT)).await {
                             tracing::warn!(%error, "failed to broadcast our presence keep-alive");
                         }
@@ -365,7 +376,9 @@ impl Presence {
     /// Picks a number if we don't have one yet, or re-picks if the one we
     /// hold has been taken over by a real device in the meantime — our own
     /// broadcast is excluded from that check via [`is_own_broadcast`], or every tick
-    /// would see "our" number as freshly conflicting with itself.
+    /// would see "our" number as freshly conflicting with itself. Devices
+    /// sharing a number among themselves (two mixers on 33) just contribute
+    /// that number to the taken set once, as far as this check goes.
     fn ensure_claimed(&self, devices: &[DiscoveredDevice]) {
         let current = self.device_number();
         let taken: Vec<u8> = devices
@@ -408,6 +421,7 @@ mod tests {
             ip: "192.168.1.10".to_string(),
             mac_address: mac.to_string(),
             peer_count: 1,
+            number_holders: 1,
         }
     }
 
@@ -477,5 +491,34 @@ mod tests {
         // A different MAC on our number is a genuine conflict, not us.
         presence.ensure_claimed(&[device(7, "aa:bb:cc:dd:ee:ff")]);
         assert_eq!(presence.device_number(), Some(6));
+    }
+
+    #[test]
+    fn peer_count_counts_each_device_sharing_a_number() {
+        let mut first_mixer = device(33, "00:11:22:33:44:a9");
+        first_mixer.kind = DeviceKind::Mixer;
+        let mut second_mixer = device(33, "00:11:22:33:44:b0");
+        second_mixer.kind = DeviceKind::Mixer;
+        let player = device(1, "aa:bb:cc:dd:ee:01");
+
+        // Two mixers and a player, plus ourselves.
+        assert_eq!(peer_count(&[player, first_mixer, second_mixer]), 4);
+    }
+
+    #[test]
+    fn peer_count_excludes_our_own_broadcast() {
+        let own = device(7, &mac_string(presence_mac(7)));
+        assert_eq!(peer_count(&[own]), 1);
+    }
+
+    #[test]
+    fn a_number_shared_between_two_other_devices_does_not_disturb_our_claim() {
+        let presence = Presence::new(None);
+        let devices = [
+            device(33, "00:11:22:33:44:a9"),
+            device(33, "00:11:22:33:44:b0"),
+        ];
+        presence.ensure_claimed(&devices);
+        assert_eq!(presence.device_number(), Some(7));
     }
 }

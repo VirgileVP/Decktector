@@ -1105,6 +1105,19 @@ input[type='checkbox']:focus-visible {
   background: rgba(var(--ok-rgb), 0.04);
 }
 
+.device-conflict-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 5px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 4px;
+  color: var(--warn);
+  border: 1px solid var(--warn);
+}
+
 .device-table {
   width: 100%;
   margin-top: 4px;

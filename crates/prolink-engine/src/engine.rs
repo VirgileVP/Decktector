@@ -3,7 +3,7 @@
 //! [`EngineHandle`], and fetches track metadata over dbserver on every
 //! track change (see [`crate::metadata`]).
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::net::Ipv4Addr;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use decktective_core::model::{DeckId, DeviceInfo, NetworkState};
 use decktective_core::{Engine, EngineHandle};
 use prolink::beat::{BeatMessage, BeatWatcher};
-use prolink::discovery::{DeviceKind, DeviceWatcher, DiscoveredDevice};
+use prolink::discovery::{conflicting_numbers, DeviceKind, DeviceWatcher, DiscoveredDevice};
 use prolink::presence::Presence;
 use prolink::status::{DeviceStatus, StatusWatcher};
 use tokio::sync::{broadcast, watch};
@@ -236,6 +236,7 @@ async fn run_reporting(
     let mut known_track_ids: HashMap<DeckId, Option<u32>> = HashMap::new();
     let mut fetch_cooldown: HashMap<DeckId, Instant> = HashMap::new();
     let mut current_bind_ip: Option<Ipv4Addr> = None;
+    let mut warned_number_conflicts: BTreeSet<u8> = BTreeSet::new();
 
     // DeviceWatcher may already have been running a while (it's shared with
     // the diagnostics panel) — hydrate from what it already knows rather
@@ -261,6 +262,7 @@ async fn run_reporting(
         &mut fetch_cooldown,
         &initial_devices,
     );
+    warn_about_number_conflicts(&mut warned_number_conflicts, &initial_devices);
 
     loop {
         tokio::select! {
@@ -288,6 +290,7 @@ async fn run_reporting(
                     &mut fetch_cooldown,
                     &devices,
                 );
+                warn_about_number_conflicts(&mut warned_number_conflicts, &devices);
             }
             changed = interface_preference.changed() => {
                 if changed.is_err() {
@@ -437,6 +440,12 @@ fn handle_status(
 /// Diffs `devices` against what was previously known and reports
 /// connect/disconnect for the difference — [`DeviceWatcher`] only ever
 /// hands back a full current snapshot, not a delta.
+///
+/// Players are identified by device number, so when two players announce the
+/// same number (a misconfiguration the Devices tab flags) they cannot both be
+/// a deck: the first in `devices` order — lowest MAC address, as
+/// [`DeviceWatcher`] sorts — keeps the number. Deterministic, so the deck does
+/// not flap between the two on every keep-alive.
 fn sync_devices(
     handle: &EngineHandle,
     metadata_fetcher: &Arc<MetadataFetcher>,
@@ -446,22 +455,18 @@ fn sync_devices(
     fetch_cooldown: &mut HashMap<DeckId, Instant>,
     devices: &[DiscoveredDevice],
 ) {
-    let current: HashMap<DeckId, DeviceInfo> = devices
-        .iter()
-        .filter(|device| {
-            device.kind == DeviceKind::Player && !prolink::presence::is_own_broadcast(device)
-        })
-        .map(|device| {
-            (
-                device.device_number,
-                DeviceInfo {
-                    deck_id: device.device_number,
-                    name: device.name.clone(),
-                    ip: device.ip.clone(),
-                },
-            )
-        })
-        .collect();
+    let mut current: HashMap<DeckId, DeviceInfo> = HashMap::new();
+    for device in devices.iter().filter(|device| {
+        device.kind == DeviceKind::Player && !prolink::presence::is_own_broadcast(device)
+    }) {
+        current
+            .entry(device.device_number)
+            .or_insert_with(|| DeviceInfo {
+                deck_id: device.device_number,
+                name: device.name.clone(),
+                ip: device.ip.clone(),
+            });
+    }
 
     for (&deck_id, info) in known.iter() {
         if !current.contains_key(&deck_id) {
@@ -478,6 +483,35 @@ fn sync_devices(
         }
     }
     *known = current;
+}
+
+/// Reports the device numbers that just became shared by several devices,
+/// updating `warned` to the numbers in conflict now. [`DeviceWatcher`]
+/// republishes on every keep-alive, so logging each list would repeat the
+/// warning every ~1.5s; this yields a number only when it enters conflict,
+/// and again if the conflict clears and later returns.
+fn newly_conflicting_numbers(warned: &mut BTreeSet<u8>, devices: &[DiscoveredDevice]) -> Vec<u8> {
+    let conflicting = conflicting_numbers(devices);
+    let newly: Vec<u8> = conflicting.difference(warned).copied().collect();
+    *warned = conflicting;
+    newly
+}
+
+/// Warns once per conflict about devices sharing a number; see
+/// [`newly_conflicting_numbers`].
+fn warn_about_number_conflicts(warned: &mut BTreeSet<u8>, devices: &[DiscoveredDevice]) {
+    for number in newly_conflicting_numbers(warned, devices) {
+        let holders: Vec<String> = devices
+            .iter()
+            .filter(|device| device.device_number == number)
+            .map(|device| format!("{} ({})", device.name, device.ip))
+            .collect();
+        tracing::warn!(
+            device_number = number,
+            holders = %holders.join(", "),
+            "several devices announce the same Pro DJ Link device number; per-deck data keyed by that number is unreliable"
+        );
+    }
 }
 
 /// `DECKTECTIVE_VCDJ_ID`: claim a specific virtual player number instead of
@@ -511,6 +545,7 @@ mod tests {
             ip: ip.to_string(),
             mac_address: mac.to_string(),
             peer_count: 1,
+            number_holders: 1,
         }
     }
 
@@ -636,5 +671,84 @@ mod tests {
 
         assert!(!known_track_ids.contains_key(&2));
         assert!(!fetch_cooldown.contains_key(&2));
+    }
+
+    /// Gives a test device the shared-number marking [`DeviceWatcher`] would
+    /// have put on it.
+    fn sharing_number(mut device: DiscoveredDevice, holders: u8) -> DiscoveredDevice {
+        device.number_holders = holders;
+        device
+    }
+
+    fn engine_fixture() -> (EngineHandle, Arc<MetadataFetcher>) {
+        let handle = EngineHandle::new();
+        let metadata_fetcher = MetadataFetcher::new(Presence::new(None), Ipv4Addr::LOCALHOST);
+        (handle, metadata_fetcher)
+    }
+
+    #[test]
+    fn sync_devices_keeps_one_deck_when_two_players_share_a_number() {
+        let (handle, metadata_fetcher) = engine_fixture();
+        let mut known = HashMap::new();
+        let first = sharing_number(test_device(2, "192.168.1.20", "aa:bb:cc:dd:ee:01"), 2);
+        let second = sharing_number(test_device(2, "192.168.1.21", "aa:bb:cc:dd:ee:02"), 2);
+
+        let sync = |known: &mut HashMap<DeckId, DeviceInfo>, devices: &[DiscoveredDevice]| {
+            sync_devices(
+                &handle,
+                &metadata_fetcher,
+                known,
+                &mut PositionTracker::new(),
+                &mut HashMap::new(),
+                &mut HashMap::new(),
+                devices,
+            );
+        };
+        sync(&mut known, &[first.clone(), second.clone()]);
+
+        assert_eq!(known.len(), 1);
+        assert_eq!(known[&2].ip, "192.168.1.20");
+
+        // The same snapshot again changes nothing: the deck does not flap.
+        sync(&mut known, &[first, second]);
+        assert_eq!(known[&2].ip, "192.168.1.20");
+    }
+
+    #[test]
+    fn sync_devices_ignores_mixers_sharing_number_33() {
+        let (handle, metadata_fetcher) = engine_fixture();
+        let mut known = HashMap::new();
+        let mut mixer_a = test_device(33, "192.168.1.10", "00:11:22:33:44:a9");
+        mixer_a.kind = DeviceKind::Mixer;
+        let mut mixer_b = test_device(33, "192.168.1.11", "00:11:22:33:44:b0");
+        mixer_b.kind = DeviceKind::Mixer;
+
+        sync_devices(
+            &handle,
+            &metadata_fetcher,
+            &mut known,
+            &mut PositionTracker::new(),
+            &mut HashMap::new(),
+            &mut HashMap::new(),
+            &[mixer_a, mixer_b],
+        );
+
+        assert!(known.is_empty());
+    }
+
+    #[test]
+    fn a_number_conflict_is_reported_once_until_it_clears() {
+        let mixer_a = sharing_number(test_device(33, "192.168.1.10", "00:11:22:33:44:a9"), 2);
+        let mixer_b = sharing_number(test_device(33, "192.168.1.11", "00:11:22:33:44:b0"), 2);
+        let lone_mixer = test_device(33, "192.168.1.10", "00:11:22:33:44:a9");
+        let mut warned = BTreeSet::new();
+        let conflicting = [mixer_a, mixer_b];
+
+        assert_eq!(newly_conflicting_numbers(&mut warned, &conflicting), [33]);
+        // Every keep-alive republishes the same list; no repeat warning.
+        assert!(newly_conflicting_numbers(&mut warned, &conflicting).is_empty());
+
+        assert!(newly_conflicting_numbers(&mut warned, &[lone_mixer]).is_empty());
+        assert_eq!(newly_conflicting_numbers(&mut warned, &conflicting), [33]);
     }
 }

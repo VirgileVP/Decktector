@@ -9,4 +9,14 @@ export type DiscoveredDevice = { name: string, deviceNumber: number, kind: Devic
 /**
  * Peers this device reports seeing on the network, including itself.
  */
-peerCount: number, };
+peerCount: number, 
+/**
+ * How many devices currently announce this `device_number`, this one
+ * included. `1` on a correctly configured network; above that, two
+ * devices share a number — typically two mixers, which both announce
+ * the reserved mixer number 33 (a DJM-A9 next to a DJM-V10, say), or
+ * two players set to the same channel. Filled in by [`DeviceWatcher`]
+ * when it publishes the list, so everything downstream (the engine, the
+ * Devices tab) reads one answer instead of recounting.
+ */
+numberHolders: number, };

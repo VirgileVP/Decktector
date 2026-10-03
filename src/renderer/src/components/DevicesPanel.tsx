@@ -1,4 +1,5 @@
 import type { DeviceKind } from '../model'
+import { describeNumberConflict, findNumberConflicts } from '../lib/device-conflicts'
 import { useDevicesStore } from '../state/devices'
 
 const KIND_LABELS: Record<DeviceKind, string> = {
@@ -16,6 +17,7 @@ export function DevicesPanel(): React.JSX.Element {
   )
   const virtualDevice = devices.find((d) => d.name.toLowerCase() === 'decktective')
   const sortedDevices = [...devices].sort((a, b) => a.deviceNumber - b.deviceNumber)
+  const numberConflicts = findNumberConflicts(devices)
 
   return (
     <section className="settings-section">
@@ -81,6 +83,12 @@ export function DevicesPanel(): React.JSX.Element {
         </div>
       </div>
 
+      {numberConflicts.map((conflict) => (
+        <p key={conflict.deviceNumber} className="setting-hint setting-warning">
+          {describeNumberConflict(conflict)}
+        </p>
+      ))}
+
       {devices.length === 0 ? (
         <p className="setting-hint">
           No device found yet — connect this machine to the same network as your CDJ/XDJ/DJM gear.
@@ -102,10 +110,20 @@ export function DevicesPanel(): React.JSX.Element {
               const isVirtual = device.name.toLowerCase() === 'decktective'
               return (
                 <tr
-                  key={device.deviceNumber}
+                  key={`${device.macAddress}@${device.ip}`}
                   className={isVirtual ? 'device-row-virtual' : undefined}
                 >
-                  <td>{device.deviceNumber}</td>
+                  <td>
+                    {device.deviceNumber}
+                    {device.numberHolders > 1 && (
+                      <span
+                        className="device-conflict-badge"
+                        title={`${device.numberHolders} devices announce number ${device.deviceNumber}`}
+                      >
+                        Number conflict
+                      </span>
+                    )}
+                  </td>
                   <td>
                     {device.name}
                     {isVirtual && <span className="device-virtual-badge">Virtual CDJ</span>}

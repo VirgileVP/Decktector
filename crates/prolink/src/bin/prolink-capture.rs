@@ -797,8 +797,13 @@ async fn run_live_table(
                     )
                 })
                 .unwrap_or_default();
+            let conflict = if device.has_number_conflict() {
+                "  <-- NUMBER SHARED: per-number data is ambiguous"
+            } else {
+                ""
+            };
             eprintln!(
-                "  #{:<2} {:<16} {:<15} {:?}{extra}",
+                "  #{:<2} {:<16} {:<15} {:?}{extra}{conflict}",
                 device.device_number, device.name, device.ip, device.kind
             );
         }

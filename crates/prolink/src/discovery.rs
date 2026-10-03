@@ -12,7 +12,7 @@
 //! cross-checked against their `beat-link` Java library's
 //! `DeviceAnnouncement` class, which parses the same packet in production.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -37,6 +37,9 @@ const NAME_LEN: usize = 20;
 const DEVICE_NUMBER_OFFSET: usize = 0x24;
 const MAC_OFFSET: usize = 0x26;
 const MAC_LEN: usize = 6;
+/// What [`DiscoveredDevice::mac_address`] renders an all-zero MAC as — the
+/// value a device would announce if it had no usable hardware address.
+const UNSET_MAC_ADDRESS: &str = "00:00:00:00:00:00";
 const IP_OFFSET: usize = 0x2c;
 const IP_LEN: usize = 4;
 const PEER_COUNT_OFFSET: usize = 0x30;
@@ -97,7 +100,86 @@ pub struct DiscoveredDevice {
     pub mac_address: String,
     /// Peers this device reports seeing on the network, including itself.
     pub peer_count: u8,
+    /// How many devices currently announce this `device_number`, this one
+    /// included. `1` on a correctly configured network; above that, two
+    /// devices share a number — typically two mixers, which both announce
+    /// the reserved mixer number 33 (a DJM-A9 next to a DJM-V10, say), or
+    /// two players set to the same channel. Filled in by [`DeviceWatcher`]
+    /// when it publishes the list, so everything downstream (the engine, the
+    /// Devices tab) reads one answer instead of recounting.
+    pub number_holders: u8,
 }
+
+impl DiscoveredDevice {
+    /// Whether another device announces the same device number as this one.
+    pub fn has_number_conflict(&self) -> bool {
+        self.number_holders > 1
+    }
+}
+
+/// The device numbers announced by more than one device in `devices`, in
+/// ascending order. For callers that react to the conflict itself (logging
+/// it once) rather than rendering each affected device.
+pub fn conflicting_numbers(devices: &[DiscoveredDevice]) -> BTreeSet<u8> {
+    devices
+        .iter()
+        .filter(|device| device.has_number_conflict())
+        .map(|device| device.device_number)
+        .collect()
+}
+
+/// Sets every device's [`DiscoveredDevice::number_holders`] from how many
+/// entries of `devices` announce its number.
+fn count_number_holders(devices: &mut [DiscoveredDevice]) {
+    let mut holders_by_number: HashMap<u8, usize> = HashMap::new();
+    for device in devices.iter() {
+        *holders_by_number.entry(device.device_number).or_default() += 1;
+    }
+    for device in devices.iter_mut() {
+        let holders = holders_by_number[&device.device_number];
+        device.number_holders = u8::try_from(holders).unwrap_or(u8::MAX);
+    }
+}
+
+/// What makes two keep-alives the same physical device, as opposed to the
+/// same device number.
+///
+/// The device number is *not* an identity: every mixer announces the
+/// reserved number 33, so two mixers on one network (a DJM-A9 and a DJM-V10
+/// at the same gig) share it, and two players can be misconfigured onto one
+/// number. Keyed by number they overwrite each other and the list flaps
+/// between them with every keep-alive. The hardware address is what stays
+/// put when a device is renumbered, so it is the key — a player that
+/// changes its number re-announces under the same MAC and replaces its old
+/// entry instead of leaving a ghost behind until [`DEVICE_TIMEOUT`].
+///
+/// A device announcing an all-zero MAC has no identity of its own (several
+/// such devices would collapse into one entry), so it falls back to its
+/// source IP — unique per host on a network, though it forgoes the
+/// renumber-in-place behaviour if the device's address also changes. Not
+/// observed on hardware: every captured CDJ and DJM announced a real MAC;
+/// this only guards against a device or simulator that does not.
+///
+/// Unverified on hardware: that two DJMs really announce the same number 33
+/// on one network, which is what this module is built to survive.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum DeviceIdentity {
+    Mac(String),
+    Address(String),
+}
+
+impl DeviceIdentity {
+    fn of(device: &DiscoveredDevice) -> Self {
+        if device.mac_address == UNSET_MAC_ADDRESS {
+            Self::Address(device.ip.clone())
+        } else {
+            Self::Mac(device.mac_address.clone())
+        }
+    }
+}
+
+/// One entry per physical device, with when its last keep-alive arrived.
+type SeenDevices = HashMap<DeviceIdentity, (DiscoveredDevice, Instant)>;
 
 /// Parses a keep-alive packet's payload; `None` if it isn't one — the
 /// channel-claim packets a device sends while starting up share port and
@@ -129,18 +211,25 @@ fn parse_keepalive(data: &[u8], source_ip: Ipv4Addr) -> Option<DiscoveredDevice>
         ip: source_ip.to_string(),
         mac_address,
         peer_count,
+        number_holders: 1,
     })
 }
 
 /// Listens for Pro DJ Link keep-alives and republishes the current device
 /// list on every change — a device arriving, updating, or timing out.
 ///
+/// Each physical device is its own entry (see [`DeviceIdentity`]), so devices
+/// sharing a number all appear, flagged through
+/// [`DiscoveredDevice::number_holders`]. The published list is ordered by
+/// device number, then MAC address, so it does not reshuffle between
+/// snapshots.
+///
 /// Construction is synchronous and does no I/O; [`Self::run`] is the async
 /// worker, spawned once a Tokio runtime is available — mirrors
 /// `decktective_timecode::TimecodeService`.
 pub struct DeviceWatcher {
     devices_tx: watch::Sender<Vec<DiscoveredDevice>>,
-    seen: Mutex<HashMap<u8, (DiscoveredDevice, Instant)>>,
+    seen: Mutex<SeenDevices>,
 }
 
 impl DeviceWatcher {
@@ -181,7 +270,7 @@ impl DeviceWatcher {
             return false;
         };
         let mut seen = self.seen();
-        seen.insert(device.device_number, (device, Instant::now()));
+        seen.insert(DeviceIdentity::of(&device), (device, Instant::now()));
         let snapshot = Self::snapshot(&seen);
         drop(seen);
         self.publish(snapshot);
@@ -250,22 +339,27 @@ impl DeviceWatcher {
     /// The `seen` map, recovering from a poisoned lock rather than
     /// propagating the panic: a capture session losing its device table
     /// mid-set is worse than carrying on with whatever is in the map.
-    fn seen(&self) -> std::sync::MutexGuard<'_, HashMap<u8, (DiscoveredDevice, Instant)>> {
+    fn seen(&self) -> std::sync::MutexGuard<'_, SeenDevices> {
         self.seen
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    fn snapshot(seen: &HashMap<u8, (DiscoveredDevice, Instant)>) -> Vec<DiscoveredDevice> {
+    fn snapshot(seen: &SeenDevices) -> Vec<DiscoveredDevice> {
         let mut devices: Vec<DiscoveredDevice> =
             seen.values().map(|(device, _)| device.clone()).collect();
-        devices.sort_by_key(|device| device.device_number);
+        devices.sort_by(|a, b| {
+            (a.device_number, &a.mac_address, &a.ip).cmp(&(b.device_number, &b.mac_address, &b.ip))
+        });
+        count_number_holders(&mut devices);
         devices
     }
 
     fn publish(&self, devices: Vec<DiscoveredDevice>) {
-        // No subscribers yet (window still opening) is not an error.
-        let _ = self.devices_tx.send(devices);
+        // `send_replace` stores the list even with no subscribers (window
+        // still opening), where `send` would drop it and leave
+        // [`Self::devices`] stale for a listener hydrating late.
+        self.devices_tx.send_replace(devices);
     }
 }
 
@@ -377,5 +471,167 @@ mod tests {
         let mut bytes = keepalive_bytes(2, "CDJ-3000", [0; 6]);
         bytes[0] = 0x00;
         assert!(parse_keepalive(&bytes, Ipv4Addr::LOCALHOST).is_none());
+    }
+
+    const MIXER_A_MAC: [u8; 6] = [0x00, 0x11, 0x22, 0x33, 0x44, 0xa9];
+    const MIXER_B_MAC: [u8; 6] = [0x00, 0x11, 0x22, 0x33, 0x44, 0xb0];
+    const PLAYER_MAC: [u8; 6] = [0xc8, 0x3d, 0xfc, 0x12, 0x69, 0x17];
+
+    fn ip(last_octet: u8) -> Ipv4Addr {
+        Ipv4Addr::new(192, 168, 1, last_octet)
+    }
+
+    /// Ages a device's last keep-alive so [`DeviceWatcher::sweep`] sees it as
+    /// older than [`DEVICE_TIMEOUT`], without sleeping through the timeout.
+    fn age_past_timeout(watcher: &DeviceWatcher, mac_address: &str) {
+        let stale = Instant::now()
+            .checked_sub(DEVICE_TIMEOUT + Duration::from_secs(1))
+            .expect("the monotonic clock is older than the device timeout");
+        let mut seen = watcher.seen();
+        let (_, last_seen) = seen
+            .get_mut(&DeviceIdentity::Mac(mac_address.to_string()))
+            .expect("the device should be tracked");
+        *last_seen = stale;
+    }
+
+    #[test]
+    fn two_mixers_on_number_33_are_two_devices() {
+        let watcher = DeviceWatcher::new();
+        watcher.ingest(&keepalive_bytes(33, "DJM-A9", MIXER_A_MAC), ip(10));
+        watcher.ingest(&keepalive_bytes(33, "DJM-V10", MIXER_B_MAC), ip(11));
+
+        let devices = watcher.devices();
+        assert_eq!(devices.len(), 2);
+        assert_eq!(devices[0].name, "DJM-A9");
+        assert_eq!(devices[0].ip, "192.168.1.10");
+        assert_eq!(devices[1].name, "DJM-V10");
+        assert_eq!(devices[1].ip, "192.168.1.11");
+    }
+
+    #[test]
+    fn a_repeated_keepalive_does_not_flip_between_mixers() {
+        let watcher = DeviceWatcher::new();
+        for _ in 0..3 {
+            watcher.ingest(&keepalive_bytes(33, "DJM-A9", MIXER_A_MAC), ip(10));
+            watcher.ingest(&keepalive_bytes(33, "DJM-V10", MIXER_B_MAC), ip(11));
+        }
+
+        let names: Vec<String> = watcher.devices().into_iter().map(|d| d.name).collect();
+        assert_eq!(names, ["DJM-A9", "DJM-V10"]);
+    }
+
+    #[test]
+    fn the_published_list_does_not_depend_on_arrival_order() {
+        let forward = DeviceWatcher::new();
+        forward.ingest(&keepalive_bytes(33, "DJM-A9", MIXER_A_MAC), ip(10));
+        forward.ingest(&keepalive_bytes(33, "DJM-V10", MIXER_B_MAC), ip(11));
+        let reverse = DeviceWatcher::new();
+        reverse.ingest(&keepalive_bytes(33, "DJM-V10", MIXER_B_MAC), ip(11));
+        reverse.ingest(&keepalive_bytes(33, "DJM-A9", MIXER_A_MAC), ip(10));
+
+        assert_eq!(forward.devices(), reverse.devices());
+    }
+
+    #[test]
+    fn a_renumbered_device_replaces_its_old_entry() {
+        let watcher = DeviceWatcher::new();
+        watcher.ingest(&keepalive_bytes(2, "CDJ-3000", PLAYER_MAC), ip(20));
+        watcher.ingest(&keepalive_bytes(3, "CDJ-3000", PLAYER_MAC), ip(20));
+
+        let devices = watcher.devices();
+        assert_eq!(devices.len(), 1);
+        assert_eq!(devices[0].device_number, 3);
+    }
+
+    #[test]
+    fn a_renumber_onto_a_taken_number_leaves_exactly_two_devices() {
+        let watcher = DeviceWatcher::new();
+        watcher.ingest(&keepalive_bytes(1, "CDJ-3000", PLAYER_MAC), ip(20));
+        watcher.ingest(&keepalive_bytes(2, "CDJ-2000NXS2", [0xaa; 6]), ip(21));
+        watcher.ingest(&keepalive_bytes(2, "CDJ-3000", PLAYER_MAC), ip(20));
+
+        let numbers: Vec<u8> = watcher.devices().iter().map(|d| d.device_number).collect();
+        assert_eq!(numbers, [2, 2]);
+    }
+
+    #[test]
+    fn devices_without_a_mac_are_told_apart_by_ip() {
+        let watcher = DeviceWatcher::new();
+        watcher.ingest(&keepalive_bytes(33, "DJM-A9", [0; 6]), ip(10));
+        watcher.ingest(&keepalive_bytes(33, "DJM-V10", [0; 6]), ip(11));
+        // A repeat from the first must update it, not add a third entry.
+        watcher.ingest(&keepalive_bytes(33, "DJM-A9", [0; 6]), ip(10));
+
+        assert_eq!(watcher.devices().len(), 2);
+    }
+
+    #[test]
+    fn sweep_expires_only_the_device_that_went_silent() {
+        let watcher = DeviceWatcher::new();
+        watcher.ingest(&keepalive_bytes(33, "DJM-A9", MIXER_A_MAC), ip(10));
+        watcher.ingest(&keepalive_bytes(33, "DJM-V10", MIXER_B_MAC), ip(11));
+
+        age_past_timeout(&watcher, "00:11:22:33:44:a9");
+        watcher.sweep();
+
+        let devices = watcher.devices();
+        assert_eq!(devices.len(), 1);
+        assert_eq!(devices[0].name, "DJM-V10");
+        assert!(!devices[0].has_number_conflict());
+    }
+
+    #[test]
+    fn sweep_keeps_devices_that_are_still_broadcasting() {
+        let watcher = DeviceWatcher::new();
+        watcher.ingest(&keepalive_bytes(33, "DJM-A9", MIXER_A_MAC), ip(10));
+        watcher.sweep();
+        assert_eq!(watcher.devices().len(), 1);
+    }
+
+    #[test]
+    fn devices_sharing_a_number_are_flagged() {
+        let watcher = DeviceWatcher::new();
+        watcher.ingest(&keepalive_bytes(33, "DJM-A9", MIXER_A_MAC), ip(10));
+        watcher.ingest(&keepalive_bytes(33, "DJM-V10", MIXER_B_MAC), ip(11));
+        watcher.ingest(&keepalive_bytes(1, "CDJ-3000", PLAYER_MAC), ip(20));
+
+        let devices = watcher.devices();
+        let player = &devices[0];
+        assert!(!player.has_number_conflict());
+        assert_eq!(player.number_holders, 1);
+        for mixer in &devices[1..] {
+            assert!(mixer.has_number_conflict());
+            assert_eq!(mixer.number_holders, 2);
+        }
+        assert_eq!(conflicting_numbers(&devices), BTreeSet::from([33]));
+    }
+
+    #[test]
+    fn a_lone_device_is_not_a_conflict() {
+        let watcher = DeviceWatcher::new();
+        watcher.ingest(&keepalive_bytes(33, "DJM-900NXS2", MIXER_A_MAC), ip(10));
+
+        let devices = watcher.devices();
+        assert!(!devices[0].has_number_conflict());
+        assert!(conflicting_numbers(&devices).is_empty());
+    }
+
+    #[test]
+    fn two_players_on_one_number_are_a_conflict_too() {
+        let watcher = DeviceWatcher::new();
+        watcher.ingest(&keepalive_bytes(2, "CDJ-3000", PLAYER_MAC), ip(20));
+        watcher.ingest(&keepalive_bytes(2, "CDJ-3000", [0xaa; 6]), ip(21));
+
+        assert_eq!(conflicting_numbers(&watcher.devices()), BTreeSet::from([2]));
+    }
+
+    #[test]
+    fn the_conflict_clears_once_one_of_the_devices_renumbers() {
+        let watcher = DeviceWatcher::new();
+        watcher.ingest(&keepalive_bytes(2, "CDJ-3000", PLAYER_MAC), ip(20));
+        watcher.ingest(&keepalive_bytes(2, "CDJ-3000", [0xaa; 6]), ip(21));
+        watcher.ingest(&keepalive_bytes(3, "CDJ-3000", [0xaa; 6]), ip(21));
+
+        assert!(conflicting_numbers(&watcher.devices()).is_empty());
     }
 }

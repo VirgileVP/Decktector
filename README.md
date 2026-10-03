@@ -46,9 +46,11 @@ Primary targets: **XDJ-XZ** and **XDJ-1000MK2** (works with 2 to 4 CDJ-2000-era 
 Decktective tries NFS first, which needs no virtual player number at all — this
 should just work on any network size, including four CDJs with all of 1-4 taken.
 dbserver is the fallback if NFS doesn't answer (e.g. an unsupported media slot),
-and _that_ route only answers a virtual CDJ numbered 1-4 — Decktective defaults to
-5 to stay clear of numbers real hardware self-assigns, so on a full four-player
-network the dbserver fallback alone wouldn't get metadata either.
+and _that_ route only answers a virtual CDJ numbered 1-4 on players older than the
+CDJ-3000. Decktective claims 7 by default (the conventional virtual-CDJ number,
+which no physical player can take), falling back to 6, 5, then 4 down to 1 when
+those are taken — so on a full four-player network of older players the dbserver
+fallback alone wouldn't get metadata either.
 
 A CDJ-3000 can be renumbered to player 5 or 6, which frees a number in range, for
 the dbserver fallback specifically. Set one player that way, then claim the freed
@@ -315,8 +317,10 @@ trusting it at a gig:**
   position**; Decktective anchors the playhead on the beat counter + beat grid and
   interpolates with the pitch (engine-side at 5 Hz, renderer-side at 60 fps).
 - The **XDJ-XZ** exposes its two decks behind a single IP and always claims player
-  numbers 1 and 2; Decktective announces itself as virtual player 5 to stay clear
-  while remaining in the 1-6 range CDJs accept database queries from.
+  numbers 1 and 2; Decktective announces itself as virtual player 7 to stay clear
+  of every number physical players can take (see
+  [Metadata on a full four-player network](#metadata-on-a-full-four-player-network)
+  for the dbserver fallback's 1-4 constraint).
 - A track loaded over **link** belongs to another player: a deck's status packet
   names the player whose media it came from, and metadata has to be asked of that
   player, in that player's slot, by that player's number. Two decks fed by one USB
