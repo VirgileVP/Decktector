@@ -2,8 +2,8 @@
 //!
 //! Speaks the wire format of Pioneer/AlphaTheta CDJ and XDJ players: announces
 //! a virtual CDJ, discovers devices, reads player status and beat packets, and
-//! fetches track metadata. Nothing here knows about Decktective's domain model
-//! — that mapping lives in `decktective-core`.
+//! fetches track metadata. Nothing here knows about Decktector's domain model
+//! — that mapping lives in `decktector-core`.
 //!
 //! The protocol is not documented by the manufacturer. This implementation
 //! follows Deep Symmetry's analysis at <https://djl-analysis.deepsymmetry.org/>.

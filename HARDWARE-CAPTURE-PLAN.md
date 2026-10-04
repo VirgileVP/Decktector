@@ -67,7 +67,7 @@ Out of scope — do not touch these:
   supply the bytes for it; writing it comes later.
 - The cues/artwork gap on the dbserver route (`README.md` phase 3).
 - Anything under `src/renderer/`, or the in-flight track-structure work in
-  `crates/decktective-core/src/structure/`.
+  `crates/decktector-core/src/structure/`.
 
 ## House rules for this work
 
@@ -204,7 +204,7 @@ it directly. Without it, one bug in phase B costs the entire NFS capture.
 For each player, `Connection::open(player_ip, bind_ip, our_device_number)`,
 then call each of `fetch_metadata`, `fetch_beat_grid`, `fetch_cues_extended`,
 `fetch_cues_basic`, `fetch_artwork`, dumping raw response bytes per query.
-Honour `DECKTECTIVE_VCDJ_ID` for the virtual device number, defaulting to 5,
+Honour `DECKTECTOR_VCDJ_ID` for the virtual device number, defaulting to 5,
 and log loudly when the number is outside dbserver's accepted 1–4 range —
 that is the documented reason this route can legitimately return nothing (see
 `README.md`, "Metadata on a full four-player network").

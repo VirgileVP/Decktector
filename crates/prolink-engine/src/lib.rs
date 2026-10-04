@@ -1,5 +1,5 @@
-//! Real Pro DJ Link `Engine`, backing decktective with actual CDJ/XDJ
-//! hardware instead of `decktective_core::sim::SimEngine`'s scripted decks.
+//! Real Pro DJ Link `Engine`, backing decktector with actual CDJ/XDJ
+//! hardware instead of `decktector_core::sim::SimEngine`'s scripted decks.
 //!
 //! This phase covers live network presence and deck state — play/pause,
 //! pitch, tempo, master/sync/on-air, and an approximate playhead. It does
@@ -10,7 +10,7 @@
 //!
 //! The renderer never talks to this crate directly — the Tauri app shell
 //! only needs [`ProlinkEngine`], constructed once and handed to the same
-//! `decktective_core::Engine`-shaped plumbing `SimEngine` already uses.
+//! `decktector_core::Engine`-shaped plumbing `SimEngine` already uses.
 
 mod engine;
 pub mod metadata;

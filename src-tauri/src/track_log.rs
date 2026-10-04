@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use chrono::Local;
-use decktective_core::model::{DeckId, PlayState, TrackInfo};
-use decktective_core::{Engine, EngineEvent};
+use decktector_core::model::{DeckId, PlayState, TrackInfo};
+use decktector_core::{Engine, EngineEvent};
 use tauri::{AppHandle, Manager};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
@@ -19,11 +19,11 @@ use tokio::sync::broadcast::error::RecvError;
 
 const LOG_FILE_NAME: &str = "played-tracks.log";
 
-/// Where the play history lives: an explicit `DECKTECTIVE_LOG_DIR` wins, a
+/// Where the play history lives: an explicit `DECKTECTOR_LOG_DIR` wins, a
 /// dev run logs into `./logs` next to the project for easy access, and a
 /// packaged build uses the app's own data directory.
 fn resolve_log_dir(app: &AppHandle) -> anyhow::Result<PathBuf> {
-    if let Ok(dir) = std::env::var("DECKTECTIVE_LOG_DIR") {
+    if let Ok(dir) = std::env::var("DECKTECTOR_LOG_DIR") {
         return Ok(PathBuf::from(dir));
     }
     if cfg!(debug_assertions) {

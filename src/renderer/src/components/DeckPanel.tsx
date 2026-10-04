@@ -3,7 +3,7 @@ import { formatTimeMs } from '../lib/playhead'
 import { TRANSPORT_GLYPHS } from '../lib/transport'
 import { useDeckActive } from '../state/deck-activity'
 import { DECK_RAIL_WIDTH_RANGE, useSettings } from '../state/settings'
-import { useDecktectiveStore } from '../state/store'
+import { useDecktectorStore } from '../state/store'
 import { BeatIndicator } from './BeatIndicator'
 import { CueList } from './CueList'
 import { DeckBar } from './DeckBar'
@@ -28,8 +28,8 @@ export function DeckPanel({
   accentColor,
   variant = 'full'
 }: DeckPanelProps): React.JSX.Element {
-  const deck = useDecktectiveStore((s) => s.decks[deckId])
-  const track = useDecktectiveStore((s) => s.tracks[deckId] ?? null)
+  const deck = useDecktectorStore((s) => s.decks[deckId])
+  const track = useDecktectorStore((s) => s.tracks[deckId] ?? null)
   const barFields = useDeckBarFields()
   const deckLabel = useSettings((s) => s.deckLabels[deckId] ?? '')
   const showCueList = useSettings((s) => s.showDeckCueList)

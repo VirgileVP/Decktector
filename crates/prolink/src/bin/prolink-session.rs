@@ -319,7 +319,7 @@ fn run_preflight(config: &Config, bind_ip: Ipv4Addr) {
         Some(apps) if apps.is_empty() => check(
             "competing apps",
             true,
-            "no rekordbox or Decktective app running",
+            "no rekordbox or Decktector app running",
         ),
         Some(apps) => check(
             "competing apps",
@@ -329,7 +329,7 @@ fn run_preflight(config: &Config, bind_ip: Ipv4Addr) {
         None => check(
             "competing apps",
             true,
-            "could not check — confirm by hand that rekordbox and the Decktective app are closed",
+            "could not check — confirm by hand that rekordbox and the Decktector app are closed",
         ),
     }
 }
@@ -342,7 +342,7 @@ fn check(label: &str, ok: bool, detail: &str) {
 /// Other Pro DJ Link consumers running on this machine, which have to be
 /// closed before recording.
 ///
-/// rekordbox competes for the virtual-player slot. The Decktective app
+/// rekordbox competes for the virtual-player slot. The Decktector app
 /// itself is just as damaging and far easier to leave running by accident
 /// (a `tauri dev` window behind the terminal): it binds the same three
 /// ports with `SO_REUSEPORT`, and while broadcasts reach every listener,
@@ -354,7 +354,7 @@ fn check(label: &str, ok: bool, detail: &str) {
 /// reported as an unknown rather than quietly passing as "nothing running".
 ///
 /// Matching is on the executable's file name, never the full command line:
-/// this repository's own directory is called `decktective`, so every path
+/// this repository's own directory is called `decktector`, so every path
 /// in `ps` output — including this tool's own — contains that word.
 fn competing_apps_running() -> Option<Vec<String>> {
     let output = if cfg!(windows) {
@@ -387,7 +387,7 @@ fn competing_apps_running() -> Option<Vec<String>> {
             .trim_end_matches(".exe");
         let app = match executable {
             name if name.contains("rekordbox") => "rekordbox",
-            "decktective" => "the Decktective app",
+            "decktector" => "the Decktector app",
             _ => continue,
         };
         if !found.iter().any(|seen| seen == app) {

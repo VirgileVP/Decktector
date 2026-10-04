@@ -226,7 +226,7 @@ fn parse_keepalive(data: &[u8], source_ip: Ipv4Addr) -> Option<DiscoveredDevice>
 ///
 /// Construction is synchronous and does no I/O; [`Self::run`] is the async
 /// worker, spawned once a Tokio runtime is available — mirrors
-/// `decktective_timecode::TimecodeService`.
+/// `decktector_timecode::TimecodeService`.
 pub struct DeviceWatcher {
     devices_tx: watch::Sender<Vec<DiscoveredDevice>>,
     seen: Mutex<SeenDevices>,

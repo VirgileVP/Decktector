@@ -1,7 +1,7 @@
 import { isTauri } from '@tauri-apps/api/core'
 import { useShallow } from 'zustand/react/shallow'
 
-import { useDecktectiveStore } from '../state/store'
+import { useDecktectorStore } from '../state/store'
 import { selectTimecodeSource, useTimecodeStore } from '../state/timecode'
 
 /** Timecode output only exists in the desktop shell — a remote browser has no generator to drive. */
@@ -15,7 +15,7 @@ const IS_TAURI = isTauri()
  */
 export function TimecodeSourceButtons(): React.JSX.Element | null {
   const sourceDeckId = useTimecodeStore((s) => s.sourceDeckId)
-  const deckIds = useDecktectiveStore(
+  const deckIds = useDecktectorStore(
     useShallow((s) =>
       Object.keys(s.decks)
         .map(Number)

@@ -1,11 +1,11 @@
 //! Standalone dev tool that broadcasts fake Pro DJ Link traffic — keep
-//! -alives, status packets and beat packets — so decktective's real engine
+//! -alives, status packets and beat packets — so decktector's real engine
 //! (`prolink-engine::ProlinkEngine`) can be exercised against something that
 //! actually speaks the wire protocol, without real CDJs on the network.
-//! Unlike `decktective_core::sim::SimEngine`, which bypasses the protocol
-//! entirely, this makes `cargo run -p decktective` (with `DECKTECTIVE_SIM`
+//! Unlike `decktector_core::sim::SimEngine`, which bypasses the protocol
+//! entirely, this makes `cargo run -p decktector` (with `DECKTECTOR_SIM`
 //! unset) show live decks end to end through the real parsing path. Run it
-//! on the same machine as decktective — no virtual-CDJ startup dance, just
+//! on the same machine as decktector — no virtual-CDJ startup dance, just
 //! the same broadcasts a real player settles into once it's up.
 //!
 //! It can also stop inventing traffic altogether and **replay a recorded

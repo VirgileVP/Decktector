@@ -34,7 +34,7 @@ Desktop app (Tauri) plus a browser-based remote view. Detachable panel windows m
 
 ## Capabilities and Constraints
 
-- Rust-derived domain model (`decktective-core`) is the single source of truth; the TypeScript model is generated from it, so engine/UI divergence fails the build rather than surfacing live.
+- Rust-derived domain model (`decktector-core`) is the single source of truth; the TypeScript model is generated from it, so engine/UI divergence fails the build rather than surfacing live.
 - No absolute playhead position from the protocol on this hardware generation — playhead is anchored on beat counter + beat grid and interpolated (engine 5 Hz, renderer 60 fps). Any waveform/position UI must tolerate this being an approximation, not ground truth.
 - Remote view is read-only by design (no write path back into the engine); token regenerates every server start. Not hardened auth — a venue network is not trusted, so nothing beyond what's already on screen should ever be exposed there.
 - Virtual player numbering constraints (1–6 range, XDJ-XZ claims 1+2, app defaults to 5) are hard protocol constraints, not UI concerns, but any diagnostics/device UI must reflect real player-number state accurately.
@@ -42,7 +42,7 @@ Desktop app (Tauri) plus a browser-based remote view. Detachable panel windows m
 
 ## Brand Commitments
 
-- Name: Decktective. Positioned explicitly "in the spirit of TC Supply's BeatKontrol" — same category, not a mandate to copy its look.
+- Name: Decktector. Positioned explicitly "in the spirit of TC Supply's BeatKontrol" — same category, not a mandate to copy its look.
 - User explicitly wants a modern, professional, legible identity — not a strict continuation of BeatKontrol's visual language.
 
 ## Evidence on Hand

@@ -20,7 +20,7 @@ import type { PanelWindowOptions } from '../panels/panel-window-options'
 import { PANEL_WINDOW_CHANNEL, type PanelWindowReport } from '../panels/panel-window-report'
 import type { PanelParams } from '../panels/params'
 
-const PANEL_WINDOWS_STORAGE_KEY = 'decktective.panel-windows'
+const PANEL_WINDOWS_STORAGE_KEY = 'decktector.panel-windows'
 
 export interface PanelWindowRecord {
   label: string

@@ -13,7 +13,7 @@
 //! independent reasons to fail (no NFS export on this media vs. our
 //! virtual number being out of dbserver's accepted range, say).
 //!
-//! Timeouts and the retry backoff are ported from decktective's pre-Rust
+//! Timeouts and the retry backoff are ported from decktector's pre-Rust
 //! engine's `track-loader.ts`, whose values came from real four-CDJ-3000
 //! testing: `METADATA_TIMEOUT`, `ASSET_TIMEOUT`, `CONNECT_TIMEOUT`,
 //! `RETRY_FAILED_SOURCE_AFTER`. `NFS_CONNECT_TIMEOUT`/`NFS_FILE_TIMEOUT` are
@@ -27,9 +27,9 @@ use std::net::Ipv4Addr;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
 use std::time::{Duration, Instant};
 
-use decktective_core::model::{DeckId, TrackInfo};
-use decktective_core::structure::{self, StructureInput};
-use decktective_core::EngineHandle;
+use decktector_core::model::{DeckId, TrackInfo};
+use decktector_core::structure::{self, StructureInput};
+use decktector_core::EngineHandle;
 use prolink::dbserver::{beatgrid, waveform as db_waveform, Connection};
 use prolink::nfs::pdb::Pdb;
 use prolink::presence::Presence;
@@ -589,7 +589,7 @@ fn assemble_dbserver_track_info(
     let cues = Vec::new(); // Cue-list wire format not yet confirmed — see prolink::dbserver::cues.
 
     // Borrowed here, before the same values move into the TrackInfo literal
-    // below — mirrors decktective_core::sim::tracks::build_sim_track's
+    // below — mirrors decktector_core::sim::tracks::build_sim_track's
     // sequencing exactly.
     let events = structure::analyze(&StructureInput {
         waveform: waveform.as_ref(),

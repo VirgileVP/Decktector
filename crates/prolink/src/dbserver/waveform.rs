@@ -14,8 +14,8 @@
 //! stores color waveform data.
 
 /// One waveform column, protocol-shaped — deliberately not
-/// `decktective_core::model::WaveformSegment`: this crate stays free of
-/// Decktective's domain model (see the crate doc comment), the same reason
+/// `decktector_core::model::WaveformSegment`: this crate stays free of
+/// Decktector's domain model (see the crate doc comment), the same reason
 /// [`super::beatgrid::DbBeatGridEntry`] isn't `BeatGridBeat`. The shape is
 /// intentionally identical (`prolink-engine::metadata::normalize` maps it
 /// field-for-field) so that mapping is a trivial, obviously-correct step.

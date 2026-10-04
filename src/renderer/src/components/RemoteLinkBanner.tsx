@@ -19,7 +19,7 @@ export function RemoteLinkBanner(): React.JSX.Element | null {
 
   return (
     <div className="remote-link-banner" role="status">
-      Reconnecting to Decktective{attempts > 1 ? ` (attempt ${attempts})` : ''}…
+      Reconnecting to Decktector{attempts > 1 ? ` (attempt ${attempts})` : ''}…
     </div>
   )
 }

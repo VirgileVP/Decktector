@@ -1,5 +1,5 @@
 [package]
-name = "decktective-remote"
+name = "decktector-remote"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -11,8 +11,8 @@ anyhow = { workspace = true }
 axum = { version = "0.8", features = ["ws"] }
 axum-server = { version = "0.8", features = ["tls-rustls"] }
 base64 = "0.22"
-decktective-core = { workspace = true }
-decktective-net = { workspace = true }
+decktector-core = { workspace = true }
+decktector-net = { workspace = true }
 futures-util = "0.3"
 http-body-util = "0.1"
 # Only used to proxy asset requests to the Vite dev server in development

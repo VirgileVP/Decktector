@@ -13,9 +13,9 @@ export function DevicesPanel(): React.JSX.Element {
   const devices = useDevicesStore((s) => s.devices)
 
   const physicalPlayers = devices.filter(
-    (d) => d.name.toLowerCase() !== 'decktective' && d.kind === 'player'
+    (d) => d.name.toLowerCase() !== 'decktector' && d.kind === 'player'
   )
-  const virtualDevice = devices.find((d) => d.name.toLowerCase() === 'decktective')
+  const virtualDevice = devices.find((d) => d.name.toLowerCase() === 'decktector')
   const sortedDevices = [...devices].sort((a, b) => a.deviceNumber - b.deviceNumber)
   const numberConflicts = findNumberConflicts(devices)
 
@@ -63,7 +63,7 @@ export function DevicesPanel(): React.JSX.Element {
                     .join(', ')})`}
             </span>
             <span>
-              <strong>Decktective:</strong>{' '}
+              <strong>Decktector:</strong>{' '}
               {virtualDevice
                 ? virtualDevice.deviceNumber <= 4
                   ? `Virtual ID #${virtualDevice.deviceNumber} • Double route active (NFS + repli dbserver)`
@@ -78,7 +78,7 @@ export function DevicesPanel(): React.JSX.Element {
               ? virtualDevice.deviceNumber <= 4
                 ? 'Ceinture de sécurité maximale : métadonnées accessibles via NFS et requêtes directes dbserver.'
                 : 'Les slots 1 à 4 sont occupés par les platines physiques. Lecture des métadonnées assurée via NFS.'
-              : 'Dès détection d’une platine sur le réseau, Decktective s’attribue un ID virtuel pour acquérir le statut et les métadonnées.'}
+              : 'Dès détection d’une platine sur le réseau, Decktector s’attribue un ID virtuel pour acquérir le statut et les métadonnées.'}
           </p>
         </div>
       </div>
@@ -107,7 +107,7 @@ export function DevicesPanel(): React.JSX.Element {
           </thead>
           <tbody>
             {sortedDevices.map((device) => {
-              const isVirtual = device.name.toLowerCase() === 'decktective'
+              const isVirtual = device.name.toLowerCase() === 'decktector'
               return (
                 <tr
                   key={`${device.macAddress}@${device.ip}`}

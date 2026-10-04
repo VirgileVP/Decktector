@@ -30,8 +30,8 @@ impl SleepBlocker {
                 *guard = Some(
                     keepawake::Builder::default()
                         .display(true)
-                        .reason("Decktective is visualizing a live set")
-                        .app_name("Decktective")
+                        .reason("Decktector is visualizing a live set")
+                        .app_name("Decktector")
                         .create()?,
                 );
             }

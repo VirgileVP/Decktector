@@ -90,7 +90,7 @@ const DEFAULT_MAX_TRACKS: usize = 50;
 /// looking at a CDJ's link menu or another capture during the session
 /// should be able to tell our virtual player from the real hardware at a
 /// glance.
-const PRESENCE_NAME: &str = "decktective";
+const PRESENCE_NAME: &str = "decktector";
 const DEFAULT_OUT_DIR: &str = "./capture";
 const LIVE_TABLE_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -1158,7 +1158,7 @@ struct QueryReport {
 /// player number nobody has announced is how a dbserver connection opens
 /// and then answers nothing. Only when we are not announcing at all
 /// (`--no-announce`) does this fall back to `--device-number`, then to
-/// `DECKTECTIVE_VCDJ_ID` — honoured the same way `prolink-engine::engine`
+/// `DECKTECTOR_VCDJ_ID` — honoured the same way `prolink-engine::engine`
 /// does (see the project README's "Metadata on a full four-player network"
 /// section), duplicated here for the same reason as [`EXPORT_PDB_PATH`]:
 /// this binary can't depend on `prolink-engine`.
@@ -1167,7 +1167,7 @@ fn our_device_number(config: &Config, presence: Option<&Arc<Presence>>) -> u8 {
     let number = claimed
         .or(config.device_number)
         .or_else(|| {
-            std::env::var("DECKTECTIVE_VCDJ_ID")
+            std::env::var("DECKTECTOR_VCDJ_ID")
                 .ok()
                 .and_then(|value| value.parse().ok())
         })

@@ -1,7 +1,7 @@
 //! Turns audio files into simulator track fixtures: real waveforms, real
 //! durations, a detected tempo and grid, and whatever the tags say.
 //!
-//! `decktective_core::sim` generates its tracks — a shaped energy envelope,
+//! `decktector_core::sim` generates its tracks — a shaped energy envelope,
 //! a perfect beat grid, cues placed by rule. That is enough to develop a
 //! layout against and not enough to trust one: a generated waveform has no
 //! silence where a real track breaks down and no drop where the energy
@@ -10,8 +10,8 @@
 //! which needs nothing.
 //!
 //! Output is the same `Vec<TrackInfo>` JSON `sim-fixtures` writes, read
-//! back by [`decktective_core::sim::SimLibrary`] through the
-//! `DECKTECTIVE_SIM_TRACKS` environment variable.
+//! back by [`decktector_core::sim::SimLibrary`] through the
+//! `DECKTECTOR_SIM_TRACKS` environment variable.
 //!
 //! What comes from the file and what is inferred:
 //!   - waveform, duration, artwork, tags — read from the file itself.
@@ -39,14 +39,14 @@ mod waveform;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use decktective_core::model::TrackInfo;
+use decktector_core::model::TrackInfo;
 
 /// Where audio files are dropped by default — gitignored, like every other
 /// input that carries someone else's material.
 const DEFAULT_INPUT_DIR: &str = "capture/audio";
 /// Written where `sim-fixtures` writes, so either builder feeds the same
-/// `DECKTECTIVE_SIM_TRACKS` path.
-const DEFAULT_OUT_FILE: &str = "crates/decktective-core/fixtures/sim-tracks.json";
+/// `DECKTECTOR_SIM_TRACKS` path.
+const DEFAULT_OUT_FILE: &str = "crates/decktector-core/fixtures/sim-tracks.json";
 /// A track's HD waveform is 150 columns per second — roughly 2 MB of JSON
 /// for a six-minute track. Eight is already more than the six decks a Pro
 /// DJ Link network tops out at.
@@ -101,7 +101,7 @@ fn how_to_run(out: &Path) -> String {
     }
     format!(
         "Run the app with {}={} to use them.",
-        decktective_core::sim::SIM_TRACKS_ENV,
+        decktector_core::sim::SIM_TRACKS_ENV,
         out.display()
     )
 }

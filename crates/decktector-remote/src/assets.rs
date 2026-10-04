@@ -145,7 +145,7 @@ mod tests {
         let directory = tempfile::tempdir().expect("temp dir creates");
         std::fs::write(
             directory.path().join("index.html"),
-            "<html>decktective</html>",
+            "<html>decktector</html>",
         )
         .expect("index.html writes");
 
@@ -164,6 +164,6 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
             .expect("body reads");
-        assert_eq!(body, "<html>decktective</html>".as_bytes());
+        assert_eq!(body, "<html>decktector</html>".as_bytes());
     }
 }

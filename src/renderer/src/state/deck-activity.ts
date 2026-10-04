@@ -8,7 +8,7 @@ import {
 } from '../lib/deck-activity'
 import { useDevicesStore } from './devices'
 import { useSettings } from './settings'
-import { useDecktectiveStore } from './store'
+import { useDecktectorStore } from './store'
 
 /**
  * Distinct mixers on the Pro DJ Link network. The device list only exists in
@@ -37,6 +37,6 @@ export function useAmbiguousMixers(): boolean {
 export function useDeckActive(deckId: DeckId): boolean {
   const source = useSettings((s) => s.onAirSource)
   const mixerCount = useMixerCount()
-  const deck = useDecktectiveStore((s) => s.decks[deckId])
+  const deck = useDecktectorStore((s) => s.decks[deckId])
   return isDeckActive(source, deck, mixerCount)
 }

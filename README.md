@@ -1,4 +1,4 @@
-# Decktective 🕵️
+# Decktector 🕵️
 
 Real-time visualizer for Pioneer **Pro DJ Link** decks (CDJ/XDJ), in the spirit of
 TC Supply's BeatKontrol. Plug your Mac into the same network as your players and get,
@@ -43,11 +43,11 @@ Primary targets: **XDJ-XZ** and **XDJ-1000MK2** (works with 2 to 4 CDJ-2000-era 
 
 ## Metadata on a full four-player network
 
-Decktective tries NFS first, which needs no virtual player number at all — this
+Decktector tries NFS first, which needs no virtual player number at all — this
 should just work on any network size, including four CDJs with all of 1-4 taken.
 dbserver is the fallback if NFS doesn't answer (e.g. an unsupported media slot),
 and _that_ route only answers a virtual CDJ numbered 1-4 on players older than the
-CDJ-3000. Decktective claims 7 by default (the conventional virtual-CDJ number,
+CDJ-3000. Decktector claims 7 by default (the conventional virtual-CDJ number,
 which no physical player can take), falling back to 6, 5, then 4 down to 1 when
 those are taken — so on a full four-player network of older players the dbserver
 fallback alone wouldn't get metadata either.
@@ -57,7 +57,7 @@ the dbserver fallback specifically. Set one player that way, then claim the free
 number:
 
 ```sh
-DECKTECTIVE_VCDJ_ID=4 npm run dev
+DECKTECTOR_VCDJ_ID=4 npm run dev
 ```
 
 Never point it at a number a device already uses — two devices sharing one breaks the
@@ -164,7 +164,7 @@ libcrypto. Nothing to run by hand on any platform:
 Windows apps render through the Edge WebView2 runtime, which the installer would
 normally fetch from Microsoft on first run. `bundle.windows.webviewInstallMode` is
 set to `offlineInstaller`, so the runtime is embedded instead: the resulting
-`Decktective_<version>_x64-setup.exe` (~270 MB) installs on a machine that has
+`Decktector_<version>_x64-setup.exe` (~270 MB) installs on a machine that has
 never been online, and needs no administrator rights — it installs per user.
 Building it does require an internet connection, since Tauri downloads the runtime
 at bundle time and caches it under `%LOCALAPPDATA%\tauri`.
@@ -227,7 +227,7 @@ unrelated and unaffected.
 ```
 crates/
 ├── prolink/            # Pro DJ Link protocol, no app dependency
-└── decktective-core/   # Domain layer, no UI dependency
+└── decktector-core/   # Domain layer, no UI dependency
     ├── model.rs        #   Normalized model (DeckState, TrackInfo, WaveformData…)
     ├── engine.rs       #   Engine trait + snapshot bookkeeping + event stream
     └── sim/            #   Scripted simulation (npm run dev:sim)
@@ -252,7 +252,7 @@ build rather than surfacing mid-set. The same engine layer also feeds the
 
 Phase 2 listens for real player traffic passively rather than running the full
 virtual-CDJ channel-claim handshake: its exact byte layout isn't pinned down
-precisely enough to transmit safely onto a live network yet. Decktective picks a
+precisely enough to transmit safely onto a live network yet. Decktector picks a
 free virtual player number and broadcasts the same settled-state keep-alive a
 real player does — it just never contests a number another device claims first.
 That keep-alive is not optional: players send their status packets **unicast,
@@ -314,10 +314,10 @@ trusting it at a gig:**
 ### Protocol notes
 
 - Pro DJ Link on this hardware generation reports **no absolute playhead
-  position**; Decktective anchors the playhead on the beat counter + beat grid and
+  position**; Decktector anchors the playhead on the beat counter + beat grid and
   interpolates with the pitch (engine-side at 5 Hz, renderer-side at 60 fps).
 - The **XDJ-XZ** exposes its two decks behind a single IP and always claims player
-  numbers 1 and 2; Decktective announces itself as virtual player 7 to stay clear
+  numbers 1 and 2; Decktector announces itself as virtual player 7 to stay clear
   of every number physical players can take (see
   [Metadata on a full four-player network](#metadata-on-a-full-four-player-network)
   for the dbserver fallback's 1-4 constraint).

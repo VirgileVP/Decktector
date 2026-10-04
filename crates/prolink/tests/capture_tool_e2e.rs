@@ -236,7 +236,7 @@ async fn phases_a_and_b_capture_every_simulated_device_at_a_full_decode_rate() {
         .unwrap_or_default();
     // Asserted by membership, not by count: this test binds the real Pro
     // DJ Link ports, so anything else Pro DJ Link on the machine or the
-    // LAN — a Decktective window left open, real players in the room —
+    // LAN — a Decktector window left open, real players in the room —
     // legitimately shows up here too.
     for simulated in [
         "CDJ-3000 #1",
@@ -255,7 +255,7 @@ async fn phases_a_and_b_capture_every_simulated_device_at_a_full_decode_rate() {
     // capture that does not announce itself is a capture with no status
     // traffic in it at all.
     assert!(
-        devices.iter().any(|device| device["name"] == "decktective"),
+        devices.iter().any(|device| device["name"] == "decktector"),
         "prolink-capture should announce itself as a virtual player: {last_snapshot}"
     );
 

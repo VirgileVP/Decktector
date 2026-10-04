@@ -1,13 +1,13 @@
-//! Maps dbserver responses onto `decktective_core::model::TrackInfo` fields.
+//! Maps dbserver responses onto `decktector_core::model::TrackInfo` fields.
 
-use decktective_core::model::{BeatGridBeat, WaveformData, WaveformSegment};
+use decktector_core::model::{BeatGridBeat, WaveformData, WaveformSegment};
 use prolink::dbserver::beatgrid::DbBeatGridEntry;
 use prolink::dbserver::client::TrackMenuItem;
 use prolink::dbserver::queries::MenuItemType;
 use prolink::dbserver::waveform;
 
 /// BPM stored as-is if plausible, `/100` if it looks like the protocol's
-/// occasional "BPM x100" encoding — ported from decktective's pre-Rust
+/// occasional "BPM x100" encoding — ported from decktector's pre-Rust
 /// engine's `normalizeTempo` (`track-loader.ts`), corroborated by
 /// `beat-link`'s own `TEMPO` menu-item-type doc comment ("the tempo of a
 /// track, BPM times 100"). `pub(crate)`: also reused by `metadata::nfs`,
@@ -100,9 +100,9 @@ pub fn waveform_data(
             color: column.color,
         })
         .collect();
-    let preview = decktective_core::waveform::build_preview_from_detail(
+    let preview = decktector_core::waveform::build_preview_from_detail(
         &detail,
-        decktective_core::waveform::PREVIEW_SEGMENT_COUNT,
+        decktector_core::waveform::PREVIEW_SEGMENT_COUNT,
     );
     Some(WaveformData {
         detail: Some(detail),

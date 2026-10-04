@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use decktective_core::model::DeckId;
-use decktective_core::Engine;
+use decktector_core::model::DeckId;
+use decktector_core::Engine;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -36,7 +36,7 @@ pub async fn download_deck_track(
         .path()
         .download_dir()
         .map_err(|e| format!("Failed to resolve download directory: {e}"))?
-        .join("Decktective");
+        .join("Decktector");
 
     let app_handle = app.clone();
     let progress_callback = Box::new(move |bytes_downloaded: u64, total_bytes: u64| {

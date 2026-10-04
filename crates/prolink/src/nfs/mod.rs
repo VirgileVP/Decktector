@@ -8,7 +8,7 @@
 //! uncertainty pending real-hardware validation — see [`pdb`]'s and
 //! [`client`]'s doc comments for exactly which parts.
 //!
-//! No domain knowledge here — mapping onto `decktective_core::model` lives
+//! No domain knowledge here — mapping onto `decktector_core::model` lives
 //! in `prolink-engine::metadata::nfs`, the same split every other protocol
 //! module in this crate already uses.
 

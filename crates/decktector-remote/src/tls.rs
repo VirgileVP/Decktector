@@ -15,8 +15,8 @@ use rcgen::{CertificateParams, DistinguishedName, DnType, KeyPair, SanType};
 pub fn generate_self_signed_pem(bound_ip: Option<IpAddr>) -> anyhow::Result<(Vec<u8>, Vec<u8>)> {
     let mut params = CertificateParams::default();
     let mut dn = DistinguishedName::new();
-    dn.push(DnType::CommonName, "Decktective Remote");
-    dn.push(DnType::OrganizationName, "Decktective");
+    dn.push(DnType::CommonName, "Decktector Remote");
+    dn.push(DnType::OrganizationName, "Decktector");
     params.distinguished_name = dn;
 
     let mut subject_alt_names = vec![

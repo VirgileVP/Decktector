@@ -39,4 +39,4 @@ capture/
 *.pcapng
 # Simulator track fixtures built from a capture (`sim-fixtures`): same real
 # library metadata as the capture they come from, and rebuildable from it.
-crates/decktective-core/fixtures/
+crates/decktector-core/fixtures/

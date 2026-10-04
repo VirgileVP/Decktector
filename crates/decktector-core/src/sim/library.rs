@@ -25,7 +25,7 @@ use crate::model::TrackInfo;
 use super::tracks::{build_sim_track, SIM_TRACKS};
 
 /// Environment variable naming a fixture file of recorded tracks.
-pub const SIM_TRACKS_ENV: &str = "DECKTECTIVE_SIM_TRACKS";
+pub const SIM_TRACKS_ENV: &str = "DECKTECTOR_SIM_TRACKS";
 
 /// The set of tracks the simulated decks draw from.
 pub struct SimLibrary {
@@ -170,7 +170,7 @@ mod tests {
     /// `sim-fixtures` and this.
     #[test]
     fn a_written_fixture_file_reads_back() {
-        let path = std::env::temp_dir().join("decktective-sim-library-round-trip.json");
+        let path = std::env::temp_dir().join("decktector-sim-library-round-trip.json");
         let written = vec![track_named("First", 11), track_named("Second", 22)];
         std::fs::write(&path, serde_json::to_vec(&written).expect("serialises")).expect("writes");
 
@@ -185,7 +185,7 @@ mod tests {
     /// modulo zero.
     #[test]
     fn an_empty_fixture_file_is_rejected() {
-        let path = std::env::temp_dir().join("decktective-sim-library-empty.json");
+        let path = std::env::temp_dir().join("decktector-sim-library-empty.json");
         std::fs::write(&path, b"[]").expect("writes");
 
         assert!(SimLibrary::from_fixture_file(&path).is_err());

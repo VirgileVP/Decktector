@@ -6,7 +6,7 @@ import { startFrameLoop } from '../lib/frame-loop'
 import { canvasInk, type CanvasInk } from '../lib/ink'
 import { estimatePlayheadMs } from '../lib/playhead'
 import { useSettings } from '../state/settings'
-import { useDecktectiveStore } from '../state/store'
+import { useDecktectorStore } from '../state/store'
 
 interface WaveformOverviewProps {
   deckId: DeckId
@@ -70,7 +70,7 @@ export function WaveformOverview({
 
       const preview = track?.waveform?.preview ?? null
       const hasWave = track !== null && preview !== null && preview.length > 0
-      const deck = useDecktectiveStore.getState().decks[deckId]
+      const deck = useDecktectorStore.getState().decks[deckId]
       const playhead = hasWave ? estimatePlayheadMs(deck, Date.now()) : null
       // A playhead is only ever set when `hasWave` held, i.e. with a track in
       // hand; the fallback duration just keeps the arithmetic total.

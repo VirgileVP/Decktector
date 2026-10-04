@@ -95,7 +95,7 @@ pub fn memory_cue_color_hex(color: ColorIndex) -> Option<&'static str> {
 }
 
 /// Per-kind fallback when neither of the above gives a color — ported
-/// directly from decktective's pre-Rust engine's `cues.ts`.
+/// directly from decktector's pre-Rust engine's `cues.ts`.
 pub const DEFAULT_MEMORY_COLOR: &str = "#ff9f2e";
 pub const DEFAULT_HOTCUE_COLOR: &str = "#12d17e";
 pub const DEFAULT_LOOP_COLOR: &str = "#ff8a00";

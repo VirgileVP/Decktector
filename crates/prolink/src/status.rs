@@ -4,7 +4,7 @@
 //!
 //! Byte offsets come from Deep Symmetry's protocol analysis
 //! (<https://djl-analysis.deepsymmetry.org/djl-analysis/vcdj.html>), cross
-//! -checked against decktective's pre-Rust engine (which read the same
+//! -checked against decktector's pre-Rust engine (which read the same
 //! packet through the `prolink-connect` library, verified against real
 //! hardware over a full development cycle) to make sure the offsets used
 //! here are the ones that actually mattered in practice, not just what the
@@ -97,8 +97,8 @@ impl MediaSlot {
 
 /// The player's own play-mode byte (`P1` in Deep Symmetry's naming, offset
 /// [`PLAY_STATE_OFFSET`]) — Pioneer's actual state names, richer than
-/// decktective's own `PlayState`, which folds several of these together
-/// (see `prolink-engine::normalize`, and decktective's pre-Rust engine's
+/// decktector's own `PlayState`, which folds several of these together
+/// (see `prolink-engine::normalize`, and decktector's pre-Rust engine's
 /// `normalize.ts`, which folds the same `prolink-connect`-decoded states the
 /// same way). Kept at this fidelity here rather than pre-folded, since it's
 /// what the protocol actually reports and folding is a domain-mapping
@@ -122,8 +122,8 @@ pub enum RawPlayState {
     Ended,
     EmergencyLoop,
     /// A value this parser doesn't recognize — normalize.rs treats this the
-    /// same way decktective's pre-Rust engine treated any state its own
-    /// lookup table didn't cover: as [`decktective_core`]'s `PlayState::Empty`,
+    /// same way decktector's pre-Rust engine treated any state its own
+    /// lookup table didn't cover: as [`decktector_core`]'s `PlayState::Empty`,
     /// the safest default when the meaning is genuinely unknown.
     Unknown(u8),
 }
@@ -266,7 +266,7 @@ pub fn build_status(
     packet[DEVICE_NUMBER_OFFSET] = device_number;
     packet[TRACK_DEVICE_OFFSET] = device_number;
     packet[MEDIA_SLOT_OFFSET] = 0x03; // USB, the common case for tests/sim.
-    packet[TRACK_TYPE_OFFSET] = 0x01; // Rekordbox-analyzed, the only kind decktective reads.
+    packet[TRACK_TYPE_OFFSET] = 0x01; // Rekordbox-analyzed, the only kind decktector reads.
     packet[PLAY_STATE_OFFSET] = play_state.to_byte();
 
     let mut flags = 0u8;

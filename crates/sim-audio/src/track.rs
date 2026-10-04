@@ -3,8 +3,8 @@
 
 use std::path::Path;
 
-use decktective_core::model::{BeatGridBeat, TrackCue, TrackEvent, TrackInfo, WaveformData};
-use decktective_core::structure::{self, StructureInput};
+use decktector_core::model::{BeatGridBeat, TrackCue, TrackEvent, TrackInfo, WaveformData};
+use decktector_core::structure::{self, StructureInput};
 
 use crate::columns::{self, Column};
 use crate::cues;

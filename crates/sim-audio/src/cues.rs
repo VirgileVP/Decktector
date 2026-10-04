@@ -7,13 +7,13 @@
 //! honest about being derived: they sit exactly where the section analysis
 //! put a boundary, not two bars before the drop the way a DJ's ear does.
 
-use decktective_core::model::{CueKind, TrackCue, TrackEvent, TrackEventKind};
+use decktector_core::model::{CueKind, TrackCue, TrackEvent, TrackEventKind};
 
 /// Hot cue buttons a CDJ offers. Boundaries past the eighth become memory
 /// cues, the way a DJ who has run out of buttons would store them.
 const HOT_CUE_BUTTONS: [&str; 8] = ["A", "B", "C", "D", "E", "F", "G", "H"];
 /// Marker colours, matching the generated simulation tracks
-/// (`decktective_core::sim`) so both libraries read the same on screen.
+/// (`decktector_core::sim`) so both libraries read the same on screen.
 const DROP_COLOR: &str = "#0a84ff";
 const BREAK_COLOR: &str = "#ffd60a";
 const BUILD_COLOR: &str = "#12d17e";

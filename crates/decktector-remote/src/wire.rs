@@ -5,8 +5,8 @@
 //! stays the single definition of the contract — the same strings the
 //! Tauri bridge emits on.
 
-use decktective_core::model::{EngineSnapshot, TrackInfo};
-use decktective_core::EngineEvent;
+use decktector_core::model::{EngineSnapshot, TrackInfo};
+use decktector_core::EngineEvent;
 use serde::{Deserialize, Serialize};
 
 /// Channel carrying the hydration message sent right after a browser
@@ -81,7 +81,7 @@ fn strip_heavy_payload(mut track: TrackInfo) -> TrackInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use decktective_core::model::{DeckState, DeckTrack, DeviceInfo, NetworkState, PlayState};
+    use decktector_core::model::{DeckState, DeckTrack, DeviceInfo, NetworkState, PlayState};
 
     fn every_event() -> Vec<EngineEvent> {
         vec![
@@ -147,7 +147,7 @@ mod tests {
     }
 
     fn track_with_heavy_payload() -> TrackInfo {
-        use decktective_core::sim::{build_sim_track, SIM_TRACKS};
+        use decktector_core::sim::{build_sim_track, SIM_TRACKS};
 
         let mut track = build_sim_track(&SIM_TRACKS[0], 1);
         assert!(

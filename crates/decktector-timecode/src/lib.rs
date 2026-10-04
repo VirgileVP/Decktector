@@ -15,15 +15,15 @@ pub mod artnet;
 pub mod ltc;
 pub mod mtc;
 
-/// Re-exported so existing callers keep writing `decktective_timecode::network::*` —
-/// the lookup itself now lives in `decktective-net`, shared with the remote service.
-pub use decktective_net as network;
+/// Re-exported so existing callers keep writing `decktector_timecode::network::*` —
+/// the lookup itself now lives in `decktector-net`, shared with the remote service.
+pub use decktector_net as network;
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use decktective_core::model::{DeckId, DeckState, PlayState};
-use decktective_core::Engine;
+use decktector_core::model::{DeckId, DeckState, PlayState};
+use decktector_core::Engine;
 use serde::{Deserialize, Serialize};
 use tokio::net::UdpSocket;
 use tokio::sync::{broadcast, watch};

@@ -1,6 +1,6 @@
-//! Maps a raw [`DeviceStatus`] onto decktective's domain [`DeckState`].
+//! Maps a raw [`DeviceStatus`] onto decktector's domain [`DeckState`].
 
-use decktective_core::model::{DeckState, PlayState};
+use decktector_core::model::{DeckState, PlayState};
 use prolink::status::{DeviceStatus, RawPlayState};
 
 /// Builds the deck state a status packet implies, anchored at `now_ms`.
@@ -25,8 +25,8 @@ pub fn to_deck_state(status: &DeviceStatus, playhead_ms: Option<f64>, now_ms: f6
     }
 }
 
-/// Folds Pioneer's own play-mode states onto decktective's simpler model —
-/// the same folding decktective's pre-Rust engine applied to the equivalent
+/// Folds Pioneer's own play-mode states onto decktector's simpler model —
+/// the same folding decktector's pre-Rust engine applied to the equivalent
 /// states `prolink-connect` decoded (`normalize.ts`'s `PLAY_STATE_MAP`):
 /// looping counts as playing, both "paused at the cue point" and "cue play
 /// in progress" read as cued, and "cue scratch in progress" reads as

@@ -1,4 +1,4 @@
-//! Normalized domain model for Decktective.
+//! Normalized domain model for Decktector.
 //!
 //! Everything the UI consumes is expressed with these types — the renderer
 //! never sees Pro DJ Link structures. Both the real engine and the simulation

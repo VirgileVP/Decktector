@@ -20,7 +20,7 @@ use axum::Router;
 type ServerHandle = axum_server::Handle<SocketAddr>;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine as _;
-use decktective_core::Engine;
+use decktector_core::Engine;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
@@ -437,7 +437,7 @@ fn bind_ipv4(interface: &str) -> Ipv4Addr {
     if interface.is_empty() {
         return Ipv4Addr::UNSPECIFIED;
     }
-    decktective_net::resolve_ipv4(interface).unwrap_or_else(|error| {
+    decktector_net::resolve_ipv4(interface).unwrap_or_else(|error| {
         tracing::warn!(
             %error,
             interface,
@@ -556,7 +556,7 @@ fn immutable_response(content_type: String, body: Vec<u8>) -> Response {
 /// (see `model.rs`), turned back into a real HTTP response instead of a
 /// JSON string riding along on the WebSocket.
 ///
-/// [`TrackInfo::artwork`]: decktective_core::model::TrackInfo::artwork
+/// [`TrackInfo::artwork`]: decktector_core::model::TrackInfo::artwork
 fn decode_data_url(data_url: &str) -> Option<(String, Vec<u8>)> {
     let rest = data_url.strip_prefix("data:")?;
     let (meta, payload) = rest.split_once(',')?;
@@ -576,7 +576,7 @@ struct TokenQuery {
 /// query string onto the `<script src>`/`<link href>` requests that page
 /// goes on to make. Without this, the very first asset request for the
 /// bundle's JS would 401, and the page would stay blank.
-const TOKEN_COOKIE: &str = "decktective_remote_token";
+const TOKEN_COOKIE: &str = "decktector_remote_token";
 
 /// The token from the query string if present, otherwise from
 /// [`TOKEN_COOKIE`] — the fallback that lets a browser's own follow-up
@@ -734,7 +734,7 @@ async fn handle_socket(mut socket: WebSocket, service: Arc<RemoteService>) {
 
 #[cfg(test)]
 mod tests {
-    use decktective_core::sim::SimEngine;
+    use decktector_core::sim::SimEngine;
 
     use super::*;
 

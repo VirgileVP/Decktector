@@ -13,8 +13,8 @@
 use std::net::Ipv4Addr;
 use std::time::Duration;
 
-use decktective_core::model::PlayState;
-use decktective_core::Engine;
+use decktector_core::model::PlayState;
+use decktector_core::Engine;
 use prolink::beat::build_beat_packet;
 use prolink::discovery::{build_keepalive, DeviceWatcher};
 use prolink::status::{build_status, RawPlayState};
@@ -55,7 +55,7 @@ async fn reports_a_playing_deck_from_simulated_wire_traffic() {
     broadcaster.abort();
 }
 
-async fn wait_for_deck(engine: &ProlinkEngine) -> decktective_core::model::DeckState {
+async fn wait_for_deck(engine: &ProlinkEngine) -> decktector_core::model::DeckState {
     loop {
         if let Some(deck) =
             engine.handle().snapshot().decks.into_iter().find(|deck| {

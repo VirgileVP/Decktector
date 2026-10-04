@@ -1,5 +1,5 @@
 [package]
-name = "decktective-timecode"
+name = "decktector-timecode"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -9,8 +9,8 @@ description = "Timecode generation (Art-Net TC, MTC and LTC) driven by a deck's 
 [dependencies]
 anyhow = { workspace = true }
 cpal = { workspace = true }
-decktective-core = { workspace = true }
-decktective-net = { workspace = true }
+decktector-core = { workspace = true }
+decktector-net = { workspace = true }
 midir = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }

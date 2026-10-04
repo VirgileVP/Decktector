@@ -1,4 +1,4 @@
-//! Claims a virtual-CDJ identity for Decktective on the Pro DJ Link network.
+//! Claims a virtual-CDJ identity for Decktector on the Pro DJ Link network.
 //!
 //! Deep Symmetry's analysis of the startup handshake
 //! (<https://djl-analysis.deepsymmetry.org/djl-analysis/startup.html>)
@@ -18,7 +18,7 @@
 //! passive, already-correct read path used elsewhere) and broadcasts the
 //! settled-state keep-alive real players use once they're done claiming —
 //! [`crate::discovery::build_keepalive`], already byte-verified by its own
-//! tests. This is enough for decktective to show up as a peer in its own
+//! tests. This is enough for decktector to show up as a peer in its own
 //! diagnostics panel and to have an identity for later phases' metadata
 //! queries, without ever transmitting a claim-stage packet this
 //! implementation can't fully verify. If it turns out real hardware needs
@@ -49,7 +49,7 @@ use crate::ANNOUNCE_PORT;
 /// [`crate::discovery`]'s module doc).
 const KEEPALIVE_INTERVAL: Duration = Duration::from_millis(1500);
 
-/// Decktective's default virtual player number when available — chosen as 7
+/// Decktector's default virtual player number when available — chosen as 7
 /// (the standard virtual CDJ identifier, used by Rekordbox Link Export and
 /// ShowKontrol) so it never collides with physical CDJ hardware (which only
 /// supports player numbers 1 to 6).
@@ -67,7 +67,7 @@ const BROADCAST_ADDR: Ipv4Addr = Ipv4Addr::new(255, 255, 255, 255);
 /// there is one Pro DJ Link identity per process — and because
 /// [`is_own_broadcast`] is called from code that has no handle on
 /// [`Presence`] (`prolink_engine::engine`'s deck mapping). Updated if
-/// decktective re-binds to a different network interface.
+/// decktector re-binds to a different network interface.
 static ANNOUNCED_MAC: RwLock<Option<[u8; 6]>> = RwLock::new(None);
 
 /// Fallback MAC for our virtual identity when the real adapter's can't be
@@ -93,7 +93,7 @@ fn mac_string(mac: [u8; 6]) -> String {
 ///
 /// Deep Symmetry's virtual-CDJ notes say to announce "your actual MAC and
 /// IP addresses"; the 2026-08-19 hardware session showed why. Announcing a
-/// synthetic MAC with the correct IP got decktective counted as a peer by
+/// synthetic MAC with the correct IP got decktector counted as a peer by
 /// two CDJ-3000s and a DJM-900NXS2 — their keep-alives' peer counts went up
 /// — while not one status packet ever arrived, which is what it looks like
 /// when the players address their status frames straight to the MAC from
@@ -222,14 +222,14 @@ fn pick_device_number(taken: &[u8], preferred_override: Option<u8>) -> Option<u8
         .find(|number| !taken.contains(number))
 }
 
-/// Whether `device` is decktective's own presence broadcast rather than a
+/// Whether `device` is decktector's own presence broadcast rather than a
 /// real or simulated peer — recognized by the MAC we are announcing with,
 /// so a genuine collision (another device on our number, with its own MAC)
 /// is still detected as a conflict. Public so
 /// callers building on [`DeviceWatcher`]'s list (e.g. mapping it to deck
 /// connect/disconnect events) can filter our own entry out the same way.
 pub fn is_own_broadcast(device: &DiscoveredDevice) -> bool {
-    if device.name.eq_ignore_ascii_case("decktective") {
+    if device.name.eq_ignore_ascii_case("decktector") {
         return true;
     }
     let guard = ANNOUNCED_MAC.read().unwrap_or_else(|p| p.into_inner());
@@ -253,7 +253,7 @@ fn peer_count(devices: &[DiscoveredDevice]) -> u8 {
     u8::try_from(others + 1).unwrap_or(u8::MAX)
 }
 
-/// Owns decktective's claimed virtual player number, once one is picked.
+/// Owns decktector's claimed virtual player number, once one is picked.
 pub struct Presence {
     device_number_tx: watch::Sender<Option<u8>>,
     /// Kept alive purely so `device_number_tx` always has at least one
@@ -263,7 +263,7 @@ pub struct Presence {
     /// `None` forever, receivers or not.
     device_number_rx: watch::Receiver<Option<u8>>,
     /// A specific number to prefer over [`PREFERRED_DEVICE_NUMBER`], e.g.
-    /// from decktective's `DECKTECTIVE_VCDJ_ID` escape hatch (see the
+    /// from decktector's `DECKTECTOR_VCDJ_ID` escape hatch (see the
     /// project's README) for claiming a number in the 1-4 range metadata
     /// queries need once a real device frees one up. Out-of-range values
     /// (outside 1-7) are ignored rather than rejected here — the caller
@@ -293,14 +293,14 @@ impl Presence {
     /// Runs until the process exits: claims a number, broadcasts a
     /// settled-state keep-alive for it on every tick, and re-claims if
     /// another device is later seen using our number. `name` is what shows
-    /// up as decktective's device name in other tools' device lists.
+    /// up as decktector's device name in other tools' device lists.
     ///
     /// `bind_ip` is the specific network adapter to send from — unlike a
     /// receiver (fine to bind `UNSPECIFIED` and take broadcasts arriving on
     /// any interface, see [`crate::discovery::DeviceWatcher`]), a broadcast
     /// *send* on a multi-NIC machine needs a concrete source interface or
     /// the OS routing table picks one, which is not reliably the booth's
-    /// adapter (mirrors `decktective_timecode`'s `bind_socket`).
+    /// adapter (mirrors `decktector_timecode`'s `bind_socket`).
     ///
     /// A bind failure is logged and this task simply never broadcasts,
     /// rather than taking the engine down over one socket — status/beat
@@ -345,7 +345,7 @@ impl Presence {
             }
         };
         *ANNOUNCED_MAC.write().unwrap_or_else(|p| p.into_inner()) = Some(mac);
-        tracing::info!(mac = %mac_string(mac), %bind_ip, "announcing decktective's presence");
+        tracing::info!(mac = %mac_string(mac), %bind_ip, "announcing decktector's presence");
 
         let mut devices_rx = device_watcher.subscribe();
         self.ensure_claimed(&device_watcher.devices());
@@ -478,7 +478,7 @@ mod tests {
     #[test]
     fn our_own_broadcast_recognized_by_name() {
         let mut d = device(7, "aa:bb:cc:dd:ee:ff");
-        d.name = "decktective".to_string();
+        d.name = "decktector".to_string();
         assert!(is_own_broadcast(&d));
     }
 

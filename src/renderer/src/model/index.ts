@@ -2,7 +2,7 @@
  * The normalized domain model, as the renderer sees it.
  *
  * Every sibling module in this directory is generated from the Rust
- * definitions in `crates/decktective-core/src/model.rs` by `cargo test` —
+ * definitions in `crates/decktector-core/src/model.rs` by `cargo test` —
  * do not edit them. This barrel is the one hand-written file here, so the UI
  * can import the whole model from a single path.
  */

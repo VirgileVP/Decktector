@@ -5,7 +5,7 @@ import { useEffectiveOnAirSource } from '../state/deck-activity'
 import type { DownloadState } from '../state/download'
 import { useTrackDownloadStore } from '../state/download'
 import { useSettings } from '../state/settings'
-import { useDecktectiveStore } from '../state/store'
+import { useDecktectorStore } from '../state/store'
 import { selectTimecodeSource, useTimecodeStore } from '../state/timecode'
 import type { DeckBarFields, DeckBarLayout } from './DeckBarLayout'
 import { DeckStat } from './DeckStat'
@@ -21,7 +21,7 @@ interface DeckBarProps {
 
 /** The deck's identity block and its TC / transport / sync / time / pitch / BPM readouts. */
 export function DeckBar({ deckId, track, fields, layout }: DeckBarProps): React.JSX.Element {
-  const deck = useDecktectiveStore((s) => s.decks[deckId])
+  const deck = useDecktectorStore((s) => s.decks[deckId])
   const isTimecodeSource = useTimecodeStore((s) => s.sourceDeckId === deckId)
   const allowTrackDownload = useSettings((s) => s.allowTrackDownload)
   const downloadState = useTrackDownloadStore((s) => s.downloads[deckId] ?? IDLE_DOWNLOAD_STATE)
@@ -101,7 +101,7 @@ export function DeckBar({ deckId, track, fields, layout }: DeckBarProps): React.
                         ? `Downloaded: ${downloadState.filename}`
                         : downloadState.status === 'error'
                           ? `Download failed: ${downloadState.message}`
-                          : 'Download track to Downloads/Decktective'
+                          : 'Download track to Downloads/Decktector'
                   }
                   disabled={downloadState.status === 'downloading'}
                   onClick={() => void startDownload(deckId)}

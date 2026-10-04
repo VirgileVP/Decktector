@@ -19,7 +19,7 @@ import { connectPanelWindowRegistry } from './state/panel-windows'
 import { connectRemoteToEngine } from './state/remote'
 import { connectSettingsBroadcast } from './state/settings-broadcast'
 import { connectSettingsToApp } from './state/settings-sync'
-import { connectStoreToEngine, useDecktectiveStore } from './state/store'
+import { connectStoreToEngine, useDecktectorStore } from './state/store'
 import { connectTimecodeToEngine } from './state/timecode'
 import { useClockNow } from './state/wall-clock'
 
@@ -68,7 +68,7 @@ function App(): React.JSX.Element {
 
   const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null)
 
-  const networkState = useDecktectiveStore((s) => s.networkState)
+  const networkState = useDecktectorStore((s) => s.networkState)
   const lastDeviceSeenAt = useDevicesStore((s) => s.lastSeenAt)
   // Piggybacks on the app's one shared per-second tick so the "last seen"
   // label stays live without a second timer or an impure `Date.now()` read
@@ -79,7 +79,7 @@ function App(): React.JSX.Element {
     networkFailed && lastDeviceSeenAt !== null
       ? ` — last seen ${formatElapsed(nowMs - lastDeviceSeenAt)} ago`
       : ''
-  const deckIds = useDecktectiveStore(
+  const deckIds = useDecktectorStore(
     useShallow((s) =>
       Object.keys(s.decks)
         .map(Number)
@@ -108,7 +108,7 @@ function App(): React.JSX.Element {
             <button
               type="button"
               className="network-status network-failed network-status-action"
-              title="Connection failed — open Devices to check what Decktective can see on the network"
+              title="Connection failed — open Devices to check what Decktector can see on the network"
               onClick={() => setSettingsTab('Devices')}
             >
               <span className="network-dot" />

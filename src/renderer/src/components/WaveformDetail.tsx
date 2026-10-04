@@ -7,7 +7,7 @@ import { canvasInk, type CanvasInk } from '../lib/ink'
 import { estimatePlayheadMs } from '../lib/playhead'
 import { stripCovers, stripRangeFor, stripWidthPx, type StripRange } from '../lib/waveform-strip'
 import { useSettings } from '../state/settings'
-import { useDecktectiveStore } from '../state/store'
+import { useDecktectorStore } from '../state/store'
 
 /** Default seconds of audio visible across the full width of the canvas. */
 const DEFAULT_WINDOW_SEC = 8
@@ -111,7 +111,7 @@ export function WaveformDetail({
       const msPerPx = (windowSec * 1000) / width
 
       const waveform = track?.waveform
-      const deck = useDecktectiveStore.getState().decks[deckId]
+      const deck = useDecktectorStore.getState().decks[deckId]
       const playhead = estimatePlayheadMs(deck, Date.now())
       const ink = canvasInk()
       // Read straight from the store: the rAF loop must not depend on a render.

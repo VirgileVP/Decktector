@@ -9,8 +9,8 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
-use decktective_core::model::{DeckId, DeviceInfo, NetworkState};
-use decktective_core::{Engine, EngineHandle};
+use decktector_core::model::{DeckId, DeviceInfo, NetworkState};
+use decktector_core::{Engine, EngineHandle};
 use prolink::beat::{BeatMessage, BeatWatcher};
 use prolink::discovery::{conflicting_numbers, DeviceKind, DeviceWatcher, DiscoveredDevice};
 use prolink::presence::Presence;
@@ -23,9 +23,9 @@ use crate::network::{self, InterfacePreference};
 use crate::normalize::to_deck_state;
 use crate::position::PositionTracker;
 
-/// Decktective's device name, as it appears in other Pro DJ Link tools'
+/// Decktector's device name, as it appears in other Pro DJ Link tools'
 /// device lists once presence has claimed a number.
-const DEVICE_NAME: &str = "decktective";
+const DEVICE_NAME: &str = "decktector";
 
 /// Real Pro DJ Link backend. Shares its [`DeviceWatcher`] with the
 /// diagnostics device panel (`src-tauri/src/devices.rs`) rather than owning
@@ -514,14 +514,14 @@ fn warn_about_number_conflicts(warned: &mut BTreeSet<u8>, devices: &[DiscoveredD
     }
 }
 
-/// `DECKTECTIVE_VCDJ_ID`: claim a specific virtual player number instead of
+/// `DECKTECTOR_VCDJ_ID`: claim a specific virtual player number instead of
 /// the default 5 — documented in the project's README as the escape hatch
 /// for a full four-player network, where metadata queries (phase 3+) need a
 /// number in 1-4 and one has been freed by renumbering a real player out of
 /// the way. An unset or unparseable value means no override, the same as
 /// before this env var existed.
 fn vcdj_id_override() -> Option<u8> {
-    std::env::var("DECKTECTIVE_VCDJ_ID")
+    std::env::var("DECKTECTOR_VCDJ_ID")
         .ok()
         .and_then(|value| value.parse().ok())
 }

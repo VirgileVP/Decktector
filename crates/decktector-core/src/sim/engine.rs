@@ -259,7 +259,7 @@ impl Engine for SimEngine {
 
         tokio::fs::write(
             &dest_file,
-            b"ID3\x03\x00\x00\x00\x00\x00\x00SIMULATED_AUDIO_DECKTECTIVE",
+            b"ID3\x03\x00\x00\x00\x00\x00\x00SIMULATED_AUDIO_DECKTECTOR",
         )
         .await?;
         Ok(dest_file)

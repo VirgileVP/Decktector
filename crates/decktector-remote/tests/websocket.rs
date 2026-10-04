@@ -4,11 +4,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use decktective_core::sim::SimEngine;
-use decktective_core::Engine;
-use decktective_remote::server::{RemoteConfig, RemoteService};
-use decktective_remote::wire::{RemoteMessage, SNAPSHOT_CHANNEL};
-use decktective_remote::AssetSource;
+use decktector_core::sim::SimEngine;
+use decktector_core::Engine;
+use decktector_remote::server::{RemoteConfig, RemoteService};
+use decktector_remote::wire::{RemoteMessage, SNAPSHOT_CHANNEL};
+use decktector_remote::AssetSource;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_tungstenite::tungstenite::Message;

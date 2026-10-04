@@ -1,5 +1,5 @@
 ---
-name: Decktective
+name: Decktector
 description: Real-time visualizer for Pioneer Pro DJ Link decks, read by the people outside the booth.
 colors:
   bg: '#08090b'
@@ -95,13 +95,13 @@ components:
     padding: '2px 7px'
 ---
 
-# Design System: Decktective
+# Design System: Decktector
 
 ## Overview
 
 **Creative North Star: "The Broadcast Console"**
 
-Decktective is read by the people around the booth, not by the DJ at the decks: a VJ keying a deck into a video mixer, a lighting operator glancing at a tablet, a technician verifying network state. The system reads as a piece of monitoring hardware built into software — a broadcast console, not a media player skin. Surfaces stay dark, dense and near-flat by default; light exists to carry meaning (on-air red, sync blue, a fixed hardware-green timecode LED) before it exists to decorate. Six selectable themes (neon, dark, light, contrast, amber, midnight) swap the palette's channel values without changing this structure — every surface, spacing and radius decision in this file holds across all six.
+Decktector is read by the people around the booth, not by the DJ at the decks: a VJ keying a deck into a video mixer, a lighting operator glancing at a tablet, a technician verifying network state. The system reads as a piece of monitoring hardware built into software — a broadcast console, not a media player skin. Surfaces stay dark, dense and near-flat by default; light exists to carry meaning (on-air red, sync blue, a fixed hardware-green timecode LED) before it exists to decorate. Six selectable themes (neon, dark, light, contrast, amber, midnight) swap the palette's channel values without changing this structure — every surface, spacing and radius decision in this file holds across all six.
 
 The system is mid-evolution: its current instrumented character (very small text, 3–4px radii, glow as the only depth cue) is being softened toward "doux et confiant" — the same console, held with a steadier hand. New and touched components should read a half-step warmer and a half-step more settled than the oldest code, without losing the console's density or its state-first color logic.
 

@@ -83,7 +83,7 @@ def main():
     ap.add_argument("--exclude-src", action="append", default=[],
                     help="drop packets from this source IP; repeatable. Use it to strip the capturing "
                          "host's own virtual-CDJ keep-alives, which a replay would otherwise see as a "
-                         "second decktective on the network.")
+                         "second decktector on the network.")
     args = ap.parse_args()
 
     tshark = find_tshark()

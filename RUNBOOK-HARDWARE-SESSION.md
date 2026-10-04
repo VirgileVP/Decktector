@@ -6,7 +6,7 @@ tooling open and no assistant available. See `HARDWARE-CAPTURE-PLAN.md` for
 why this tooling exists and exactly what it captures.
 
 **The point of this session is to capture bytes, not to debug the app.**
-None of this needs the Decktective app to work at all. If the app is broken
+None of this needs the Decktector app to work at all. If the app is broken
 on the day, the session is still a complete success — every parser question
 gets answered afterwards, offline, against what got captured.
 
@@ -39,7 +39,7 @@ still documented at the bottom, for when something needs to be done by hand.
 
 ## On arrival
 
-1. **Close Rekordbox _and the Decktective app_** on the laptop. Both
+1. **Close Rekordbox _and the Decktector app_** on the laptop. Both
    compete for the same virtual-player slot, and the app is the easier one
    to leave running by accident — a `tauri dev` window behind the terminal
    is enough. It binds the same three UDP ports, and because player status

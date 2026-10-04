@@ -294,7 +294,7 @@ interface SettingsActions {
   applyDeckViewPreset(preset: DeckViewPreset): void
 }
 
-const SETTINGS_STORAGE_KEY = 'decktective.settings'
+const SETTINGS_STORAGE_KEY = 'decktector.settings'
 
 /**
  * User preferences, persisted as they change. Nothing here reaches the outside

@@ -1,10 +1,10 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/decktective-core",
-    "crates/decktective-net",
-    "crates/decktective-remote",
-    "crates/decktective-timecode",
+    "crates/decktector-core",
+    "crates/decktector-net",
+    "crates/decktector-remote",
+    "crates/decktector-timecode",
     "crates/prolink",
     "crates/prolink-engine",
     "crates/sim-audio",
@@ -18,10 +18,10 @@ authors = ["Virgile Pornet"]
 license = "MIT"
 
 [workspace.dependencies]
-decktective-core = { path = "crates/decktective-core" }
-decktective-net = { path = "crates/decktective-net" }
-decktective-remote = { path = "crates/decktective-remote" }
-decktective-timecode = { path = "crates/decktective-timecode" }
+decktector-core = { path = "crates/decktector-core" }
+decktector-net = { path = "crates/decktector-net" }
+decktector-remote = { path = "crates/decktector-remote" }
+decktector-timecode = { path = "crates/decktector-timecode" }
 prolink = { path = "crates/prolink" }
 prolink-engine = { path = "crates/prolink-engine" }
 

@@ -1,4 +1,4 @@
-use decktective_core::sim::{build_sim_track, SIM_TRACKS};
+use decktector_core::sim::{build_sim_track, SIM_TRACKS};
 
 #[test]
 fn probe() {

@@ -196,7 +196,7 @@ impl LtcStream {
         let thread_stop = Arc::clone(&stop);
         let owned_device_name = device_name.to_string();
         let thread = thread::Builder::new()
-            .name("decktective-ltc".into())
+            .name("decktector-ltc".into())
             .spawn(move || {
                 run_audio_thread(&owned_device_name, thread_latch, thread_stop, ready_tx)
             })

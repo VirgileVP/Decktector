@@ -6,11 +6,11 @@
 //! the point: a [`TrackInfo`] carries a whole waveform, and a busy night can
 //! have several browsers watching at once.
 //!
-//! [`TrackInfo`]: decktective_core::model::TrackInfo
+//! [`TrackInfo`]: decktector_core::model::TrackInfo
 
 use std::sync::Arc;
 
-use decktective_core::Engine;
+use decktector_core::Engine;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
 
@@ -79,7 +79,7 @@ impl RemoteHub {
     /// currently has it loaded — what the `/track/{id}/artwork` and
     /// `/track/{id}/waveform` HTTP routes read from, since the WebSocket
     /// stream itself no longer carries either (see [`wire::from_event`]).
-    pub fn track(&self, track_id: u32) -> Option<decktective_core::model::TrackInfo> {
+    pub fn track(&self, track_id: u32) -> Option<decktector_core::model::TrackInfo> {
         self.engine
             .handle()
             .snapshot()
@@ -106,12 +106,12 @@ impl RemoteHub {
 mod tests {
     use std::time::Duration;
 
-    use decktective_core::model::{DeckState, PlayState};
-    use decktective_core::sim::SimEngine;
+    use decktector_core::model::{DeckState, PlayState};
+    use decktector_core::sim::SimEngine;
 
     use super::*;
 
-    fn deck(deck_id: decktective_core::model::DeckId) -> DeckState {
+    fn deck(deck_id: decktector_core::model::DeckId) -> DeckState {
         DeckState {
             deck_id,
             play_state: PlayState::Playing,
@@ -163,7 +163,7 @@ mod tests {
         let message: wire::RemoteMessage = serde_json::from_str(&text).expect("valid JSON");
         assert_eq!(message.channel, wire::SNAPSHOT_CHANNEL);
 
-        let _snapshot: decktective_core::model::EngineSnapshot =
+        let _snapshot: decktector_core::model::EngineSnapshot =
             serde_json::from_value(message.payload).expect("payload is a valid snapshot");
     }
 }

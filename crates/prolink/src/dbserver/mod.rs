@@ -1,13 +1,13 @@
 //! The dbserver/remotedb protocol: a TCP query service every player runs,
 //! used here to fetch track metadata, beat grid, cues and waveform for
 //! whatever track a deck has loaded. No domain knowledge here — mapping
-//! onto `decktective_core::model::TrackInfo` lives in
+//! onto `decktector_core::model::TrackInfo` lives in
 //! `prolink-engine::metadata`, the same split `status.rs`/`beat.rs` use.
 //!
 //! See [`client`]'s doc comment for the confidence level of the exact wire
 //! bytes: the message envelope and query/response type ids are cross
 //! -checked against Deep Symmetry's `beat-link`, but nothing in
-//! decktective's history exercised this exact TCP exchange before this
+//! decktector's history exercised this exact TCP exchange before this
 //! module, unlike the UDP parsers elsewhere in this crate.
 
 pub mod beatgrid;

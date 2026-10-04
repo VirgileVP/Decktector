@@ -9,7 +9,7 @@ export type DeckView = (typeof DECK_VIEWS)[number]
 
 export const DEFAULT_DECK_VIEW: DeckView = 'stack'
 
-export const DECK_VIEW_STORAGE_KEY = 'decktective.view'
+export const DECK_VIEW_STORAGE_KEY = 'decktector.view'
 
 /** Narrows a stored value to a known view; anything else falls back to the default. */
 export function parseDeckView(raw: string | null): DeckView {

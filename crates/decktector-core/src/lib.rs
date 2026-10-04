@@ -1,4 +1,4 @@
-//! Domain layer for Decktective: the normalized deck model, the engine
+//! Domain layer for Decktector: the normalized deck model, the engine
 //! contract every backend implements, and the scripted simulation engine.
 //!
 //! Nothing here knows about Tauri, windows or the Pro DJ Link wire format —

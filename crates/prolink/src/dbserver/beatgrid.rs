@@ -15,7 +15,7 @@ const HEADER_LEN: usize = 20;
 const ENTRY_LEN: usize = 16;
 
 /// One beat-grid entry as the dbserver reports it — protocol-shaped, not
-/// yet `decktective_core::model::BeatGridBeat` (that mapping, including
+/// yet `decktector_core::model::BeatGridBeat` (that mapping, including
 /// computing each beat's offset in ms, needs `time_ms` directly, which this
 /// format already gives per-entry, unlike the file format's beat-count
 /// -plus-tempo encoding).

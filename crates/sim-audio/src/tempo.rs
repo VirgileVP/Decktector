@@ -6,7 +6,7 @@
 //! energy for which beat starts the bar. The result is a regular grid — a
 //! real one drifts with a live take, and this does not pretend to.
 
-use decktective_core::model::BeatGridBeat;
+use decktector_core::model::BeatGridBeat;
 
 use crate::columns::{Column, DETAIL_COLUMNS_PER_SECOND};
 

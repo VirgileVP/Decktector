@@ -15,7 +15,7 @@
 //! (<https://djl-analysis.deepsymmetry.org/djl-analysis/beats.html>). That
 //! same page describes the precise-position packet as type `0x02` with a
 //! variable length driven by a `lenr` field; this implementation instead
-//! follows decktective's own pre-Rust engine, whose comments record its
+//! follows decktector's own pre-Rust engine, whose comments record its
 //! packet shape (type `0x0b`, fixed 60 bytes, position at `0x28`) as
 //! byte-for-byte verified against real CDJ-3000 hardware. That's stronger
 //! provenance than a doc page for this one packet, but the two sources
@@ -38,7 +38,7 @@ const BEAT_PITCH_OFFSET: usize = 0x54;
 const BEAT_BPM_OFFSET: usize = 0x5a;
 const BEAT_IN_BAR_OFFSET: usize = 0x5c;
 
-/// See this module's doc comment: sourced from decktective's pre-Rust
+/// See this module's doc comment: sourced from decktector's pre-Rust
 /// engine's hardware-verified comments, not the doc site (which names a
 /// different type byte and a variable length for this packet).
 const PRECISE_POSITION_PACKET_TYPE: u8 = 0x0b;

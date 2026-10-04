@@ -4,7 +4,7 @@ import type { DeckId, TrackInfo } from '../model'
 import { BEATS_PER_MEASURE, beatInMeasureAt } from '../lib/beat-grid'
 import { startFrameLoop } from '../lib/frame-loop'
 import { estimatePlayheadMs } from '../lib/playhead'
-import { useDecktectiveStore } from '../state/store'
+import { useDecktectorStore } from '../state/store'
 
 const BEATS = Array.from({ length: BEATS_PER_MEASURE }, (_, index) => index + 1)
 
@@ -34,7 +34,7 @@ export function BeatIndicator({ deckId, track }: BeatIndicatorProps): React.JSX.
     let litBeat = -1
 
     const tick = (): void => {
-      const deck = useDecktectiveStore.getState().decks[deckId]
+      const deck = useDecktectorStore.getState().decks[deckId]
       const playhead = estimatePlayheadMs(deck, Date.now())
       const gridBeat = playhead !== null ? beatInMeasureAt(track?.beatGrid, playhead) : null
       const beat = gridBeat ?? deck?.beatInMeasure ?? 0

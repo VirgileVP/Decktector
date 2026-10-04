@@ -12,7 +12,7 @@
 //! from Deep Symmetry's documentation and cross-referenced against
 //! `beat-link`'s general message envelope, but — unlike this crate's UDP
 //! parsers, which had a hardware-validated pre-Rust implementation to check
-//! against — nothing in decktective's history exercised this exact TCP
+//! against — nothing in decktector's history exercised this exact TCP
 //! byte sequence before. Treat it as the best current understanding, not
 //! confirmed-correct until it's run against a real player.
 

@@ -1,5 +1,5 @@
 import { DECK_ACCENT_COLOR } from '../lib/deck-colors'
-import { useDecktectiveStore } from '../state/store'
+import { useDecktectorStore } from '../state/store'
 import { DeckPanel } from './DeckPanel'
 
 interface DeckPanelHostProps {
@@ -16,7 +16,7 @@ interface DeckPanelHostProps {
  * must say so rather than render an empty panel.
  */
 export function DeckPanelHost({ deckId, variant }: DeckPanelHostProps): React.JSX.Element {
-  const isConnected = useDecktectiveStore((s) => deckId in s.decks)
+  const isConnected = useDecktectorStore((s) => deckId in s.decks)
 
   if (!isConnected) {
     return <div className="panel-deck-placeholder">Deck {deckId} is not connected</div>

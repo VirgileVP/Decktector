@@ -28,7 +28,7 @@ pub struct Tags {
     pub key: Option<String>,
     pub bpm: Option<f64>,
     /// Embedded cover art as a ready-to-use `data:` URL, the form
-    /// [`decktective_core::model::TrackInfo::artwork`] is served in.
+    /// [`decktector_core::model::TrackInfo::artwork`] is served in.
     pub artwork: Option<String>,
 }
 

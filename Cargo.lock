@@ -1051,14 +1051,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "decktective"
+name = "decktector"
 version = "1.2.1"
 dependencies = [
  "anyhow",
  "chrono",
- "decktective-core",
- "decktective-remote",
- "decktective-timecode",
+ "decktector-core",
+ "decktector-remote",
+ "decktector-timecode",
  "keepawake",
  "prolink",
  "prolink-engine",
@@ -1071,7 +1071,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "decktective-core"
+name = "decktector-core"
 version = "1.2.1"
 dependencies = [
  "anyhow",
@@ -1085,7 +1085,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "decktective-net"
+name = "decktector-net"
 version = "1.2.1"
 dependencies = [
  "anyhow",
@@ -1095,15 +1095,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "decktective-remote"
+name = "decktector-remote"
 version = "1.2.1"
 dependencies = [
  "anyhow",
  "axum",
  "axum-server",
  "base64 0.22.1",
- "decktective-core",
- "decktective-net",
+ "decktector-core",
+ "decktector-net",
  "futures-util",
  "http-body-util",
  "hyper-util",
@@ -1122,13 +1122,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "decktective-timecode"
+name = "decktector-timecode"
 version = "1.2.1"
 dependencies = [
  "anyhow",
  "cpal",
- "decktective-core",
- "decktective-net",
+ "decktector-core",
+ "decktector-net",
  "midir",
  "serde",
  "tokio",
@@ -3514,8 +3514,8 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "binrw",
- "decktective-core",
- "decktective-net",
+ "decktector-core",
+ "decktector-net",
  "prolink",
  "rekordcrate",
  "serde",
@@ -4216,7 +4216,7 @@ version = "1.2.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
- "decktective-core",
+ "decktector-core",
  "serde_json",
  "symphonia",
 ]

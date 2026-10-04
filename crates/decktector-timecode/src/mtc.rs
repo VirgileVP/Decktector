@@ -17,10 +17,10 @@ use midir::{MidiOutput, MidiOutputConnection};
 use crate::{FrameRate, TimeCode};
 
 /// Client name MTC output registers under with the OS's MIDI subsystem.
-const CLIENT_NAME: &str = "Decktective";
+const CLIENT_NAME: &str = "Decktector";
 /// Name of the connection this crate opens to a chosen output port — shown
 /// by some MIDI monitors alongside the port itself.
-const CONNECTION_NAME: &str = "decktective-timecode";
+const CONNECTION_NAME: &str = "decktector-timecode";
 
 const QUARTER_FRAME_STATUS: u8 = 0xF1;
 

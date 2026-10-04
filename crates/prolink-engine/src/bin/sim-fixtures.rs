@@ -1,7 +1,7 @@
 //! Turns a recorded capture session into simulator track fixtures: real
 //! titles, real beat grids, real cues, real waveforms.
 //!
-//! `decktective_core::sim` generates its tracks — a shaped energy envelope,
+//! `decktector_core::sim` generates its tracks — a shaped energy envelope,
 //! a perfect beat grid, cues placed by rule. That is enough to develop a
 //! layout against and not enough to trust one: a generated waveform has no
 //! silence where a real track breaks down, no beat grid that drifts, and no
@@ -27,7 +27,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use decktective_core::model::TrackInfo;
+use decktector_core::model::TrackInfo;
 use prolink::nfs::pdb::{self, Pdb, Track};
 use prolink_engine::metadata::nfs::{build_track_info, ext_variant_path, parse_analysis, Analysis};
 

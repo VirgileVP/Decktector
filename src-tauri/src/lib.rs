@@ -1,7 +1,7 @@
-//! Decktective's application shell: opens the window, starts an engine and
+//! Decktector's application shell: opens the window, starts an engine and
 //! bridges it to the renderer.
 //!
-//! Everything domain-related lives in `decktective-core`; this crate only
+//! Everything domain-related lives in `decktector-core`; this crate only
 //! wires it to Tauri.
 
 mod devices;
@@ -14,11 +14,11 @@ mod window_prefs;
 
 use std::sync::Arc;
 
-use decktective_core::model::EngineSnapshot;
-use decktective_core::sim::SimEngine;
-use decktective_core::Engine;
-use decktective_remote::RemoteService;
-use decktective_timecode::TimecodeService;
+use decktector_core::model::EngineSnapshot;
+use decktector_core::sim::SimEngine;
+use decktector_core::Engine;
+use decktector_remote::RemoteService;
+use decktector_timecode::TimecodeService;
 use prolink::discovery::DeviceWatcher;
 use prolink_engine::{InterfacePreference, ProlinkEngine};
 use tauri::{Manager, State, Window};
@@ -50,7 +50,7 @@ fn set_window_prefs(
 }
 
 /// Picks the engine backing this run: the real Pro DJ Link backend by
-/// default, or the scripted simulation when `DECKTECTIVE_SIM=1` — set by
+/// default, or the scripted simulation when `DECKTECTOR_SIM=1` — set by
 /// `npm run dev:sim`/`dev:sim4`, or by hand when developing the UI without
 /// hardware nearby. `device_watcher` is shared with the real engine rather
 /// than each owning its own — both just want the same "who's on the
@@ -61,8 +61,8 @@ fn create_engine(
     device_watcher: Arc<DeviceWatcher>,
     interface_preference: Arc<InterfacePreference>,
 ) -> Arc<dyn Engine> {
-    if std::env::var("DECKTECTIVE_SIM").as_deref() == Ok("1") {
-        let deck_count = std::env::var("DECKTECTIVE_SIM_DECKS")
+    if std::env::var("DECKTECTOR_SIM").as_deref() == Ok("1") {
+        let deck_count = std::env::var("DECKTECTOR_SIM_DECKS")
             .ok()
             .and_then(|value| value.parse().ok())
             .unwrap_or(DEFAULT_SIM_DECKS);
@@ -75,7 +75,7 @@ pub fn run() {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "decktective=info,decktective_core=info".into()),
+                .unwrap_or_else(|_| "decktector=info,decktector_core=info".into()),
         )
         .init();
 
@@ -151,5 +151,5 @@ pub fn run() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("failed to start Decktective");
+        .expect("failed to start Decktector");
 }

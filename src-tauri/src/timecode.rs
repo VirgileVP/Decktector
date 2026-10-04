@@ -1,4 +1,4 @@
-//! Bridges [`decktective_timecode::TimecodeService`] to the renderer: one
+//! Bridges [`decktector_timecode::TimecodeService`] to the renderer: one
 //! event channel for status ticks, and the commands the settings panel and
 //! the deck source picker call.
 //!
@@ -7,9 +7,9 @@
 
 use std::sync::Arc;
 
-use decktective_core::model::DeckId;
-use decktective_timecode::network::{self, NetworkInterfaceInfo};
-use decktective_timecode::{ltc, mtc, TimecodeConfig, TimecodeService, TimecodeStatus};
+use decktector_core::model::DeckId;
+use decktector_timecode::network::{self, NetworkInterfaceInfo};
+use decktector_timecode::{ltc, mtc, TimecodeConfig, TimecodeService, TimecodeStatus};
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::broadcast::error::RecvError;
 

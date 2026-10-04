@@ -16,7 +16,7 @@ import {
   type LineupSlot
 } from '../lib/lineup'
 
-const LINEUP_STORAGE_KEY = 'decktective.lineup'
+const LINEUP_STORAGE_KEY = 'decktector.lineup'
 
 /** `[day, hour, minute, artist]` of the placeholder night shown before anything is entered. */
 const DEFAULT_SET_TIMES: readonly (readonly [0 | 1, number, number, string])[] = [

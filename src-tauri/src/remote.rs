@@ -1,4 +1,4 @@
-//! Bridges [`decktective_remote::RemoteService`] to the renderer: one event
+//! Bridges [`decktector_remote::RemoteService`] to the renderer: one event
 //! channel for status changes, and the command the settings panel calls to
 //! turn the remote view on or off.
 //!
@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use decktective_remote::{AssetSource, RemoteConfig, RemoteService, RemoteStatus};
+use decktector_remote::{AssetSource, RemoteConfig, RemoteService, RemoteStatus};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::broadcast::error::RecvError;
 
@@ -111,7 +111,7 @@ pub async fn set_remote_config(
 /// code, so it drops straight into an `<img>` as a `data:` URL.
 #[tauri::command]
 pub fn remote_qr_svg(url: String) -> Result<String, String> {
-    decktective_remote::qr::qr_svg(&url).map_err(|error| error.to_string())
+    decktector_remote::qr::qr_svg(&url).map_err(|error| error.to_string())
 }
 
 /// Immediately rotates the remote access token and disconnects any connected

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Decktective",
+  "productName": "Decktector",
   "version": "1.2.1",
-  "identifier": "com.decktective",
+  "identifier": "com.decktector",
   "build": {
     "beforeDevCommand": "npm run dev:renderer",
     "devUrl": "http://localhost:1420",
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Decktective",
+        "title": "Decktector",
         "width": 1280,
         "height": 800,
         "backgroundColor": "#0c0e14"

@@ -2,12 +2,12 @@
 
 use std::collections::HashMap;
 
-use decktective_core::model::DeckId;
+use decktector_core::model::DeckId;
 use prolink::status::DeviceStatus;
 
 /// How long a CDJ-3000 precise-position reading stays trusted before this
 /// falls back to the beat-count approximation. Precise-position packets
-/// arrive roughly every 30ms — this matches decktective's pre-Rust engine's
+/// arrive roughly every 30ms — this matches decktector's pre-Rust engine's
 /// own staleness window for the same packets (`PRECISE_POSITION_STALE_MS`
 /// in its `position.ts`), which had real CDJ-3000s to tune it against; a
 /// couple of seconds, by contrast, would happily keep showing a frozen

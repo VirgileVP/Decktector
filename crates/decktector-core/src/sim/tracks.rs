@@ -274,7 +274,7 @@ pub fn build_sim_track(spec: &SimTrackSpec, track_id: u32) -> TrackInfo {
         album: Some(spec.album.to_owned()),
         genre: Some(spec.genre.to_owned()),
         key: Some(spec.key.to_owned()),
-        label: Some("Decktective Records".to_owned()),
+        label: Some("Decktector Records".to_owned()),
         comment: None,
         duration_ms,
         bpm: Some(spec.bpm),

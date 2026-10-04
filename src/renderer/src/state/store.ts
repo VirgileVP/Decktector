@@ -10,14 +10,14 @@ import type {
 } from '../model'
 import { selectTransport } from './transport'
 
-interface DecktectiveStore {
+interface DecktectorStore {
   networkState: NetworkState
   devices: DeviceInfo[]
   decks: Record<DeckId, DeckState>
   tracks: Record<DeckId, TrackInfo | null>
 }
 
-export const useDecktectiveStore = create<DecktectiveStore>(() => ({
+export const useDecktectorStore = create<DecktectorStore>(() => ({
   networkState: 'offline',
   devices: [],
   decks: {},
@@ -26,7 +26,7 @@ export const useDecktectiveStore = create<DecktectiveStore>(() => ({
 
 /** Idempotent — a reconnecting transport re-hydrates by calling this again. */
 function applySnapshot(snapshot: EngineSnapshot): void {
-  useDecktectiveStore.setState({
+  useDecktectorStore.setState({
     networkState: snapshot.networkState,
     devices: snapshot.devices,
     decks: Object.fromEntries(snapshot.decks.map((deck) => [deck.deckId, deck])),
@@ -39,7 +39,7 @@ function applySnapshot(snapshot: EngineSnapshot): void {
  * hydrates it from the current snapshot. Returns the teardown function.
  */
 export function connectStoreToEngine(): () => void {
-  const { setState } = useDecktectiveStore
+  const { setState } = useDecktectorStore
 
   return selectTransport().connect({
     snapshot: applySnapshot,

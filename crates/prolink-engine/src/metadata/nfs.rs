@@ -15,11 +15,11 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine as _;
 use binrw::BinRead;
 use binrw::Endian;
-use decktective_core::model::{
+use decktector_core::model::{
     BeatGridBeat, CueKind, TrackCue, TrackInfo, WaveformData, WaveformSegment,
 };
-use decktective_core::structure::{self, StructureInput};
-use decktective_core::waveform::{build_preview_from_detail, PREVIEW_SEGMENT_COUNT};
+use decktector_core::structure::{self, StructureInput};
+use decktector_core::waveform::{build_preview_from_detail, PREVIEW_SEGMENT_COUNT};
 use prolink::nfs::pdb::{self, Pdb, Track};
 use prolink::nfs::{parse_anlz_cues, parse_export_library, AnlzCue, NfsClient};
 use prolink::status::MediaSlot;

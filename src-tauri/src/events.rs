@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use decktective_core::{Engine, EngineEvent};
+use decktector_core::{Engine, EngineEvent};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::broadcast::error::RecvError;
 

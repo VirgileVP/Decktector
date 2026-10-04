@@ -245,7 +245,7 @@ export function SettingsDialog({
                   <h3>Window</h3>
                   <ToggleRow
                     label="Always on top"
-                    hint="Keeps Decktective above every other application"
+                    hint="Keeps Decktector above every other application"
                     checked={settings.alwaysOnTop}
                     onChange={update('alwaysOnTop')}
                   />

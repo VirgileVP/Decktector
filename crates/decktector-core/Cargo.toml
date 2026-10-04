@@ -1,10 +1,10 @@
 [package]
-name = "decktective-core"
+name = "decktector-core"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "Normalized deck model and engine layer for Decktective"
+description = "Normalized deck model and engine layer for Decktector"
 
 [dependencies]
 anyhow = { workspace = true }

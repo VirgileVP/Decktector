@@ -9,7 +9,7 @@ import {
   eventProgressAt,
   formatEventSeconds
 } from '../lib/track-events'
-import { useDecktectiveStore } from '../state/store'
+import { useDecktectorStore } from '../state/store'
 
 /** Gauge positions the loop distinguishes; finer than a pixel on any rail width. */
 const GAUGE_STEPS = 1000
@@ -49,7 +49,7 @@ export function TrackEventList({ deckId, track, width }: TrackEventListProps): R
     let renderedCountdown = ''
 
     const tick = (): void => {
-      const deck = useDecktectiveStore.getState().decks[deckId]
+      const deck = useDecktectorStore.getState().decks[deckId]
       const playhead = estimatePlayheadMs(deck, Date.now())
       const progress = playhead !== null ? eventProgressAt(events, playhead) : null
       const index = progress?.index ?? 0

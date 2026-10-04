@@ -1,5 +1,5 @@
 [package]
-name = "decktective-net"
+name = "decktector-net"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

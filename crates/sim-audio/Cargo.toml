@@ -9,6 +9,6 @@ publish = false
 [dependencies]
 anyhow.workspace = true
 base64 = "0.22"
-decktective-core.workspace = true
+decktector-core.workspace = true
 serde_json.workspace = true
 symphonia.workspace = true

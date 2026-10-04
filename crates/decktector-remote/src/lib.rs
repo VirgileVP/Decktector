@@ -3,9 +3,9 @@
 //! A read-only second screen: any browser on the local network can watch
 //! the same decks the desktop app shows, fed by the same [`Engine`] handle
 //! the Tauri shell uses. This crate knows nothing about Tauri — it depends
-//! only on `decktective-core`, the same shape as `decktective-timecode`.
+//! only on `decktector-core`, the same shape as `decktector-timecode`.
 //!
-//! [`Engine`]: decktective_core::Engine
+//! [`Engine`]: decktector_core::Engine
 
 pub mod assets;
 pub mod hub;

@@ -9,9 +9,9 @@
 
 use std::path::Path;
 
-use decktective_core::sim::SimLibrary;
+use decktector_core::sim::SimLibrary;
 
-const FIXTURE: &str = "../decktective-core/fixtures/sim-tracks.json";
+const FIXTURE: &str = "../decktector-core/fixtures/sim-tracks.json";
 
 #[test]
 fn the_simulation_reads_back_what_the_builder_wrote() {

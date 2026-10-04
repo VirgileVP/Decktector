@@ -1,7 +1,7 @@
 //! Columns to the [`WaveformData`] the UI already draws.
 
-use decktective_core::model::{WaveformData, WaveformSegment};
-use decktective_core::waveform::{build_preview_from_detail, PREVIEW_SEGMENT_COUNT};
+use decktector_core::model::{WaveformData, WaveformSegment};
+use decktector_core::waveform::{build_preview_from_detail, PREVIEW_SEGMENT_COUNT};
 
 use crate::columns::{Column, DETAIL_COLUMNS_PER_SECOND};
 

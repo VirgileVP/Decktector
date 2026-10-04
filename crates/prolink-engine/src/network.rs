@@ -1,20 +1,20 @@
-//! Picks which local network adapter to broadcast decktective's own
+//! Picks which local network adapter to broadcast decktector's own
 //! presence — and originate dbserver metadata connections — from, on a
-//! machine that might have more than one (see `decktective_net`'s own
+//! machine that might have more than one (see `decktector_net`'s own
 //! module doc — a booth machine routinely does: Ethernet to the players,
 //! Wi-Fi for everything else).
 //!
 //! Uses the one adapter when there's only one, otherwise matches a
 //! discovered peer's IP against each adapter's real netmask — the same
-//! exact-match approach decktective's pre-Rust engine used
+//! exact-match approach decktector's pre-Rust engine used
 //! (`findInterfaceForPeer` in `network-config.ts`, `(candidateIp & mask) ==
-//! (peerIp & mask)`), now that `decktective_net::NetworkInterfaceInfo`
+//! (peerIp & mask)`), now that `decktector_net::NetworkInterfaceInfo`
 //! carries a real netmask instead of the earlier phase's /24-or-/16 guess.
 
 use std::net::Ipv4Addr;
 use std::sync::Arc;
 
-use decktective_net::{list_broadcastable_interfaces, resolve_ipv4, NetworkInterfaceInfo};
+use decktector_net::{list_broadcastable_interfaces, resolve_ipv4, NetworkInterfaceInfo};
 use tokio::sync::watch;
 
 /// The adapter the user pinned Pro DJ Link to in settings, if any.
@@ -51,7 +51,7 @@ impl InterfacePreference {
     }
 }
 
-/// The adapter to bind decktective's own broadcast socket to, given the IP
+/// The adapter to bind decktector's own broadcast socket to, given the IP
 /// of a peer already seen on the network, if any yet, and the adapter the
 /// user pinned, if any. A pinned adapter that has gone away (unplugged, no
 /// IPv4 address) falls back to the auto-pick rather than leaving the

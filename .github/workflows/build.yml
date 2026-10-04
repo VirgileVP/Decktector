@@ -60,13 +60,13 @@ jobs:
       matrix:
         include:
           - platform: macos-latest
-            artifact: decktective-macos
+            artifact: decktector-macos
             bundle: target/release/bundle/dmg/*.dmg
           - platform: windows-latest
-            artifact: decktective-windows
+            artifact: decktector-windows
             bundle: target/release/bundle/nsis/*-setup.exe
           - platform: ubuntu-latest
-            artifact: decktective-linux
+            artifact: decktector-linux
             bundle: target/release/bundle/appimage/*.AppImage
 
     runs-on: ${{ matrix.platform }}

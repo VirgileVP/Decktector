@@ -5,7 +5,7 @@ import { cueLabel, cueProgressAt, sortCues } from '../lib/cue-progress'
 import { startFrameLoop } from '../lib/frame-loop'
 import { estimatePlayheadMs, formatTimeMs } from '../lib/playhead'
 import { formatEventSeconds } from '../lib/track-events'
-import { useDecktectiveStore } from '../state/store'
+import { useDecktectorStore } from '../state/store'
 
 /** Gauge positions the loop distinguishes; finer than a pixel on any rail width. */
 const GAUGE_STEPS = 1000
@@ -44,7 +44,7 @@ export function CueList({ deckId, track, width }: CueListProps): React.JSX.Eleme
     let renderedCountdown = ''
 
     const tick = (): void => {
-      const deck = useDecktectiveStore.getState().decks[deckId]
+      const deck = useDecktectorStore.getState().decks[deckId]
       const playhead = estimatePlayheadMs(deck, Date.now())
       const progress = playhead !== null ? cueProgressAt(cues, playhead) : null
       const index = progress?.index ?? 0
