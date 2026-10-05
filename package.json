@@ -17,6 +17,7 @@
     "dev:sim:recorded": "node scripts/with-openssl.mjs cross-env DECKTECTOR_SIM=1 DECKTECTOR_SIM_DECKS=4 DECKTECTOR_SIM_TRACKS=../crates/decktector-core/fixtures/sim-tracks.json tauri dev",
     "build": "npm run typecheck && npm run test && node scripts/with-openssl.mjs tauri build",
     "tauri": "node scripts/with-openssl.mjs tauri",
+    "branding": "node scripts/branding/build.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:rust": "node scripts/with-openssl.mjs cargo test --workspace",
@@ -31,6 +32,8 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@fontsource/geist": "^5.3.0",
+    "@resvg/resvg-js": "^2.6.2",
     "@tauri-apps/cli": "^2.11.4",
     "@types/node": "^22.19.1",
     "@types/react": "^19.2.7",
@@ -42,6 +45,7 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
+    "opentype.js": "^2.0.0",
     "prettier": "^3.7.4",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.0",
