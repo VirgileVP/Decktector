@@ -351,3 +351,13 @@ trusting it at a gig:**
   using `rekordcrate`'s source as a layout reference — see
   [Porting status](#porting-status) for the confidence caveat that comes with
   that.
+
+## License
+
+Decktector is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. See [LICENSE](LICENSE) for the full text.
+
+Any distributed copy or derivative work, paid or not, must ship with its
+complete source code under the same license.

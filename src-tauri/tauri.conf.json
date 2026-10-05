@@ -26,6 +26,7 @@
   },
   "bundle": {
     "active": true,
+    "license": "GPL-3.0-or-later",
     "targets": ["nsis", "dmg", "appimage", "deb"],
     "icon": [
       "icons/32x32.png",

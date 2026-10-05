@@ -4,6 +4,7 @@
   "description": "Real-time visualizer for Pioneer Pro DJ Link decks (CDJ/XDJ): waveforms, metadata and player state",
   "type": "module",
   "author": "Virgile Pornet",
+  "license": "GPL-3.0-or-later",
   "scripts": {
     "postinstall": "node scripts/prepare-openssl.mjs",
     "format": "prettier --write .",
