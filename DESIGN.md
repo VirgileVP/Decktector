@@ -19,25 +19,25 @@ colors:
   led-timecode: '#39ff14'
 typography:
   headline:
-    fontFamily: "Inter, 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif"
+    fontFamily: "'Geist Mono Variable', ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, Menlo, 'SFMono-Regular', 'DejaVu Sans Mono', monospace"
     fontSize: '15px'
     fontWeight: 500
     lineHeight: '18px'
     letterSpacing: '0.08em'
   title:
-    fontFamily: "Inter, 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif"
+    fontFamily: "'Geist Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif"
     fontSize: '13px'
     fontWeight: 600
     lineHeight: 'normal'
     letterSpacing: '0.01em'
   body:
-    fontFamily: "Inter, 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif"
+    fontFamily: "'Geist Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif"
     fontSize: '12px'
     fontWeight: 500
     lineHeight: 'normal'
     letterSpacing: 'normal'
   label:
-    fontFamily: "Inter, 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif"
+    fontFamily: "'Geist Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif"
     fontSize: '10px'
     fontWeight: 600
     lineHeight: 'normal'
@@ -147,8 +147,10 @@ Every color below is a CSS custom property that six themes redefine; the hex/rgb
 
 ## Typography
 
-**Body/UI Font:** Inter (with Segoe UI, system sans fallbacks)
-**Numeric readouts:** same family, always `font-variant-numeric: tabular-nums` — clocks, BPM, times and countdowns never jitter horizontally as digits change.
+**Body/UI Font:** Geist, bundled as a variable font (with Segoe UI, system sans fallbacks)
+**Clock and timecode font:** Geist Mono, bundled as a variable font (with system monospace fallbacks) — the wall clock and the TC readout only, where every digit must fill the same cell.
+**Numeric readouts:** everything else numeric stays in Geist with `font-variant-numeric: tabular-nums` (Geist ships a `tnum` feature) — BPM, times and countdowns never jitter horizontally as digits change.
+**Offline:** both faces are packaged with the app (`@fontsource-variable/geist`, `@fontsource-variable/geist-mono`) and nothing is fetched at runtime, so the typography is identical in a booth with no network. Canvas text (cue flags, zoom label) uses the same Geist family.
 
 **Character:** A dense instrument-panel voice: no display size exists at the base scale (the largest routine text is 15px), weight and letter-spacing carry hierarchy instead of size.
 

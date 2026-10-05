@@ -21,10 +21,10 @@
      the readout wobbling, especially once the fit-to-window panel scales it
      up several times over. */
   --clock-font-family:
-    ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, Menlo, 'SFMono-Regular',
-    'DejaVu Sans Mono', monospace;
+    'Geist Mono Variable', ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Consolas, Menlo,
+    'SFMono-Regular', 'DejaVu Sans Mono', monospace;
   font-family:
-    Inter,
+    'Geist Variable',
     'Segoe UI',
     -apple-system,
     BlinkMacSystemFont,

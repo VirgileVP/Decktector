@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 
 import type { DeckId, TrackInfo, WaveformSegment } from '../model'
 import { prepareCanvas } from '../lib/canvas'
+import { canvasFont } from '../lib/canvas-font'
 import { startFrameLoop } from '../lib/frame-loop'
 import { canvasInk, type CanvasInk } from '../lib/ink'
 import { estimatePlayheadMs } from '../lib/playhead'
@@ -209,7 +210,7 @@ export function WaveformDetail({
 
       // Current zoom window, bottom-right corner
       ctx.fillStyle = ink.overlayText
-      ctx.font = '500 9px system-ui, sans-serif'
+      ctx.font = canvasFont(500, 9)
       ctx.textAlign = 'right'
       ctx.textBaseline = 'bottom'
       ctx.fillText(`${windowSec.toFixed(0)}s`, width - 5, height - 3)
@@ -430,7 +431,7 @@ function drawCueMarkers(
       // Hot cue: lettered square flag
       ctx.fillRect(x - 6, 0, 12, 12)
       ctx.fillStyle = ink.flagText
-      ctx.font = '700 8px system-ui, sans-serif'
+      ctx.font = canvasFont(700, 8)
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText(cue.button, x, 6.5)
