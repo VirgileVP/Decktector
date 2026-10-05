@@ -194,6 +194,9 @@ export interface Settings {
    *  picked from the header, not here — see `state/timecode.ts`. */
   timecodeProtocol: TimecodeProtocolChoice
   timecodeFrameRate: FrameRate
+  /** Whether the timecode source follows the on-air deck by itself instead of
+   *  the manual pick in the header — see `state/timecode-follow.ts`. */
+  timecodeFollowOnAir: boolean
   /** Name of the network adapter to broadcast from, e.g. `"eth0"` — picked
    *  from `list_network_interfaces`, not typed in. */
   timecodeArtNetInterface: string
@@ -272,6 +275,7 @@ export const DEFAULT_SETTINGS: Settings = {
   allowTrackDownload: false,
   timecodeProtocol: 'off',
   timecodeFrameRate: 'smpte30',
+  timecodeFollowOnAir: false,
   timecodeArtNetInterface: NO_NETWORK_INTERFACE,
   timecodeArtNetPort: ART_NET_DEFAULT_PORT,
   timecodeMtcPort: NO_MIDI_PORT,
@@ -345,6 +349,7 @@ function pickSettings(state: Settings): Settings {
     allowTrackDownload,
     timecodeProtocol,
     timecodeFrameRate,
+    timecodeFollowOnAir,
     timecodeArtNetInterface,
     timecodeArtNetPort,
     timecodeMtcPort,
@@ -388,6 +393,7 @@ function pickSettings(state: Settings): Settings {
     allowTrackDownload,
     timecodeProtocol,
     timecodeFrameRate,
+    timecodeFollowOnAir,
     timecodeArtNetInterface,
     timecodeArtNetPort,
     timecodeMtcPort,

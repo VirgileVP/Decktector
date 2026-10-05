@@ -21,6 +21,7 @@ import { connectSettingsBroadcast } from './state/settings-broadcast'
 import { connectSettingsToApp } from './state/settings-sync'
 import { connectStoreToEngine, useDecktectorStore } from './state/store'
 import { connectTimecodeToEngine } from './state/timecode'
+import { connectTimecodeFollowOnAir } from './state/timecode-follow'
 import { useClockNow } from './state/wall-clock'
 
 /** Evenly spaced teeth of the settings gear icon, in degrees. */
@@ -50,6 +51,7 @@ function App(): React.JSX.Element {
   useEffect(() => connectSettingsToApp('main'), [])
   useEffect(() => connectSettingsBroadcast(), [])
   useEffect(() => connectTimecodeToEngine(), [])
+  useEffect(() => connectTimecodeFollowOnAir(), [])
   useEffect(() => connectDevicesToEngine(), [])
   useEffect(() => connectDownloadToEngine(), [])
   useEffect(() => connectRemoteToEngine(), [])

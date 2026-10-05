@@ -24,6 +24,14 @@ describe('mergePersistedSettings', () => {
     }
   })
 
+  it('leaves the timecode source manual unless follow-on-air was stored', () => {
+    expect(DEFAULT_SETTINGS.timecodeFollowOnAir).toBe(false)
+    expect(mergePersistedSettings({}, DEFAULT_SETTINGS).timecodeFollowOnAir).toBe(false)
+    expect(
+      mergePersistedSettings({ timecodeFollowOnAir: true }, DEFAULT_SETTINGS).timecodeFollowOnAir
+    ).toBe(true)
+  })
+
   it('keeps the other stored settings and sanitizes deck labels', () => {
     const merged = mergePersistedSettings(
       { uiScale: 1.25, deckLabels: { 1: ' CH1 ', 9: 'nope' } },

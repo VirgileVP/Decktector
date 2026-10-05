@@ -409,10 +409,16 @@ export function SettingsDialog({
               <h3>Timecode</h3>
               <ChoiceRow
                 label="Output"
-                hint="Which deck to send from is picked in the header, not here"
+                hint="Which deck to send from is picked in the header, or follows the on-air deck below"
                 value={settings.timecodeProtocol}
                 options={TIMECODE_PROTOCOL_OPTIONS}
                 onChange={update('timecodeProtocol')}
+              />
+              <ToggleRow
+                label="Follow the on-air deck"
+                hint="Sends timecode from whichever deck is on air, as set by the on-air source in Interface. A manual pick in the header holds until another deck goes on air."
+                checked={settings.timecodeFollowOnAir}
+                onChange={update('timecodeFollowOnAir')}
               />
               <ChoiceRow
                 label="Frame rate"
