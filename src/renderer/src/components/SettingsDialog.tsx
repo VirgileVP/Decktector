@@ -22,6 +22,7 @@ import { DevicesPanel } from './DevicesPanel'
 import { LineupEditor } from './LineupEditor'
 import { OnAirSourceSetting } from './OnAirSourceSetting'
 import { ChoiceRow, SliderRow, TextRow, ToggleRow } from './SettingControls'
+import { TrackDownloadSetting } from './TrackDownloadSetting'
 
 const asPercent = (value: number): string => `${Math.round(value * 100)} %`
 
@@ -261,10 +262,8 @@ export function SettingsDialog({
               {IS_TAURI && (
                 <section className="settings-section">
                   <h3>Media & Downloads</h3>
-                  <ToggleRow
-                    label="Allow track downloads (experimental)"
-                    hint="Shows a discreet download button on each deck to fetch audio files directly from the player's USB drive over the network"
-                    checked={settings.allowTrackDownload}
+                  <TrackDownloadSetting
+                    value={settings.allowTrackDownload}
                     onChange={update('allowTrackDownload')}
                   />
                 </section>

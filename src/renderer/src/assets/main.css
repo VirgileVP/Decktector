@@ -2360,6 +2360,56 @@ input[type='checkbox']:focus-visible {
   margin: 6px 0;
 }
 
+/* ---------- Confirm dialog ---------- */
+
+/* Stacks over the settings modal it is usually opened from. */
+.confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.confirm-panel {
+  width: min(420px, 100%);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 16px 18px;
+}
+
+.confirm-title {
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--warn);
+}
+
+.confirm-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.confirm-accept {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
 /* ---------- Panel windows ---------- */
 
 /* Every panel window is created `transparent: true` — on Windows that flag
