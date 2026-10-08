@@ -5,20 +5,21 @@
  */
 
 import { isRecord } from '../lib/is-record'
+import { DECK_VIEW_PRESETS } from './settings'
 
 /** Bumped whenever a stored record changes shape; see `migratePanelWindowsState`. */
 export const PANEL_WINDOWS_STORE_VERSION = 1
 
 /**
  * Version 0 records carried a single `compact` flag where version 1 has a
- * `display`. A compact window becomes a compact-layout display and is left
- * partial on purpose: the window fills the rest in when it reads it back
- * (`resolvePanelDisplay`), exactly as for any other incomplete record.
+ * `display`. The compact layout is gone: a compact window becomes the
+ * Simple view preset, its closest match; any other one gets no display and
+ * starts from the main window's toggles (`resolvePanelDisplay`).
  */
 function migrateRecordFromVersion0(record: unknown): unknown {
   if (!isRecord(record) || !('compact' in record)) return record
   const { compact, ...rest } = record
-  return compact === true ? { ...rest, display: { layout: 'compact' } } : rest
+  return compact === true ? { ...rest, display: { ...DECK_VIEW_PRESETS.simple.values } } : rest
 }
 
 /** zustand `persist`'s `migrate`: brings `persisted`, stored at `version`, up to the current shape. */

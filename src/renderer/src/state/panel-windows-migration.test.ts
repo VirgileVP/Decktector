@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import { migratePanelWindowsState, PANEL_WINDOWS_STORE_VERSION } from './panel-windows-migration'
+import { DECK_VIEW_PRESETS } from './settings'
 
 const PARAMS = { panelId: 'deck', deckId: 2, instance: 0 }
 
 describe('migratePanelWindowsState', () => {
-  it('turns a compact window into a compact-layout display', () => {
+  it('turns a compact window into the Simple view preset', () => {
     const migrated = migratePanelWindowsState(
       { windows: { 'panel-deck-2-0': { label: 'panel-deck-2-0', params: PARAMS, compact: true } } },
       0
@@ -15,7 +16,7 @@ describe('migratePanelWindowsState', () => {
         'panel-deck-2-0': {
           label: 'panel-deck-2-0',
           params: PARAMS,
-          display: { layout: 'compact' }
+          display: DECK_VIEW_PRESETS.simple.values
         }
       }
     })

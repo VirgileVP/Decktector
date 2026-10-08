@@ -17,59 +17,13 @@ import { isRecord } from '../lib/is-record'
 import type { DeckViewToggles } from '../state/settings'
 import type { PanelId } from './params'
 
-/** `'full'` is the main window's deck panel; `'compact'` is a single row sized for a small window. */
-export type DeckWindowLayout = 'full' | 'compact'
-
-/** Which pieces of the compact deck row are shown. */
-export interface CompactDeckFields {
-  artwork: boolean
-  deckNumber: boolean
-  /** The operator's deck label — shows nothing for a deck without one. */
-  label: boolean
-  title: boolean
-  artist: boolean
-  trackTags: boolean
-  transport: boolean
-  syncBadges: boolean
-  time: boolean
-  timeRemaining: boolean
-  pitch: boolean
-  bpm: boolean
-}
-
-/** What the compact row showed back when it could not be configured. */
-export const DEFAULT_COMPACT_DECK_FIELDS: CompactDeckFields = {
-  artwork: true,
-  deckNumber: false,
-  label: true,
-  title: true,
-  artist: true,
-  trackTags: false,
-  transport: true,
-  syncBadges: false,
-  time: false,
-  timeRemaining: true,
-  pitch: false,
-  bpm: true
-}
-
-/**
- * A deck window's display. Each layout keeps its own set of toggles, so
- * switching layout and back loses nothing.
- */
-export interface DeckWindowDisplay {
-  layout: DeckWindowLayout
-  /** Same toggles as the Deck view settings tab, owned by this window alone. */
-  full: DeckViewToggles
-  compact: CompactDeckFields
-}
-
 /** The display each panel owns — `null` for a panel with nothing to choose. */
 export interface PanelDisplayByPanel {
   clock: null
   timecode: null
   'header-block': HeaderBlockVisibility
-  deck: DeckWindowDisplay
+  /** Same toggles as the Deck view settings tab, owned by this window alone. */
+  deck: DeckViewToggles
 }
 
 export type PanelDisplay = PanelDisplayByPanel[PanelId]
@@ -100,19 +54,6 @@ export function parseBooleanFields<T extends Record<keyof T, boolean>>(
   return parsed
 }
 
-function parseDeckWindowLayout(raw: unknown, fallback: DeckWindowLayout): DeckWindowLayout {
-  return raw === 'full' || raw === 'compact' ? raw : fallback
-}
-
-function parseDeckWindowDisplay(raw: unknown, fallback: DeckWindowDisplay): DeckWindowDisplay {
-  if (!isRecord(raw)) return fallback
-  return {
-    layout: parseDeckWindowLayout(raw.layout, fallback.layout),
-    full: parseBooleanFields(raw.full, fallback.full),
-    compact: parseBooleanFields(raw.compact, fallback.compact)
-  }
-}
-
 const NO_DISPLAY: PanelDisplayCodec<null> = {
   initial: () => null,
   parse: () => null
@@ -128,12 +69,8 @@ const PANEL_DISPLAY_CODECS: { [P in PanelId]: PanelDisplayCodec<PanelDisplayByPa
   deck: {
     // A copy, not a link: once open, the window is set from its own toolbar
     // and the Deck view settings tab only drives the main window.
-    initial: (mainDeckView) => ({
-      layout: 'full',
-      full: { ...mainDeckView },
-      compact: { ...DEFAULT_COMPACT_DECK_FIELDS }
-    }),
-    parse: parseDeckWindowDisplay
+    initial: (mainDeckView) => ({ ...mainDeckView }),
+    parse: parseBooleanFields
   }
 }
 

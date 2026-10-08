@@ -225,14 +225,14 @@ settings. Transparency is meant for keying the window over a video feed — pin 
 deck or the clock on top, drop its background, and key out the rest.
 
 Each window also chooses what it shows, from the display options button in its
-chrome. A deck window picks a layout — **Full** (waveforms, cue list, deck bar)
-or **Compact** (a single row sized for a small window) — and which pieces that
-layout shows. It starts from the main window's Deck view settings, then keeps
-its own: two windows of the same deck can show different things, and changing
-the settings tab does not touch a window already open (its **Match main
-window** button copies them back). The Time window picks among clock, timecode
-and lineup the same way. Open panel windows are remembered across restarts, in
-their last position and with what they show.
+chrome. A deck window offers the same **Simple view** / **Full** presets and the
+same toggles as the Deck view settings tab, applied to that window only. It
+starts from the main window's Deck view settings, then keeps its own: two
+windows of the same deck can show different things, and changing the settings
+tab does not touch a window already open (its **Match main window** button
+copies them back). The Time window picks among clock, timecode and lineup the
+same way. Open panel windows are remembered across restarts, in their last
+position and with what they show.
 
 This is desktop-only. The [remote view](#remote-view)'s `?deck=N` focus mode is
 unrelated and unaffected.

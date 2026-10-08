@@ -80,7 +80,7 @@ export const PANELS: { [P in PanelId]: PanelDefinition<P> } = {
       params.deckId === null ? (
         <div className="panel-deck-placeholder">No deck selected</div>
       ) : (
-        <DeckPanelHost deckId={params.deckId} display={display} />
+        <DeckPanelHost deckId={params.deckId} view={display} />
       ),
     DisplayControl: DeckDisplayControl
   }

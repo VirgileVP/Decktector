@@ -2761,127 +2761,6 @@ html[data-transparent='on'] .panel-chrome-bar {
   right: 0;
 }
 
-/* ---------- Compact deck ---------- */
-
-.deck-compact {
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-}
-
-.deck-compact-art {
-  flex-shrink: 0;
-  width: 48px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  background: var(--bg-inset);
-  border: 1px solid var(--border-strong);
-  border-radius: 4px;
-  color: var(--text-faint);
-}
-
-.deck-compact-art img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.deck-compact-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.deck-compact-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.deck-compact-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.deck-compact-sub {
-  font-size: 11px;
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.deck-compact-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-muted);
-}
-
-.deck-compact-bpm {
-  gap: 1px;
-}
-
-.deck-compact-bpm .deck-stat-label {
-  font-size: 8px;
-}
-
-.deck-compact-bpm .deck-stat-value {
-  font-size: 13px;
-}
-
-.deck-compact-label-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.deck-compact-no {
-  flex-shrink: 0;
-  padding: 0 5px;
-  font-variant-numeric: tabular-nums;
-  color: var(--text);
-  background: var(--bg-inset);
-  border: 1px solid var(--border-strong);
-  border-radius: 3px;
-}
-
-.deck-compact-tags {
-  flex-shrink: 1;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.deck-compact-time,
-.deck-compact-pitch {
-  color: var(--text);
-}
-
-.deck-compact-sync {
-  flex-direction: row;
-  gap: 6px;
-}
-
 /* ---------- Pop-out buttons ---------- */
 
 .pop-out-button {
@@ -2959,11 +2838,11 @@ html[data-transparent='on'] .panel-chrome-bar {
   white-space: nowrap;
 }
 
-.panel-display-layout {
+.panel-display-presets {
   flex-shrink: 0;
 }
 
-.panel-display-layout button {
+.panel-display-presets button {
   flex: 1;
 }
 
