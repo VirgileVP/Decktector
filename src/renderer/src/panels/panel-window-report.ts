@@ -8,6 +8,7 @@
 import { emit } from '@tauri-apps/api/event'
 
 import type { WindowGeometry } from './panel-geometry'
+import type { PanelDisplay } from './panel-display'
 import type { PanelWindowOptions } from './panel-window-options'
 import type { PanelParams } from './params'
 
@@ -19,7 +20,7 @@ export type PanelWindowReport =
       label: string
       params: PanelParams
       options: PanelWindowOptions
-      compact: boolean
+      display: PanelDisplay
       geometry: WindowGeometry | null
     }
   | { type: 'closed'; label: string }

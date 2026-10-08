@@ -15,6 +15,7 @@ import {
   DEFAULT_PANEL_WINDOW_OPTIONS,
   type PanelWindowOptions
 } from './panel-window-options'
+import type { PanelDisplay } from './panel-display'
 import { reportPanelWindow } from './panel-window-report'
 import type { PanelParams } from './params'
 import { readWindowGeometry } from './read-window-geometry'
@@ -54,11 +55,9 @@ const RESIZE_ZONES: readonly ResizeZone[] = [
 interface PanelChromeProps {
   title: string
   params: PanelParams
-  /** Whether `PANELS[params.panelId].hasCompactVariant` — shows the compact toggle when true. */
-  hasCompactVariant: boolean
-  compact: boolean
-  onToggleCompact: () => void
-  /** A panel-specific control rendered alongside the built-in ones (e.g. the "Time" panel's show/hide toggle). */
+  /** What the window shows — owned by `PanelWindow`, reported from here with the rest of the window's state. */
+  display: PanelDisplay
+  /** A panel-specific control rendered alongside the built-in ones (e.g. the panel's display options). */
   toolbarExtra?: React.ReactNode
   children: React.ReactNode
 }
@@ -70,9 +69,7 @@ function startResize(direction: ResizeDirection): void {
 export function PanelChrome({
   title,
   params,
-  hasCompactVariant,
-  compact,
-  onToggleCompact,
+  display,
   toolbarExtra,
   children
 }: PanelChromeProps): React.JSX.Element {
@@ -117,27 +114,27 @@ export function PanelChrome({
 
   useEffect(() => applyPanelWindowOptions(options), [options])
 
-  // `reportPanelWindow` needs the latest params/options/compact, but the
+  // `reportPanelWindow` needs the latest params/options/display, but the
   // move/resize listeners below must only be attached once — a ref sidesteps
   // re-subscribing them on every option change just to read fresh values.
-  const latestReportInputs = useRef({ params, options, compact })
+  const latestReportInputs = useRef({ params, options, display })
   useEffect(() => {
-    latestReportInputs.current = { params, options, compact }
-  }, [params, options, compact])
+    latestReportInputs.current = { params, options, display }
+  }, [params, options, display])
 
   const reportCurrentState = (): void => {
     void readWindowGeometry().then((geometry) => {
       const {
         params: currentParams,
         options: currentOptions,
-        compact: currentCompact
+        display: currentDisplay
       } = latestReportInputs.current
       reportPanelWindow({
         type: 'update',
         label: getCurrentWindow().label,
         params: currentParams,
         options: currentOptions,
-        compact: currentCompact,
+        display: currentDisplay,
         geometry
       })
     })
@@ -147,7 +144,7 @@ export function PanelChrome({
   useEffect(() => {
     if (!isTauri()) return
     reportCurrentState()
-  }, [params, options, compact])
+  }, [params, options, display])
 
   // Reports on move/resize (debounced) and once more, synchronously, when the
   // OS is actually about to close the window — a React unmount is not a
@@ -266,20 +263,6 @@ export function PanelChrome({
           >
             +
           </button>
-          {hasCompactVariant && (
-            <button
-              type="button"
-              className={`panel-chrome-toggle${compact ? ' active' : ''}`}
-              title="Compact layout"
-              aria-label="Compact layout"
-              aria-pressed={compact}
-              onClick={onToggleCompact}
-            >
-              <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
-                <path d="M1.5 4.5h9M1.5 7.5h9" />
-              </svg>
-            </button>
-          )}
           {toolbarExtra}
           <button
             type="button"

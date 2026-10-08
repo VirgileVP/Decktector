@@ -1,7 +1,7 @@
 import type { DeckId, TrackInfo } from '../model'
+import { formatBpm, formatPitch } from '../lib/deck-readouts'
 import { formatTimeMs } from '../lib/playhead'
 import { TRANSPORT_GLYPHS } from '../lib/transport'
-import { useEffectiveOnAirSource } from '../state/deck-activity'
 import type { DownloadState } from '../state/download'
 import { useTrackDownloadStore } from '../state/download'
 import { useSettings } from '../state/settings'
@@ -9,6 +9,7 @@ import { useDecktectorStore } from '../state/store'
 import { selectTimecodeSource, useTimecodeStore } from '../state/timecode'
 import type { DeckBarFields, DeckBarLayout } from './DeckBarLayout'
 import { DeckStat } from './DeckStat'
+import { DeckSyncBadges } from './DeckSyncBadges'
 
 const IDLE_DOWNLOAD_STATE: DownloadState = { status: 'idle' }
 
@@ -26,15 +27,11 @@ export function DeckBar({ deckId, track, fields, layout }: DeckBarProps): React.
   const allowTrackDownload = useSettings((s) => s.allowTrackDownload)
   const downloadState = useTrackDownloadStore((s) => s.downloads[deckId] ?? IDLE_DOWNLOAD_STATE)
   const startDownload = useTrackDownloadStore((s) => s.startDownload)
-  // The light is the mixer's own flag: without a trusted mixer it would only
-  // ever read "off air" for a deck that may well be live, so it is left out.
-  const showOnAirLight = useEffectiveOnAirSource() === 'mixer'
 
   const playState = deck?.playState ?? 'empty'
   const playhead = deck?.playheadMs ?? null
   const remaining = track && playhead !== null ? track.durationMs - playhead : null
-  const bpmValue = deck?.effectiveBpm ?? deck?.trackBpm ?? null
-  const bpmText = bpmValue !== null ? bpmValue.toFixed(1) : '--.-'
+  const bpmText = formatBpm(deck?.effectiveBpm ?? deck?.trackBpm ?? null)
 
   // The engine resolves artwork to a data: URL, so it drops straight into
   // an <img> with nothing to allocate or revoke.
@@ -70,7 +67,10 @@ export function DeckBar({ deckId, track, fields, layout }: DeckBarProps): React.
         </div>
       )}
 
-      {(fields.tcButton || (allowTrackDownload && track) || fields.transport || fields.syncBadges) && (
+      {(fields.tcButton ||
+        (allowTrackDownload && track) ||
+        fields.transport ||
+        fields.syncBadges) && (
         <div className="deck-rail-actions">
           {(fields.tcButton || (allowTrackDownload && track) || fields.transport) && (
             <div className="deck-controls">
@@ -143,20 +143,14 @@ export function DeckBar({ deckId, track, fields, layout }: DeckBarProps): React.
               )}
 
               {fields.transport && (
-                <div className={`deck-transport state-${playState}`}>{TRANSPORT_GLYPHS[playState]}</div>
+                <div className={`deck-transport state-${playState}`}>
+                  {TRANSPORT_GLYPHS[playState]}
+                </div>
               )}
             </div>
           )}
 
-          {fields.syncBadges && (
-            <div className="deck-msync">
-              {showOnAirLight && (
-                <span className={deck?.isOnAir ? 'lit lit-onair' : ''}>ON AIR</span>
-              )}
-              <span className={deck?.isMaster ? 'lit lit-master' : ''}>MASTER</span>
-              <span className={deck?.isSynced ? 'lit lit-sync' : ''}>SYNC</span>
-            </div>
-          )}
+          {fields.syncBadges && <DeckSyncBadges deckId={deckId} />}
         </div>
       )}
 
@@ -179,7 +173,7 @@ export function DeckBar({ deckId, track, fields, layout }: DeckBarProps): React.
           <DeckStat
             className="deck-stat-pitch"
             label="PITCH"
-            value={deck ? `${deck.pitch >= 0 ? '+' : ''}${deck.pitch.toFixed(2)}%` : '--.--%'}
+            value={formatPitch(deck?.pitch ?? null)}
           />
         )}
         {fields.bpm && <DeckStat className="deck-stat-bpm" label="BPM" value={bpmText} />}

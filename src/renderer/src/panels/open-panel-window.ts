@@ -7,6 +7,8 @@
 import { getAllWebviewWindows, WebviewWindow } from '@tauri-apps/api/webviewWindow'
 
 import { usePanelWindowsStore } from '../state/panel-windows'
+import { pickDeckViewToggles, useSettings } from '../state/settings'
+import { initialPanelDisplay } from './panel-display'
 import { DEFAULT_PANEL_WINDOW_OPTIONS } from './panel-window-options'
 import { panelSearch, type PanelParams } from './params'
 import { PANELS } from './registry'
@@ -72,7 +74,7 @@ export async function openPanelWindow(params: PanelParams): Promise<void> {
     label,
     params: resolvedParams,
     options: DEFAULT_PANEL_WINDOW_OPTIONS,
-    compact: false,
+    display: initialPanelDisplay(params.panelId, pickDeckViewToggles(useSettings.getState())),
     geometry: null
   })
 }

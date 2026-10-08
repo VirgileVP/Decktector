@@ -1,6 +1,6 @@
-import { useSettings } from '../state/settings'
+import type { DeckViewToggles } from '../state/settings'
 
-/** Which pieces of `DeckBar` are shown — one flag per `showDeck*` setting. */
+/** Which pieces of `DeckBar` are shown — one flag per `showDeck*` toggle. */
 export interface DeckBarFields {
   artwork: boolean
   trackInfo: boolean
@@ -21,19 +21,19 @@ export interface DeckBarFields {
  */
 export type DeckBarLayout = 'bar' | 'rail' | 'hidden'
 
-/** Reads the bar's slice of the settings store. */
-export function useDeckBarFields(): DeckBarFields {
+/** The bar's slice of a set of Deck view toggles. */
+export function deckBarFields(view: DeckViewToggles): DeckBarFields {
   return {
-    artwork: useSettings((s) => s.showDeckArtwork),
-    trackInfo: useSettings((s) => s.showDeckTrackInfo),
-    trackTags: useSettings((s) => s.showDeckTrackTags),
-    tcButton: useSettings((s) => s.showDeckTcButton),
-    transport: useSettings((s) => s.showDeckTransport),
-    syncBadges: useSettings((s) => s.showDeckSyncBadges),
-    time: useSettings((s) => s.showDeckTime),
-    timeRemaining: useSettings((s) => s.showDeckTimeRemaining),
-    pitch: useSettings((s) => s.showDeckPitch),
-    bpm: useSettings((s) => s.showDeckBpm)
+    artwork: view.showDeckArtwork,
+    trackInfo: view.showDeckTrackInfo,
+    trackTags: view.showDeckTrackTags,
+    tcButton: view.showDeckTcButton,
+    transport: view.showDeckTransport,
+    syncBadges: view.showDeckSyncBadges,
+    time: view.showDeckTime,
+    timeRemaining: view.showDeckTimeRemaining,
+    pitch: view.showDeckPitch,
+    bpm: view.showDeckBpm
   }
 }
 

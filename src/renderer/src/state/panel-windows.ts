@@ -19,6 +19,7 @@ import type { WindowGeometry } from '../panels/panel-geometry'
 import type { PanelWindowOptions } from '../panels/panel-window-options'
 import { PANEL_WINDOW_CHANNEL, type PanelWindowReport } from '../panels/panel-window-report'
 import type { PanelParams } from '../panels/params'
+import { migratePanelWindowsState, PANEL_WINDOWS_STORE_VERSION } from './panel-windows-migration'
 
 const PANEL_WINDOWS_STORAGE_KEY = 'decktector.panel-windows'
 
@@ -26,7 +27,12 @@ export interface PanelWindowRecord {
   label: string
   params: PanelParams
   options: PanelWindowOptions
-  compact: boolean
+  /**
+   * What the window shows (`PanelDisplayByPanel[params.panelId]`). Typed
+   * `unknown` because it is read straight back from storage: the window
+   * validates it itself (`resolvePanelDisplay`) before using it.
+   */
+  display: unknown
   geometry: WindowGeometry | null
 }
 
@@ -54,6 +60,9 @@ export const usePanelWindowsStore = create<PanelWindowsState & PanelWindowsActio
     }),
     {
       name: PANEL_WINDOWS_STORAGE_KEY,
+      version: PANEL_WINDOWS_STORE_VERSION,
+      migrate: (persisted, version) =>
+        migratePanelWindowsState(persisted, version) as PanelWindowsState,
       // Actions are not state: keeping them out avoids writing dead keys to storage.
       partialize: (state) => ({ windows: state.windows })
     }
@@ -63,8 +72,8 @@ export const usePanelWindowsStore = create<PanelWindowsState & PanelWindowsActio
 /**
  * A window's own record from the store, keyed by its own label — the seed
  * a panel window uses for whatever it has to know about itself before its
- * first mount-time report goes out (its display options, whether it is in
- * its compact layout). Backed by the same persisted `localStorage` the
+ * first mount-time report goes out (its window options, what it shows).
+ * Backed by the same persisted `localStorage` the
  * main window wrote it to, since that storage — unlike JS state — is
  * shared by every webview on the origin.
  */
@@ -119,7 +128,7 @@ export function connectPanelWindowRegistry(): () => void {
         label: report.label,
         params: report.params,
         options: report.options,
-        compact: report.compact,
+        display: report.display,
         geometry: report.geometry
       })
     }

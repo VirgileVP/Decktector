@@ -222,8 +222,17 @@ there too. Each panel window has its own chrome (a title bar and a close button
 appear on hover; drag the bar to move it, drag an edge to resize), and its own
 always-on-top, transparency and zoom controls, independent of the main window's
 settings. Transparency is meant for keying the window over a video feed — pin a
-deck or the clock on top, drop its background, and key out the rest. Open panel
-windows are remembered across restarts, in their last position.
+deck or the clock on top, drop its background, and key out the rest.
+
+Each window also chooses what it shows, from the display options button in its
+chrome. A deck window picks a layout — **Full** (waveforms, cue list, deck bar)
+or **Compact** (a single row sized for a small window) — and which pieces that
+layout shows. It starts from the main window's Deck view settings, then keeps
+its own: two windows of the same deck can show different things, and changing
+the settings tab does not touch a window already open (its **Match main
+window** button copies them back). The Time window picks among clock, timecode
+and lineup the same way. Open panel windows are remembered across restarts, in
+their last position and with what they show.
 
 This is desktop-only. The [remote view](#remote-view)'s `?deck=N` focus mode is
 unrelated and unaffected.

@@ -17,6 +17,7 @@ import {
   type DeckViewPreset,
   type Settings
 } from '../state/settings'
+import { DECK_VIEW_TOGGLE_GROUPS } from './deck-view-toggle-rows'
 import { DeckLabelsEditor } from './DeckLabelsEditor'
 import { DevicesPanel } from './DevicesPanel'
 import { LineupEditor } from './LineupEditor'
@@ -279,7 +280,8 @@ export function SettingsDialog({
                   <span className="setting-text">
                     <span className="setting-label">What this deck view is for</span>
                     <span className="setting-hint">
-                      A starting point for the toggles below — pick one, then fine-tune.
+                      A starting point for the toggles below — pick one, then fine-tune. A
+                      popped-out deck window starts from these, then keeps its own.
                     </span>
                   </span>
                   <div className="setting-choice" role="group" aria-label="Deck view preset">
@@ -299,103 +301,20 @@ export function SettingsDialog({
                 </div>
               </section>
 
-              <section className="settings-section">
-                <h3>Deck bar</h3>
-                <ToggleRow
-                  label="Artwork"
-                  hint="Album art thumbnail next to the track info"
-                  checked={settings.showDeckArtwork}
-                  onChange={update('showDeckArtwork')}
-                />
-                <ToggleRow
-                  label="Track title & artist"
-                  hint="The track's title, artist and album"
-                  checked={settings.showDeckTrackInfo}
-                  onChange={update('showDeckTrackInfo')}
-                />
-                <ToggleRow
-                  label="Track tags"
-                  hint="Key and genre badges next to the track title"
-                  checked={settings.showDeckTrackTags}
-                  onChange={update('showDeckTrackTags')}
-                />
-                <ToggleRow
-                  label="TC button"
-                  hint="Button to send timecode from this deck"
-                  checked={settings.showDeckTcButton}
-                  onChange={update('showDeckTcButton')}
-                />
-                <ToggleRow
-                  label="Play/pause button"
-                  hint="The transport state glyph"
-                  checked={settings.showDeckTransport}
-                  onChange={update('showDeckTransport')}
-                />
-                <ToggleRow
-                  label="Sync badges"
-                  hint="ON AIR, MASTER and SYNC indicators"
-                  checked={settings.showDeckSyncBadges}
-                  onChange={update('showDeckSyncBadges')}
-                />
-                <ToggleRow
-                  label="Time"
-                  hint="Elapsed time, as its own column next to pitch and BPM"
-                  checked={settings.showDeckTime}
-                  onChange={update('showDeckTime')}
-                />
-                <ToggleRow
-                  label="Pitch"
-                  hint="Pitch percentage as its own column, next to time and BPM"
-                  checked={settings.showDeckPitch}
-                  onChange={update('showDeckPitch')}
-                />
-                <ToggleRow
-                  label="Time remaining"
-                  hint="Countdown under the elapsed time readout"
-                  checked={settings.showDeckTimeRemaining}
-                  onChange={update('showDeckTimeRemaining')}
-                />
-                <ToggleRow
-                  label="BPM"
-                  hint="BPM as its own column, next to time and pitch"
-                  checked={settings.showDeckBpm}
-                  onChange={update('showDeckBpm')}
-                />
-              </section>
-
-              <section className="settings-section">
-                <h3>Deck body</h3>
-                <ToggleRow
-                  label="Cue list"
-                  hint="Cue points below the track info"
-                  checked={settings.showDeckCueList}
-                  onChange={update('showDeckCueList')}
-                />
-                <ToggleRow
-                  label="Track structure"
-                  hint="Intro, builds, drops and breaks as they come up"
-                  checked={settings.showDeckEventList}
-                  onChange={update('showDeckEventList')}
-                />
-                <ToggleRow
-                  label="Waveform overview"
-                  hint="Full-track waveform strip"
-                  checked={settings.showDeckWaveformOverview}
-                  onChange={update('showDeckWaveformOverview')}
-                />
-                <ToggleRow
-                  label="Waveform detail"
-                  hint="Zoomed-in waveform around the playhead"
-                  checked={settings.showDeckWaveformDetail}
-                  onChange={update('showDeckWaveformDetail')}
-                />
-                <ToggleRow
-                  label="Deck number"
-                  hint="The deck's number badge in the waveform view"
-                  checked={settings.showDeckNumber}
-                  onChange={update('showDeckNumber')}
-                />
-              </section>
+              {DECK_VIEW_TOGGLE_GROUPS.map((group) => (
+                <section key={group.title} className="settings-section">
+                  <h3>{group.title}</h3>
+                  {group.rows.map((row) => (
+                    <ToggleRow
+                      key={row.key}
+                      label={row.label}
+                      hint={row.hint}
+                      checked={settings[row.key]}
+                      onChange={update(row.key)}
+                    />
+                  ))}
+                </section>
+              ))}
 
               <DeckLabelsEditor />
             </>

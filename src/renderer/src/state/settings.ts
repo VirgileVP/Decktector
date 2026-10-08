@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { useShallow } from 'zustand/react/shallow'
 
 import { DEFAULT_ON_AIR_SOURCE, parseOnAirSource, type OnAirSource } from '../lib/deck-activity'
 import { sanitizeDeckLabels, type DeckLabels } from '../lib/deck-labels'
@@ -78,7 +79,7 @@ export type DeckViewToggles = Pick<
   | 'showDeckWaveformDetail'
 >
 
-const DECK_VIEW_TOGGLE_KEYS = [
+export const DECK_VIEW_TOGGLE_KEYS = [
   'showDeckNumber',
   'showDeckArtwork',
   'showDeckTrackInfo',
@@ -95,6 +96,13 @@ const DECK_VIEW_TOGGLE_KEYS = [
   'showDeckWaveformOverview',
   'showDeckWaveformDetail'
 ] as const satisfies readonly (keyof DeckViewToggles)[]
+
+/** The Deck view toggles out of a full settings object — a copy, safe to keep. */
+export function pickDeckViewToggles(settings: DeckViewToggles): DeckViewToggles {
+  const toggles = {} as DeckViewToggles
+  for (const key of DECK_VIEW_TOGGLE_KEYS) toggles[key] = settings[key]
+  return toggles
+}
 
 export type DeckViewPreset = 'simple' | 'full'
 
@@ -423,4 +431,9 @@ function pickSettings(state: Settings): Settings {
     deckEventListWidth,
     deckLabels
   }
+}
+
+/** The main window's Deck view toggles, re-rendering only when one of them changes. */
+export function useDeckViewToggles(): DeckViewToggles {
+  return useSettings(useShallow(pickDeckViewToggles))
 }

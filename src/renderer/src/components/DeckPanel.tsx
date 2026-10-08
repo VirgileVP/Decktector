@@ -1,15 +1,12 @@
 import type { DeckId } from '../model'
-import { formatTimeMs } from '../lib/playhead'
-import { TRANSPORT_GLYPHS } from '../lib/transport'
 import { useDeckActive } from '../state/deck-activity'
-import { DECK_RAIL_WIDTH_RANGE, useSettings } from '../state/settings'
+import { DECK_RAIL_WIDTH_RANGE, useSettings, type DeckViewToggles } from '../state/settings'
 import { useDecktectorStore } from '../state/store'
 import { BeatIndicator } from './BeatIndicator'
 import { CueList } from './CueList'
 import { DeckBar } from './DeckBar'
-import { deckBarLayout, useDeckBarFields } from './DeckBarLayout'
+import { deckBarFields, deckBarLayout } from './DeckBarLayout'
 import { DeckIdentity } from './DeckIdentity'
-import { DeckStat } from './DeckStat'
 import { PanelResizeHandle } from './PanelResizeHandle'
 import { PopOutButton } from './PopOutButton'
 import { TrackEventList } from './TrackEventList'
@@ -19,69 +16,25 @@ import { WaveformOverview } from './WaveformOverview'
 interface DeckPanelProps {
   deckId: DeckId
   accentColor: string
-  /** `'compact'` is for a small panel window — see `PanelChrome`'s compact toggle. */
-  variant?: 'full' | 'compact'
+  /** Which pieces are shown — the Deck view settings in the main window, a window's own in a panel window. */
+  view: DeckViewToggles
 }
 
-export function DeckPanel({
-  deckId,
-  accentColor,
-  variant = 'full'
-}: DeckPanelProps): React.JSX.Element {
-  const deck = useDecktectorStore((s) => s.decks[deckId])
+export function DeckPanel({ deckId, accentColor, view }: DeckPanelProps): React.JSX.Element {
   const track = useDecktectorStore((s) => s.tracks[deckId] ?? null)
-  const barFields = useDeckBarFields()
-  const deckLabel = useSettings((s) => s.deckLabels[deckId] ?? '')
-  const showCueList = useSettings((s) => s.showDeckCueList)
-  const showEventList = useSettings((s) => s.showDeckEventList)
-  const showWaveformOverview = useSettings((s) => s.showDeckWaveformOverview)
-  const showWaveformDetail = useSettings((s) => s.showDeckWaveformDetail)
+  const barFields = deckBarFields(view)
+  const {
+    showDeckCueList: showCueList,
+    showDeckEventList: showEventList,
+    showDeckWaveformOverview: showWaveformOverview,
+    showDeckWaveformDetail: showWaveformDetail
+  } = view
   const cueListWidth = useSettings((s) => s.deckCueListWidth)
   const eventListWidth = useSettings((s) => s.deckEventListWidth)
   const updateSetting = useSettings((s) => s.update)
   const showTimeline = showWaveformOverview || showWaveformDetail
   const barLayout = deckBarLayout(barFields)
-
-  // The engine resolves artwork to a data: URL, so it drops straight into
-  // an <img> with nothing to allocate or revoke.
-  const artworkUrl = track?.artwork ?? null
-
-  const playState = deck?.playState ?? 'empty'
-  const playhead = deck?.playheadMs ?? null
-  const remaining = track && playhead !== null ? track.durationMs - playhead : null
   const isActive = useDeckActive(deckId)
-  const bpmValue = deck?.effectiveBpm ?? deck?.trackBpm ?? null
-  const bpmText = bpmValue !== null ? bpmValue.toFixed(1) : '--.-'
-
-  // No waveforms, no cue rail, no event rail, and the `showDeck*` settings
-  // do not apply — a compact window is sized for artwork, title, artist,
-  // BPM, play state and time remaining only.
-  if (variant === 'compact') {
-    return (
-      <section
-        className={`deck deck-compact ${isActive ? 'deck-onair' : 'deck-idle'}`}
-        style={{ ['--deck-color' as string]: accentColor }}
-      >
-        <div className="deck-compact-art">
-          {artworkUrl ? <img src={artworkUrl} alt="" /> : <span>♪</span>}
-        </div>
-        <div className="deck-compact-info">
-          {deckLabel !== '' && <div className="deck-compact-label">{deckLabel}</div>}
-          <div className="deck-compact-title">{track?.title ?? 'No track loaded'}</div>
-          <div className="deck-compact-sub">{track?.artist ?? '—'}</div>
-          <div className="deck-compact-meta">
-            <span className={`deck-transport state-${playState}`}>
-              {TRANSPORT_GLYPHS[playState]}
-            </span>
-            <DeckStat className="deck-compact-bpm" label="BPM" value={bpmText} />
-            <span className="deck-compact-remain">
-              {remaining !== null ? `-${formatTimeMs(remaining)}` : '--:--'}
-            </span>
-          </div>
-        </div>
-      </section>
-    )
-  }
 
   return (
     <section
@@ -137,7 +90,7 @@ export function DeckPanel({
               {showWaveformDetail && (
                 <WaveformDetail deckId={deckId} track={track} accentColor={accentColor} />
               )}
-              <DeckIdentity deckId={deckId} />
+              <DeckIdentity deckId={deckId} showDeckNumber={view.showDeckNumber} />
             </div>
           )}
         </div>

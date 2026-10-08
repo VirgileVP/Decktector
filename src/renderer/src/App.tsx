@@ -18,6 +18,7 @@ import { connectDownloadToEngine } from './state/download'
 import { connectPanelWindowRegistry } from './state/panel-windows'
 import { connectRemoteToEngine } from './state/remote'
 import { connectSettingsBroadcast } from './state/settings-broadcast'
+import { useDeckViewToggles } from './state/settings'
 import { connectSettingsToApp } from './state/settings-sync'
 import { connectStoreToEngine, useDecktectorStore } from './state/store'
 import { connectTimecodeToEngine } from './state/timecode'
@@ -69,6 +70,7 @@ function App(): React.JSX.Element {
   }
 
   const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null)
+  const deckViewToggles = useDeckViewToggles()
 
   const networkState = useDecktectorStore((s) => s.networkState)
   const lastDeviceSeenAt = useDevicesStore((s) => s.lastSeenAt)
@@ -168,7 +170,12 @@ function App(): React.JSX.Element {
           </div>
         ) : (
           visibleDeckIds.map((deckId) => (
-            <DeckPanel key={deckId} deckId={deckId} accentColor={DECK_ACCENT_COLOR} />
+            <DeckPanel
+              key={deckId}
+              deckId={deckId}
+              accentColor={DECK_ACCENT_COLOR}
+              view={deckViewToggles}
+            />
           ))
         )}
       </main>

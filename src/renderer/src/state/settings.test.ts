@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { DEFAULT_SETTINGS, mergePersistedSettings } from './settings'
+import {
+  DECK_VIEW_PRESETS,
+  DEFAULT_SETTINGS,
+  mergePersistedSettings,
+  pickDeckViewToggles
+} from './settings'
 
 describe('mergePersistedSettings', () => {
   it('defaults the on-air source to auto', () => {
@@ -39,5 +44,11 @@ describe('mergePersistedSettings', () => {
     )
     expect(merged.uiScale).toBe(1.25)
     expect(merged.deckLabels).toEqual({ 1: 'CH1' })
+  })
+})
+
+describe('pickDeckViewToggles', () => {
+  it('keeps exactly the Deck view toggles', () => {
+    expect(pickDeckViewToggles(DEFAULT_SETTINGS)).toEqual(DECK_VIEW_PRESETS.full.values)
   })
 })

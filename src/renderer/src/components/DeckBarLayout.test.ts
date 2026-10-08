@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { deckBarLayout, type DeckBarFields } from './DeckBarLayout'
+import { DECK_VIEW_PRESETS } from '../state/settings'
+import { deckBarFields, deckBarLayout, type DeckBarFields } from './DeckBarLayout'
 
 function allFieldsFalse(): DeckBarFields {
   return {
@@ -62,5 +63,23 @@ describe('deckBarLayout', () => {
         pitch: true
       })
     ).toBe('rail')
+  })
+})
+
+describe('deckBarFields', () => {
+  it('maps each Deck view toggle onto its bar field', () => {
+    const view = { ...DECK_VIEW_PRESETS.full.values, showDeckPitch: false, showDeckArtwork: false }
+    expect(deckBarFields(view)).toEqual({
+      artwork: false,
+      trackInfo: true,
+      trackTags: true,
+      tcButton: true,
+      transport: true,
+      syncBadges: true,
+      time: true,
+      timeRemaining: true,
+      pitch: false,
+      bpm: true
+    })
   })
 })
