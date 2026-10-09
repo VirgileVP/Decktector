@@ -13,6 +13,8 @@ export interface LineupSlot {
   /** Stable across edits so the editor can reorder rows without losing focus. */
   id: string
   artist: string
+  /** Free text for the booth, shown only in the "Time" panel window; empty when unused. */
+  note: string
   /** Axis position, or null while the row is being filled in. */
   startOffset: AxisMinutes | null
 }
@@ -21,6 +23,8 @@ export interface LineupSlot {
 export interface ResolvedSlot {
   id: string
   artist: string
+  /** The set's note; always empty on the doors and END SHOW markers. */
+  note: string
   startOffset: AxisMinutes
   /** Start of the following set, the night's end, or null if neither is set. */
   endOffset: AxisMinutes | null
@@ -66,7 +70,7 @@ export function generateId(): string {
 }
 
 export function createSlot(): LineupSlot {
-  return { id: generateId(), artist: '', startOffset: null }
+  return { id: generateId(), artist: '', note: '', startOffset: null }
 }
 
 /** Chronological order over the axis; rows with no time yet stay at the end. */
@@ -125,6 +129,7 @@ export function resolveLineup(slots: LineupSlot[], endOffset: AxisMinutes | null
     return {
       id: slot.id,
       artist: slot.artist,
+      note: slot.note,
       startOffset: slot.startOffset,
       endOffset: next === undefined ? endOffset : next.startOffset
     }
@@ -159,6 +164,7 @@ export function lineupBlocks(
     blocks.push({
       id: DOORS_OPEN_ID,
       artist: 'Doors opening',
+      note: '',
       startOffset: doorsOffset,
       endOffset: sets[0]?.startOffset ?? endOffset
     })
@@ -167,7 +173,13 @@ export function lineupBlocks(
   blocks.push(...sets)
 
   if (endOffset !== null) {
-    blocks.push({ id: END_SHOW_ID, artist: 'END SHOW', startOffset: endOffset, endOffset: null })
+    blocks.push({
+      id: END_SHOW_ID,
+      artist: 'END SHOW',
+      note: '',
+      startOffset: endOffset,
+      endOffset: null
+    })
   }
 
   return blocks

@@ -71,9 +71,19 @@ describe('resolvePanelDisplay', () => {
     expect(
       resolvePanelDisplay(
         'header-block',
-        { clock: false, timecode: true, lineup: false },
+        { clock: false, timecode: true, lineup: false, notes: false },
         MAIN_DECK_VIEW
       )
-    ).toEqual({ clock: false, timecode: true, lineup: false })
+    ).toEqual({ clock: false, timecode: true, lineup: false, notes: false })
+  })
+
+  it('shows notes in a Time window saved before notes existed', () => {
+    expect(
+      resolvePanelDisplay(
+        'header-block',
+        { clock: false, timecode: true, lineup: true },
+        MAIN_DECK_VIEW
+      )
+    ).toEqual({ clock: false, timecode: true, lineup: true, notes: true })
   })
 })

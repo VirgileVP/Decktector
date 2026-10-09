@@ -418,6 +418,30 @@ input[type='checkbox']:focus-visible {
   );
 }
 
+/* A set's note in the "Time" panel window: a quiet aside marked by a thin
+   edge rule, a step below the set's own times and name so it never outreads
+   them. It wraps rather than widening the set past a readable measure. */
+.lineup-set-note {
+  justify-self: start;
+  align-self: flex-start;
+  max-width: 24ch;
+  padding: 0.05em 0 0.05em 0.5em;
+  border-left: 0.12em solid var(--border-strong);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 0.62em;
+  line-height: 1.3;
+  color: var(--text-faint);
+}
+
+/* The set on air is the one the booth acts on now: its note is lifted to the
+   muted tone and its rule takes a hint of the warning colour — enough to be
+   found at a glance, still quieter than the name above it. */
+.lineup-current .lineup-set-note {
+  border-left-color: color-mix(in srgb, var(--warn) 55%, transparent);
+  color: var(--text-muted);
+}
+
 /* ---------- Settings ---------- */
 
 .settings-backdrop {
@@ -652,7 +676,7 @@ input[type='checkbox']:focus-visible {
 .lineup-rows {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   margin-bottom: 6px;
 }
 
@@ -677,14 +701,28 @@ input[type='checkbox']:focus-visible {
   border-color: var(--sync);
 }
 
+.lineup-rows,
+.lineup-row {
+  --lineup-row-gap: 8px;
+  --lineup-time-width: 78px;
+}
+
 .lineup-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--lineup-row-gap);
+}
+
+/* A set's row, with its note on a second line. */
+.lineup-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .lineup-time-field,
-.lineup-name-field {
+.lineup-name-field,
+.lineup-note-field {
   padding: 4px 6px;
   background: var(--bg-inset);
   border: 1px solid var(--border-strong);
@@ -699,19 +737,27 @@ input[type='checkbox']:focus-visible {
 }
 
 .lineup-time-field:focus,
-.lineup-name-field:focus {
+.lineup-name-field:focus,
+.lineup-note-field:focus {
   border-color: var(--sync);
 }
 
 .lineup-time-field {
   flex-shrink: 0;
-  width: 78px;
+  width: var(--lineup-time-width);
   font-variant-numeric: tabular-nums;
 }
 
 .lineup-name-field {
   flex: 1;
   min-width: 0;
+}
+
+/* Lined up under the artist name, past the time field. */
+.lineup-note-field {
+  margin-left: calc(var(--lineup-time-width) + var(--lineup-row-gap));
+  font-size: 10px;
+  color: var(--text-muted);
 }
 
 .lineup-duration {
@@ -2317,7 +2363,7 @@ input[type='checkbox']:focus-visible {
   }
 
   /* Same fixed-width time column as the panel window's stacked header block
-     (see `.header-block-fit[data-layout='stacked'] .lineup-set-time`) and
+     (see `.header-block-fit[data-layout='stacked'] .lineup-now`) and
      for the same reason: one set per line means a bare "18:05" and the
      current set's "11:55–18:05" range would otherwise claim different
      widths, and every artist name would start at a different x. */
@@ -2699,28 +2745,76 @@ html[data-transparent='on'] .panel-chrome-bar {
 }
 
 .header-block-fit[data-layout='stacked'] .lineup-now {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.2em;
+  /* One set per line on a shared grid — time, artist, note — so every column
+     starts at the same x on every line: a bare "18:05" and the current set's
+     "11:55–18:05" range share one time column, and the notes line up beside
+     the names instead of each pushing a line of its own under its set. The
+     note column takes no room at all when no set has a note. */
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  justify-content: center;
+  align-items: baseline;
+  row-gap: 0.2em;
 }
 
-/* Stacked, each set is its own line, so the time column needs a fixed slot —
-   otherwise a bare "18:05" and the current set's "11:55–18:05" range claim
-   different widths and every artist name starts at a different x. The slot
-   is sized by an invisible range laid out in a zero-height second row, so it
-   is exactly as wide as a real range (tabular-nums keeps every digit the same
-   width) and the current set's progress bar starts flush with its times. */
+.header-block-fit[data-layout='stacked'] .lineup-set {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+}
+
+/* The wrappers that group a set's line, bar and note elsewhere step aside, so
+   their pieces land straight on the shared columns. */
+.header-block-fit[data-layout='stacked'] .lineup-set-body,
+.header-block-fit[data-layout='stacked'] .lineup-set-line {
+  display: contents;
+}
+
 .header-block-fit[data-layout='stacked'] .lineup-set-time {
-  display: inline-grid;
-  justify-items: end;
+  grid-column: 1;
+  justify-self: end;
 }
 
-.header-block-fit[data-layout='stacked'] .lineup-set-time::after {
-  content: '00:00\2013 00:00';
+.header-block-fit[data-layout='stacked'] .lineup-set-artist {
+  grid-column: 2;
+  margin-left: 0.4em;
+}
+
+/* Under the set's times and name, as wide as both. */
+.header-block-fit[data-layout='stacked'] .lineup-set-progress {
+  grid-column: 1 / 3;
   grid-row: 2;
-  height: 0;
-  overflow: hidden;
-  visibility: hidden;
+  margin-top: 0.2em;
+}
+
+.header-block-fit[data-layout='stacked'] .lineup-set-note {
+  grid-column: 3;
+  grid-row: 1;
+  /* A tab beside a line of text reads as one with it when centred on it;
+     on the baseline its padding would hang it low. */
+  align-self: center;
+  max-width: 36ch;
+  margin-left: 1.5em;
+}
+
+/* Beside a progress bar, the note spans the bar's row too, so a note that
+   wraps does not push the bar away from the name it measures. */
+.header-block-fit[data-layout='stacked'] .lineup-set-progress + .lineup-set-note {
+  grid-row: 1 / span 2;
+  align-self: start;
+}
+
+/* A portrait window is limited by its width, which a column of notes beside
+   the names would only eat into: there the note goes under its set's name,
+   below the progress bar when there is one, and the note column stays empty. */
+.header-block-fit[data-shape='portrait'] .lineup-set-note,
+.header-block-fit[data-shape='portrait'] .lineup-set-progress + .lineup-set-note {
+  grid-column: 2;
+  grid-row: auto;
+  align-self: start;
+  max-width: 24ch;
+  margin: 0.2em 0 0.25em 0.4em;
 }
 
 /* The "·" separator only reads as a separator inline; stacked, each set is

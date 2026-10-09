@@ -8,10 +8,11 @@ import type { HeaderBlockVisibility } from './HeaderBlockVisibility'
 const VISIBILITY_ROWS: { key: keyof HeaderBlockVisibility; label: string }[] = [
   { key: 'clock', label: 'Clock' },
   { key: 'timecode', label: 'Timecode' },
-  { key: 'lineup', label: 'Lineup' }
+  { key: 'lineup', label: 'Lineup' },
+  { key: 'notes', label: 'Artist notes' }
 ]
 
-/** The "Time" panel window's show/hide control for its three pieces (clock, timecode, lineup). */
+/** The "Time" panel window's show/hide control for its pieces (clock, timecode, lineup, notes). */
 export function HeaderBlockVisibilityToggle({
   display,
   onChange

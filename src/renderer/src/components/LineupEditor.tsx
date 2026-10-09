@@ -107,7 +107,8 @@ function DayBadge({ offset, onToggle }: DayBadgeProps): React.JSX.Element | null
  * The lineup is entered one set per row, with a native time field and a name.
  * Rows sort themselves chronologically as times are filled in, and each one
  * shows the length it works out to, so a wrong hour shows up as a wrong duration
- * instead of waiting until the night to be noticed. A rail above the rows shows
+ * instead of waiting until the night to be noticed. Under each row, an optional
+ * note for the booth, which only the "Time" panel window displays. A rail above the rows shows
  * the same running order as draggable blocks on a two-day timeline.
  */
 export function LineupEditor(): React.JSX.Element {
@@ -184,50 +185,60 @@ export function LineupEditor(): React.JSX.Element {
             const duration = durations.get(slot.id)
             const anchor = anchorBefore(ordered, index, doorsOffset)
             return (
-              <div key={slot.id} className="lineup-row">
-                <input
-                  type="time"
-                  className="lineup-time-field"
-                  value={toTimeInput(
-                    slot.startOffset === null ? null : axisClock(slot.startOffset)
-                  )}
-                  aria-label={`Start time of set ${index + 1}`}
-                  onChange={(event) => {
-                    const clock = parseTimeInput(event.target.value)
-                    updateSlot(slot.id, {
-                      startOffset: clock === null ? null : axisAfter(clock, anchor)
-                    })
-                  }}
-                />
+              <div key={slot.id} className="lineup-slot">
+                <div className="lineup-row">
+                  <input
+                    type="time"
+                    className="lineup-time-field"
+                    value={toTimeInput(
+                      slot.startOffset === null ? null : axisClock(slot.startOffset)
+                    )}
+                    aria-label={`Start time of set ${index + 1}`}
+                    onChange={(event) => {
+                      const clock = parseTimeInput(event.target.value)
+                      updateSlot(slot.id, {
+                        startOffset: clock === null ? null : axisAfter(clock, anchor)
+                      })
+                    }}
+                  />
+                  <input
+                    type="text"
+                    className="lineup-name-field"
+                    value={slot.artist}
+                    placeholder="Artist"
+                    spellCheck={false}
+                    aria-label={`Artist of set ${index + 1}`}
+                    ref={(element) => {
+                      if (element) nameInputs.current.set(slot.id, element)
+                      else nameInputs.current.delete(slot.id)
+                    }}
+                    onChange={(event) => updateSlot(slot.id, { artist: event.target.value })}
+                  />
+                  <span className="lineup-duration">
+                    {duration === null || duration === undefined ? '' : formatDuration(duration)}
+                  </span>
+                  <DayBadge
+                    offset={slot.startOffset}
+                    onToggle={(next) => updateSlot(slot.id, { startOffset: next })}
+                  />
+                  <button
+                    type="button"
+                    className="lineup-remove"
+                    title="Remove this set"
+                    aria-label={`Remove set ${index + 1}`}
+                    onClick={() => removeSlot(slot.id)}
+                  >
+                    ×
+                  </button>
+                </div>
                 <input
                   type="text"
-                  className="lineup-name-field"
-                  value={slot.artist}
-                  placeholder="Artist"
-                  spellCheck={false}
-                  aria-label={`Artist of set ${index + 1}`}
-                  ref={(element) => {
-                    if (element) nameInputs.current.set(slot.id, element)
-                    else nameInputs.current.delete(slot.id)
-                  }}
-                  onChange={(event) => updateSlot(slot.id, { artist: event.target.value })}
+                  className="lineup-note-field"
+                  value={slot.note}
+                  placeholder="Note — shown in the Time window"
+                  aria-label={`Note for set ${index + 1}`}
+                  onChange={(event) => updateSlot(slot.id, { note: event.target.value })}
                 />
-                <span className="lineup-duration">
-                  {duration === null || duration === undefined ? '' : formatDuration(duration)}
-                </span>
-                <DayBadge
-                  offset={slot.startOffset}
-                  onToggle={(next) => updateSlot(slot.id, { startOffset: next })}
-                />
-                <button
-                  type="button"
-                  className="lineup-remove"
-                  title="Remove this set"
-                  aria-label={`Remove set ${index + 1}`}
-                  onClick={() => removeSlot(slot.id)}
-                >
-                  ×
-                </button>
               </div>
             )
           })}

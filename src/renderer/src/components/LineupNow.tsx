@@ -11,6 +11,9 @@ interface LineupNowProps {
   /** Draws how far the set on air has run under its name — the "Time" panel
    *  window shows it; the app header has no room to spare for it. */
   showProgress?: boolean
+  /** Writes each set's note under its name — the "Time" panel window only,
+   *  where the booth reads them; the app header never shows them. */
+  showNotes?: boolean
 }
 
 /**
@@ -18,7 +21,10 @@ interface LineupNowProps {
  * narrowed to the sets around now. Renders nothing outside the night, so the
  * header falls back to the clock alone.
  */
-export function LineupNow({ showProgress = false }: LineupNowProps): React.JSX.Element | null {
+export function LineupNow({
+  showProgress = false,
+  showNotes = false
+}: LineupNowProps): React.JSX.Element | null {
   const slots = useLineup((s) => s.slots)
   const endOffset = useLineup((s) => s.endOffset)
   const doorsOffset = useLineup((s) => s.doorsOffset)
@@ -34,20 +40,42 @@ export function LineupNow({ showProgress = false }: LineupNowProps): React.JSX.E
   return (
     <div className="lineup-now">
       {shown.map((entry) => (
-        <span key={entry.id} className={`lineup-set lineup-${entry.state}`}>
-          {showProgress && entry.progress !== null ? (
-            <span className="lineup-set-body">
-              <span className="lineup-set-line">
-                <SetLine entry={entry} />
-              </span>
-              <SetProgress progress={entry.progress} />
-            </span>
-          ) : (
-            <SetLine entry={entry} />
-          )}
-        </span>
+        <LineupSet
+          key={entry.id}
+          entry={entry}
+          progress={showProgress ? entry.progress : null}
+          note={showNotes ? entry.note.trim() : ''}
+        />
       ))}
     </div>
+  )
+}
+
+interface LineupSetProps {
+  entry: LineupEntry
+  /** Null hides the progress bar. */
+  progress: number | null
+  /** Empty hides the note. */
+  note: string
+}
+
+/** One set of the readout, with whatever sits under its line. */
+function LineupSet({ entry, progress, note }: LineupSetProps): React.JSX.Element {
+  const hasExtras = progress !== null || note.length > 0
+  return (
+    <span className={`lineup-set lineup-${entry.state}`}>
+      {hasExtras ? (
+        <span className="lineup-set-body">
+          <span className="lineup-set-line">
+            <SetLine entry={entry} />
+          </span>
+          {progress !== null && <SetProgress progress={progress} />}
+          {note.length > 0 && <span className="lineup-set-note">{note}</span>}
+        </span>
+      ) : (
+        <SetLine entry={entry} />
+      )}
+    </span>
   )
 }
 

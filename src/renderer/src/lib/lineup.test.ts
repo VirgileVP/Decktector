@@ -47,8 +47,8 @@ describe('generateId', () => {
 describe('buildLineup progress', () => {
   const MINUTES_PER_HOUR = 60
   const slots: LineupSlot[] = [
-    { id: 'a', artist: 'Opener', startOffset: 22 * MINUTES_PER_HOUR },
-    { id: 'b', artist: 'Closer', startOffset: 23 * MINUTES_PER_HOUR }
+    { id: 'a', artist: 'Opener', note: '', startOffset: 22 * MINUTES_PER_HOUR },
+    { id: 'b', artist: 'Closer', note: '', startOffset: 23 * MINUTES_PER_HOUR }
   ]
   const nightEnd = 24 * MINUTES_PER_HOUR
 
@@ -86,6 +86,31 @@ describe('buildLineup progress', () => {
     expect(progressOf(23 * MINUTES_PER_HOUR + 30, null)).toEqual([
       ['Opener', null],
       ['Closer', null]
+    ])
+  })
+})
+
+describe('buildLineup notes', () => {
+  const MINUTES_PER_HOUR = 60
+
+  it("carries each set's note, and none on the doors and END SHOW markers", () => {
+    const slots: LineupSlot[] = [
+      { id: 'a', artist: 'Opener', note: 'Brings own mixer', startOffset: 22 * MINUTES_PER_HOUR },
+      { id: 'b', artist: 'Closer', note: '', startOffset: 23 * MINUTES_PER_HOUR }
+    ]
+    const doors = 21 * MINUTES_PER_HOUR
+    const nightEnd = 24 * MINUTES_PER_HOUR
+
+    const notes = buildLineup(slots, nightEnd, 22 * MINUTES_PER_HOUR, doors).map((entry) => [
+      entry.artist,
+      entry.note
+    ])
+
+    expect(notes).toEqual([
+      ['Doors opening', ''],
+      ['Opener', 'Brings own mixer'],
+      ['Closer', ''],
+      ['END SHOW', '']
     ])
   })
 })

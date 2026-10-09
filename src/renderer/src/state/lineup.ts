@@ -99,6 +99,11 @@ function migrateFromV2(state: V3LineupState): V3LineupState {
   return { ...state, doorsOpenMinutes: null }
 }
 
+/** Version 4 placed sets on the axis but had no per-set note. */
+interface V4LineupState extends Omit<LineupState, 'slots'> {
+  slots: Omit<LineupSlot, 'note'>[]
+}
+
 /** Version 3's bascule: anything before 06:00 belonged to the previous night. */
 const V3_ROLLOVER_MINUTES = 6 * MINUTES_PER_HOUR
 
@@ -113,7 +118,7 @@ function v3ToAxis(minutes: number | null): AxisMinutes | null {
  * clock reading the user typed — the axis is not rebased to zero, since that
  * would change what was actually entered.
  */
-function migrateFromV3(state: V3LineupState): LineupState {
+function migrateFromV3(state: V3LineupState): V4LineupState {
   return {
     slots: state.slots.map((slot) => ({
       id: slot.id,
@@ -123,6 +128,11 @@ function migrateFromV3(state: V3LineupState): LineupState {
     endOffset: v3ToAxis(state.endMinutes),
     doorsOffset: v3ToAxis(state.doorsOpenMinutes)
   }
+}
+
+/** Version 5 gave every set a note, empty until the user writes one. */
+function migrateFromV4(state: V4LineupState): LineupState {
+  return { ...state, slots: state.slots.map((slot) => ({ ...slot, note: '' })) }
 }
 
 /**
@@ -182,20 +192,21 @@ export const useLineup = create<LineupState & LineupActions>()(
           return { slots: nextSlots, doorsOffset: nextDoorsOffset, endOffset: nextEndOffset }
         }),
       addSlotAt: (minutes) => {
-        const id = generateId()
-        set((state) => ({ slots: [...state.slots, { id, artist: '', startOffset: minutes }] }))
-        return id
+        const slot = { ...createSlot(), startOffset: minutes }
+        set((state) => ({ slots: [...state.slots, slot] }))
+        return slot.id
       },
       clear: () => set({ slots: [], endOffset: null, doorsOffset: null })
     }),
     {
       name: LINEUP_STORAGE_KEY,
-      version: 4,
+      version: 5,
       migrate: (persisted, version) => {
         let state = persisted as unknown
         if (version < 2) state = migrateFromV1(state as { slots?: LegacySlot[] })
         if (version < 3) state = migrateFromV2(state as V3LineupState)
         if (version < 4) state = migrateFromV3(state as V3LineupState)
+        if (version < 5) state = migrateFromV4(state as V4LineupState)
         return state as LineupState
       },
       // Actions are not state: keeping them out avoids writing dead keys to storage.

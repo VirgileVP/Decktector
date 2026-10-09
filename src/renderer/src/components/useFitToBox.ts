@@ -8,29 +8,50 @@ import { useEffect, useLayoutEffect, useReducer, useState, type RefObject } from
  */
 const ROW_LAYOUT_MIN_ASPECT = 3.5
 
+/**
+ * Box aspect ratio (width / height) below which the box counts as portrait:
+ * taller than wide, so anything that can go under its neighbour instead of
+ * beside it should — width is what limits the scale there.
+ */
+const PORTRAIT_MAX_ASPECT = 1
+
 /** Share of the box the fitted content fills, leaving a margin of air around it. */
 const FILL_RATIO = 0.94
 
 /** Keeps a degenerate measurement from producing absurdly small or large text. */
 const SCALE_RANGE = { min: 0.4, max: 12 } as const
 
+/**
+ * The box's shape, for the content to arrange itself by: `wide` is wide
+ * enough for a single row, `landscape` is wider than tall without being
+ * that wide, `portrait` is taller than wide.
+ */
+export type BoxShape = 'wide' | 'landscape' | 'portrait'
+
 export interface FitToBox {
   /** Multiplier to apply to the content's natural size so it fills the box. */
   scale: number
-  /** Whether the box is wide enough for the single-row layout. */
-  wide: boolean
+  shape: BoxShape
 }
 
 /** What a caller that opted out reads, so the content renders at its natural size. */
-const NO_FIT: FitToBox = { scale: 1, wide: true }
+const NO_FIT: FitToBox = { scale: 1, shape: 'wide' }
+
+/** Classifies a box of `width` by `height` (both positive). */
+export function boxShape(width: number, height: number): BoxShape {
+  const aspect = width / height
+  if (aspect >= ROW_LAYOUT_MIN_ASPECT) return 'wide'
+  if (aspect < PORTRAIT_MAX_ASPECT) return 'portrait'
+  return 'landscape'
+}
 
 function clampScale(scale: number): number {
   return Math.min(SCALE_RANGE.max, Math.max(SCALE_RANGE.min, scale))
 }
 
 /**
- * Scales the element in `contentRef` to fill the one in `boxRef`, and picks
- * between a wide and a stacked arrangement from the box's shape.
+ * Scales the element in `contentRef` to fill the one in `boxRef`, and reports
+ * the box's shape for the content to pick its arrangement from.
  *
  * This replaces sizing text off viewport units: a `clamp()` of `vw`/`vh` has
  * to guess how much text there is, so it either clips a short window or leaves
@@ -49,7 +70,7 @@ export function useFitToBox(
   const [fit, setFit] = useState<FitToBox>(NO_FIT)
   const [resizeTick, signalResize] = useReducer((tick: number) => tick + 1, 0)
 
-  // `fit.wide` belongs in the dependencies below because flipping the layout is
+  // `fit.shape` belongs in the dependencies below because flipping the layout is
   // itself what changes the content's size: a scale measured in the same pass
   // that decides to flip describes the arrangement being replaced, so the
   // measurement has to run once more against the new one. That settles in a
@@ -73,12 +94,12 @@ export function useFitToBox(
       scale: clampScale(
         FILL_RATIO * Math.min(boxRect.width / contentWidth, boxRect.height / contentHeight)
       ),
-      wide: boxRect.width / boxRect.height >= ROW_LAYOUT_MIN_ASPECT
+      shape: boxShape(boxRect.width, boxRect.height)
     }
     setFit((current) =>
-      current.scale === next.scale && current.wide === next.wide ? current : next
+      current.scale === next.scale && current.shape === next.shape ? current : next
     )
-  }, [boxRef, contentRef, enabled, resizeTick, fit.wide])
+  }, [boxRef, contentRef, enabled, resizeTick, fit.shape])
 
   useEffect(() => {
     if (!enabled) return undefined

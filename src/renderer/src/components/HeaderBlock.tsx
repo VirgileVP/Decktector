@@ -34,7 +34,7 @@ export function HeaderBlock({
 }: HeaderBlockProps): React.JSX.Element {
   const boxRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
-  const { scale, wide } = useFitToBox(boxRef, contentRef, fitToWindow)
+  const { scale, shape } = useFitToBox(boxRef, contentRef, fitToWindow)
 
   return (
     <div className="header-center poppable" ref={boxRef}>
@@ -48,7 +48,8 @@ export function HeaderBlock({
       <div
         ref={contentRef}
         className={`header-block-content${fitToWindow ? ' header-block-fit' : ''}`}
-        data-layout={wide ? 'row' : 'stacked'}
+        data-layout={shape === 'wide' ? 'row' : 'stacked'}
+        data-shape={shape}
         style={fitToWindow ? { ['--fit-scale' as string]: String(scale) } : undefined}
       >
         <div className="header-clocks">
@@ -60,7 +61,9 @@ export function HeaderBlock({
             </>
           )}
         </div>
-        {visibility.lineup && <LineupNow showProgress={fitToWindow} />}
+        {visibility.lineup && (
+          <LineupNow showProgress={fitToWindow} showNotes={fitToWindow && visibility.notes} />
+        )}
       </div>
     </div>
   )
