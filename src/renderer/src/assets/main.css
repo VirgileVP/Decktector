@@ -1925,6 +1925,15 @@ input[type='checkbox']:focus-visible {
   background: var(--border-strong);
 }
 
+/* A rail keeps the width its resize handle set — except when nothing
+   follows it in the deck body (no waveform, or only the rails shown): it
+   then stretches over the space the timeline would have taken, instead of
+   leaving it empty. Its stored width stays as the flex basis. */
+.deck-body > .cue-list:last-child,
+.deck-body > .event-list:last-child {
+  flex-grow: 1;
+}
+
 .cue-list {
   flex-shrink: 0;
   display: flex;
