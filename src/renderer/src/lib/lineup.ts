@@ -19,6 +19,15 @@ export interface LineupSlot {
   startOffset: AxisMinutes | null
 }
 
+/** A whole night's running order: its sets and the two markers around them. */
+export interface LineupData {
+  slots: LineupSlot[]
+  /** When the last set stops; null leaves the night open-ended. */
+  endOffset: AxisMinutes | null
+  /** When doors open, ahead of the first set; null hides the marker. */
+  doorsOffset: AxisMinutes | null
+}
+
 /** A slot placed on the timeline, with the end its successor gives it. */
 export interface ResolvedSlot {
   id: string

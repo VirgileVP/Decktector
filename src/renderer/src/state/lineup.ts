@@ -13,6 +13,7 @@ import {
   createSlot,
   generateId,
   nextSlotOffset,
+  type LineupData,
   type LineupSlot
 } from '../lib/lineup'
 
@@ -43,13 +44,7 @@ export interface BoundaryPatch {
   minutes: AxisMinutes
 }
 
-interface LineupState {
-  slots: LineupSlot[]
-  /** When the last set stops; null leaves the night open-ended. */
-  endOffset: AxisMinutes | null
-  /** When doors open, ahead of the first set; null hides the marker. */
-  doorsOffset: AxisMinutes | null
-}
+type LineupState = LineupData
 
 interface LineupActions {
   addSlot(): void
@@ -61,6 +56,8 @@ interface LineupActions {
   moveBoundaries(patches: readonly BoundaryPatch[]): void
   /** Inserts a new, unnamed set at `minutes`; returns its id so the caller can focus it. */
   addSlotAt(minutes: AxisMinutes): string
+  /** Swaps the whole night for another one, e.g. a lineup loaded from a file. */
+  replace(lineup: LineupData): void
   clear(): void
 }
 
@@ -196,6 +193,7 @@ export const useLineup = create<LineupState & LineupActions>()(
         set((state) => ({ slots: [...state.slots, slot] }))
         return slot.id
       },
+      replace: ({ slots, endOffset, doorsOffset }) => set({ slots, endOffset, doorsOffset }),
       clear: () => set({ slots: [], endOffset: null, doorsOffset: null })
     }),
     {

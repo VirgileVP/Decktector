@@ -14,6 +14,7 @@ import {
 } from '../lib/lineup-axis'
 import { useLineup } from '../state/lineup'
 import { LINEUP_VIEW_OPTIONS, useSettings } from '../state/settings'
+import { LineupFileActions } from './LineupFileActions'
 import { LineupTimeline } from './LineupTimeline'
 import { ChoiceRow } from './SettingControls'
 
@@ -153,6 +154,8 @@ export function LineupEditor(): React.JSX.Element {
           Clear
         </button>
       </div>
+
+      <LineupFileActions />
 
       <ChoiceRow
         label="Header readout"

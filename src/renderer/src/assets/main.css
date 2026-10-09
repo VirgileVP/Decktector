@@ -787,7 +787,8 @@ input[type='checkbox']:focus-visible {
   color: var(--onair);
 }
 
-.lineup-add {
+.lineup-add,
+.lineup-file-button {
   padding: 4px 8px;
   background: none;
   border: 1px dashed var(--border-strong);
@@ -801,9 +802,30 @@ input[type='checkbox']:focus-visible {
     border-color 0.15s ease;
 }
 
-.lineup-add:hover {
+.lineup-add:hover,
+.lineup-file-button:hover:not(:disabled) {
   color: var(--text);
   border-color: var(--sync);
+}
+
+/* Moving the night in or out of a file: solid, unlike the dashed "add" that grows it. */
+.lineup-file-button {
+  border-style: solid;
+}
+
+.lineup-file-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.lineup-file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
 }
 
 /* Set apart from the sets above it: it closes the night rather than opening one. */
