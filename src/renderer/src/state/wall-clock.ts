@@ -1,8 +1,8 @@
 import { useSyncExternalStore } from 'react'
 
-import { minutesOfDay } from '../lib/lineup-axis'
-
 const MS_PER_SECOND = 1000
+export const SECONDS_PER_MINUTE = 60
+const SECONDS_PER_HOUR = 3600
 
 /**
  * One wall clock for the whole app. Readers subscribe at the granularity they
@@ -13,7 +13,7 @@ const MS_PER_SECOND = 1000
 const listeners = new Set<() => void>()
 let timer: ReturnType<typeof setTimeout> | null = null
 let secondsLabel = ''
-let dayMinutes = 0
+let daySeconds = 0
 let nowMs = Date.now()
 
 function pad2(value: number): string {
@@ -25,7 +25,8 @@ function pad2(value: number): string {
 function refresh(): void {
   const now = new Date()
   secondsLabel = `${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`
-  dayMinutes = minutesOfDay(now)
+  daySeconds =
+    now.getHours() * SECONDS_PER_HOUR + now.getMinutes() * SECONDS_PER_MINUTE + now.getSeconds()
   nowMs = now.getTime()
 }
 
@@ -61,7 +62,19 @@ export function useClockSeconds(): string {
 
 /** Minutes since midnight, re-rendering the caller only when the minute turns. */
 export function useClockMinutes(): number {
-  return useSyncExternalStore(subscribe, () => dayMinutes)
+  return useClockMinutesStepped(SECONDS_PER_MINUTE)
+}
+
+/**
+ * Minutes since midnight, floored to `stepSeconds` — fractional when the step
+ * is under a minute — so the caller re-renders once per step rather than once
+ * per second.
+ */
+export function useClockMinutesStepped(stepSeconds: number): number {
+  return useSyncExternalStore(
+    subscribe,
+    () => (Math.floor(daySeconds / stepSeconds) * stepSeconds) / SECONDS_PER_MINUTE
+  )
 }
 
 /** Epoch ms as of the last second boundary — for callers computing an elapsed

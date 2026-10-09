@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { generateId } from './lineup'
+import { buildLineup, generateId, type LineupSlot } from './lineup'
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
@@ -41,5 +41,51 @@ describe('generateId', () => {
     const ids = new Set(Array.from({ length: 500 }, () => generateId()))
 
     expect(ids.size).toBe(500)
+  })
+})
+
+describe('buildLineup progress', () => {
+  const MINUTES_PER_HOUR = 60
+  const slots: LineupSlot[] = [
+    { id: 'a', artist: 'Opener', startOffset: 22 * MINUTES_PER_HOUR },
+    { id: 'b', artist: 'Closer', startOffset: 23 * MINUTES_PER_HOUR }
+  ]
+  const nightEnd = 24 * MINUTES_PER_HOUR
+
+  function progressOf(nowClockMinutes: number, endOffset: number | null = nightEnd) {
+    return buildLineup(slots, endOffset, nowClockMinutes).map((entry) => [
+      entry.artist,
+      entry.progress
+    ])
+  }
+
+  it('measures how far the current set has run', () => {
+    expect(progressOf(22 * MINUTES_PER_HOUR + 15)).toEqual([
+      ['Opener', 0.25],
+      ['Closer', null],
+      ['END SHOW', null]
+    ])
+  })
+
+  it('reads a clock finer than the minute', () => {
+    const quarterMinute = 0.25
+    const [opener] = buildLineup(slots, nightEnd, 22 * MINUTES_PER_HOUR + 6 + quarterMinute)
+
+    expect(opener.progress).toBeCloseTo((6 + quarterMinute) / MINUTES_PER_HOUR)
+  })
+
+  it('starts the current set at zero', () => {
+    expect(progressOf(23 * MINUTES_PER_HOUR)).toEqual([
+      ['Opener', null],
+      ['Closer', 0],
+      ['END SHOW', null]
+    ])
+  })
+
+  it('has no progress for a last set with no end to measure against', () => {
+    expect(progressOf(23 * MINUTES_PER_HOUR + 30, null)).toEqual([
+      ['Opener', null],
+      ['Closer', null]
+    ])
   })
 })

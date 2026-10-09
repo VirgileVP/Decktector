@@ -340,7 +340,9 @@ input[type='checkbox']:focus-visible {
   line-height: 14px;
 }
 
-.lineup-set {
+/* `.lineup-set-line` is the same row, nested when a progress bar sits under it. */
+.lineup-set,
+.lineup-set-line {
   display: flex;
   align-items: baseline;
   gap: 5px;
@@ -392,6 +394,28 @@ input[type='checkbox']:focus-visible {
 
 .lineup-upcoming .lineup-set-artist {
   color: var(--text-muted);
+}
+
+/* Times and name above a progress bar as wide as both. A column flex box
+   takes its baseline from its first line, so the set still lines up with its
+   neighbours in a row. */
+.lineup-set-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+  min-width: 0;
+}
+
+/* Track and fill in one element: the fill is a gradient stop driven by
+   `--set-progress` (0 to 1), so a new minute only rewrites one property. */
+.lineup-set-progress {
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--text-muted) calc(var(--set-progress, 0) * 100%),
+    var(--border) 0
+  );
 }
 
 /* ---------- Settings ---------- */
@@ -2682,12 +2706,21 @@ html[data-transparent='on'] .panel-chrome-bar {
 
 /* Stacked, each set is its own line, so the time column needs a fixed slot —
    otherwise a bare "18:05" and the current set's "11:55–18:05" range claim
-   different widths and every artist name starts at a different x. Sized to
-   the range (the widest case, "HH:MM–HH:MM" = 11 characters) and
-   right-aligned within it; tabular-nums keeps the digits themselves uniform. */
+   different widths and every artist name starts at a different x. The slot
+   is sized by an invisible range laid out in a zero-height second row, so it
+   is exactly as wide as a real range (tabular-nums keeps every digit the same
+   width) and the current set's progress bar starts flush with its times. */
 .header-block-fit[data-layout='stacked'] .lineup-set-time {
-  min-width: 11ch;
-  text-align: right;
+  display: inline-grid;
+  justify-items: end;
+}
+
+.header-block-fit[data-layout='stacked'] .lineup-set-time::after {
+  content: '00:00\2013 00:00';
+  grid-row: 2;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
 }
 
 /* The "·" separator only reads as a separator inline; stacked, each set is

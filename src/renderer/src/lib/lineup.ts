@@ -29,6 +29,9 @@ export interface ResolvedSlot {
 /** A resolved slot read against the current time, ready to render. */
 export interface LineupEntry extends ResolvedSlot {
   state: 'passed' | 'current' | 'upcoming'
+  /** Share of the set already played, from 0 to 1 — null unless it is the
+   *  current one and has an end to measure against. */
+  progress: number | null
 }
 
 /** The night's used range, from its first marker to its last. */
@@ -303,15 +306,22 @@ export function buildLineup(
   const span = lineupSpan(slots, endOffset, doorsOffset)
   const now = projectClockOnAxis(nowClockMinutes, span)
 
-  return lineupBlocks(slots, endOffset, doorsOffset).map((slot) => ({
-    ...slot,
-    state:
+  return lineupBlocks(slots, endOffset, doorsOffset).map((slot) => {
+    const state =
       now < slot.startOffset
         ? 'upcoming'
         : slot.endOffset !== null && now >= slot.endOffset
           ? 'passed'
           : 'current'
-  }))
+    return { ...slot, state, progress: state === 'current' ? setProgress(slot, now) : null }
+  })
+}
+
+/** How far `now` sits into the set, or null while the set has no end. */
+function setProgress(slot: ResolvedSlot, now: AxisMinutes): number | null {
+  const duration = slotDuration(slot)
+  if (duration === null || duration <= 0) return null
+  return Math.min(Math.max((now - slot.startOffset) / duration, 0), 1)
 }
 
 /**

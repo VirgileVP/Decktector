@@ -60,7 +60,7 @@ export function HeaderBlock({
             </>
           )}
         </div>
-        {visibility.lineup && <LineupNow />}
+        {visibility.lineup && <LineupNow showProgress={fitToWindow} />}
       </div>
     </div>
   )
