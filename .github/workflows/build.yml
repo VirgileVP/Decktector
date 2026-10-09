@@ -17,6 +17,22 @@ jobs:
           node-version: 22
           cache: npm
 
+      # A release tag must match the app's version and have its notes written in
+      # CHANGELOG.md. Checked first, so a forgotten bump or missing notes fails in
+      # seconds instead of after every platform has built.
+      - name: Check the release version and notes
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          app_version="$(node -p "require('./package.json').version")"
+          if [[ "$version" != "$app_version" ]]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match package.json version $app_version"
+            exit 1
+          fi
+          node scripts/release-notes.mjs "$version" > /dev/null
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -124,18 +140,27 @@ jobs:
             exit 1
           fi
 
+          # A `v*` tag is a real release: titled after the app, with its
+          # CHANGELOG.md section as the notes (the check job has already
+          # made sure there is one). Anything else is a bare build.
+          notes="$RUNNER_TEMP/release-notes.md"
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             tag="$GITHUB_REF_NAME"
+            product="$(node -p "require('./src-tauri/tauri.conf.json').productName")"
+            title="$product $tag"
+            node scripts/release-notes.mjs "${tag#v}" > "$notes"
           else
             tag="build-${GITHUB_SHA::7}"
+            title="$tag"
+            echo "Automated build of \`$GITHUB_SHA\` on \`$GITHUB_REF_NAME\`." > "$notes"
           fi
 
           # The three platform jobs run in parallel and share one release,
           # so whichever loses the race to create it must carry on rather
-          # than fail — hence the view/create/view sequence.
+          # than fail — hence the view/create/view sequence. The notes are
+          # only set here, so a re-run keeps any edit made on GitHub since.
           if ! gh release view "$tag" >/dev/null 2>&1; then
-            create=(--target "$GITHUB_SHA" --title "$tag"
-                    --notes "Automated build of \`$GITHUB_SHA\` on \`$GITHUB_REF_NAME\`.")
+            create=(--target "$GITHUB_SHA" --title "$title" --notes-file "$notes")
             if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
               create+=(--prerelease)
             fi

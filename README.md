@@ -151,6 +151,12 @@ then attaches the installers to a GitHub release — the tag itself for a `v*` p
 a `build-<short sha>` prerelease for anything else. Download from the Releases
 page rather than the run's page; these are release assets, not Actions artifacts.
 
+A `v*` tag's release takes its notes from that version's section of
+[`CHANGELOG.md`](CHANGELOG.md), followed by the downloads table in
+`.github/release-footer.md`; `node scripts/release-notes.mjs <version>` prints them
+locally. The workflow fails early if the tag doesn't match the `package.json` version
+or the changelog has no section for it.
+
 The Rekordbox database `prolink` reads is SQLCipher-encrypted, so the build links a
 libcrypto. Nothing to run by hand on any platform:
 
