@@ -3,7 +3,8 @@ import {
   PanelDisplayPopover,
   type DisplayControlProps
 } from '../panels/PanelDisplayPopover'
-import type { HeaderBlockVisibility } from './HeaderBlockVisibility'
+import { LINEUP_VIEW_OPTIONS } from '../state/settings'
+import type { HeaderBlockDisplay, HeaderBlockVisibility } from './HeaderBlockVisibility'
 
 const VISIBILITY_ROWS: { key: keyof HeaderBlockVisibility; label: string }[] = [
   { key: 'clock', label: 'Clock' },
@@ -12,11 +13,15 @@ const VISIBILITY_ROWS: { key: keyof HeaderBlockVisibility; label: string }[] = [
   { key: 'notes', label: 'Artist notes' }
 ]
 
-/** The "Time" panel window's show/hide control for its pieces (clock, timecode, lineup, notes). */
+/**
+ * The "Time" panel window's display control: show/hide for its pieces
+ * (clock, timecode, lineup, notes) and how much of the running order the
+ * lineup shows.
+ */
 export function HeaderBlockVisibilityToggle({
   display,
   onChange
-}: DisplayControlProps<HeaderBlockVisibility>): React.JSX.Element {
+}: DisplayControlProps<HeaderBlockDisplay>): React.JSX.Element {
   const toggle = (key: keyof HeaderBlockVisibility): void =>
     onChange({ ...display, [key]: !display[key] })
 
@@ -30,6 +35,27 @@ export function HeaderBlockVisibilityToggle({
           onToggle={() => toggle(key)}
         />
       ))}
+
+      <fieldset className="panel-display-group" disabled={!display.lineup}>
+        <legend>Lineup readout</legend>
+        <div
+          className="setting-choice panel-display-choice"
+          role="group"
+          aria-label="Lineup readout"
+        >
+          {LINEUP_VIEW_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={display.lineupView === option.value ? 'active' : ''}
+              aria-pressed={display.lineupView === option.value}
+              onClick={() => onChange({ ...display, lineupView: option.value })}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </fieldset>
     </PanelDisplayPopover>
   )
 }

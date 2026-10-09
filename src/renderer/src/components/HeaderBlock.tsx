@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 
+import type { LineupView } from '../state/settings'
 import {
   DEFAULT_HEADER_BLOCK_VISIBILITY,
   type HeaderBlockVisibility
@@ -15,6 +16,8 @@ interface HeaderBlockProps {
   /** Defaults to showing everything — the main header always does. A panel
    * window controls this through its own chrome (`HeaderBlockVisibilityToggle`). */
   visibility?: HeaderBlockVisibility
+  /** How much of the running order to show — the `lineupView` setting when omitted, as in the app header. */
+  lineupView?: LineupView
   /**
    * Scales the block to fill whatever space it is given, and lets its shape
    * choose the layout. Panel windows turn this on — the block is the whole
@@ -30,6 +33,7 @@ interface HeaderBlockProps {
  */
 export function HeaderBlock({
   visibility = DEFAULT_HEADER_BLOCK_VISIBILITY,
+  lineupView,
   fitToWindow = false
 }: HeaderBlockProps): React.JSX.Element {
   const boxRef = useRef<HTMLDivElement>(null)
@@ -62,7 +66,11 @@ export function HeaderBlock({
           )}
         </div>
         {visibility.lineup && (
-          <LineupNow showProgress={fitToWindow} showNotes={fitToWindow && visibility.notes} />
+          <LineupNow
+            view={lineupView}
+            showProgress={fitToWindow}
+            showNotes={fitToWindow && visibility.notes}
+          />
         )}
       </div>
     </div>

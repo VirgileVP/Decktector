@@ -3004,6 +3004,28 @@ html[data-transparent='on'] .panel-chrome-bar {
   flex: 1;
 }
 
+/* Stacked: the option labels are too long to sit side by side in the popover. */
+.panel-display-choice {
+  flex-direction: column;
+}
+
+.panel-display-choice button {
+  text-align: left;
+}
+
+.panel-display-choice button + button {
+  border-left: none;
+  border-top: 1px solid var(--border-strong);
+}
+
+.panel-display-group:disabled {
+  opacity: 0.45;
+}
+
+.panel-display-group:disabled .setting-choice button {
+  cursor: default;
+}
+
 .panel-display-group {
   display: flex;
   flex-direction: column;

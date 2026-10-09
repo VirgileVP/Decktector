@@ -1,3 +1,5 @@
+import type { LineupView } from '../state/settings'
+
 /** Which pieces of `HeaderBlock` are shown — toggled per-window from `HeaderBlockVisibilityToggle`. */
 export interface HeaderBlockVisibility {
   clock: boolean
@@ -12,4 +14,18 @@ export const DEFAULT_HEADER_BLOCK_VISIBILITY: HeaderBlockVisibility = {
   timecode: true,
   lineup: true,
   notes: true
+}
+
+/**
+ * Everything a "Time" panel window chooses for itself: which pieces show,
+ * and how much of the running order — independent of the main header's
+ * `lineupView` setting.
+ */
+export interface HeaderBlockDisplay extends HeaderBlockVisibility {
+  lineupView: LineupView
+}
+
+export const DEFAULT_HEADER_BLOCK_DISPLAY: HeaderBlockDisplay = {
+  ...DEFAULT_HEADER_BLOCK_VISIBILITY,
+  lineupView: 'full'
 }

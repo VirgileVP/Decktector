@@ -1,13 +1,15 @@
 import { formatClockMinutes } from '../lib/lineup-axis'
 import { buildLineup, selectAroundNow, type LineupEntry } from '../lib/lineup'
 import { useLineup } from '../state/lineup'
-import { useSettings } from '../state/settings'
+import { useSettings, type LineupView } from '../state/settings'
 import { SECONDS_PER_MINUTE, useClockMinutesStepped } from '../state/wall-clock'
 
 /** How often the progress bar moves on — finer than the minute the rest of the readout needs. */
 const PROGRESS_REFRESH_SECONDS = 15
 
 interface LineupNowProps {
+  /** How much of the running order to show — the `lineupView` setting when omitted. */
+  view?: LineupView
   /** Draws how far the set on air has run under its name — the "Time" panel
    *  window shows it; the app header has no room to spare for it. */
   showProgress?: boolean
@@ -22,13 +24,15 @@ interface LineupNowProps {
  * header falls back to the clock alone.
  */
 export function LineupNow({
+  view,
   showProgress = false,
   showNotes = false
 }: LineupNowProps): React.JSX.Element | null {
   const slots = useLineup((s) => s.slots)
   const endOffset = useLineup((s) => s.endOffset)
   const doorsOffset = useLineup((s) => s.doorsOffset)
-  const lineupView = useSettings((s) => s.lineupView)
+  const settingsLineupView = useSettings((s) => s.lineupView)
+  const lineupView = view ?? settingsLineupView
   const nowMinutes = useClockMinutesStepped(
     showProgress ? PROGRESS_REFRESH_SECONDS : SECONDS_PER_MINUTE
   )

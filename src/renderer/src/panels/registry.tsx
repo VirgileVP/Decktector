@@ -69,7 +69,9 @@ export const PANELS: { [P in PanelId]: PanelDefinition<P> } = {
     title: () => 'Time',
     defaultSize: HEADER_BLOCK_DEFAULT_SIZE,
     minSize: HEADER_BLOCK_MIN_SIZE,
-    render: (_params, visibility) => <HeaderBlock visibility={visibility} fitToWindow />,
+    render: (_params, display) => (
+      <HeaderBlock visibility={display} lineupView={display.lineupView} fitToWindow />
+    ),
     DisplayControl: HeaderBlockVisibilityToggle
   },
   deck: {

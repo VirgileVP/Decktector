@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { DEFAULT_HEADER_BLOCK_VISIBILITY } from '../components/HeaderBlockVisibility'
+import { DEFAULT_HEADER_BLOCK_DISPLAY } from '../components/HeaderBlockVisibility'
 import { DECK_VIEW_PRESETS, type DeckViewToggles } from '../state/settings'
 import { initialPanelDisplay, parseBooleanFields, resolvePanelDisplay } from './panel-display'
 
@@ -13,10 +13,11 @@ describe('initialPanelDisplay', () => {
     expect(display).not.toBe(MAIN_DECK_VIEW)
   })
 
-  it('starts the Time window with every piece shown', () => {
+  it('starts the Time window with every piece shown and the whole lineup', () => {
     expect(initialPanelDisplay('header-block', MAIN_DECK_VIEW)).toEqual(
-      DEFAULT_HEADER_BLOCK_VISIBILITY
+      DEFAULT_HEADER_BLOCK_DISPLAY
     )
+    expect(DEFAULT_HEADER_BLOCK_DISPLAY.lineupView).toBe('full')
   })
 
   it('gives panels with nothing to choose no display', () => {
@@ -67,14 +68,21 @@ describe('resolvePanelDisplay', () => {
     )
   })
 
-  it('restores the Time window visibility', () => {
+  it('restores the Time window display', () => {
+    const stored = {
+      clock: false,
+      timecode: true,
+      lineup: false,
+      notes: false,
+      lineupView: 'around'
+    }
+    expect(resolvePanelDisplay('header-block', stored, MAIN_DECK_VIEW)).toEqual(stored)
+  })
+
+  it('falls back to the whole lineup on an unknown Time window readout', () => {
     expect(
-      resolvePanelDisplay(
-        'header-block',
-        { clock: false, timecode: true, lineup: false, notes: false },
-        MAIN_DECK_VIEW
-      )
-    ).toEqual({ clock: false, timecode: true, lineup: false, notes: false })
+      resolvePanelDisplay('header-block', { lineupView: 'everything' }, MAIN_DECK_VIEW)
+    ).toEqual(DEFAULT_HEADER_BLOCK_DISPLAY)
   })
 
   it('shows notes in a Time window saved before notes existed', () => {
@@ -84,6 +92,6 @@ describe('resolvePanelDisplay', () => {
         { clock: false, timecode: true, lineup: true },
         MAIN_DECK_VIEW
       )
-    ).toEqual({ clock: false, timecode: true, lineup: true, notes: true })
+    ).toEqual({ clock: false, timecode: true, lineup: true, notes: true, lineupView: 'full' })
   })
 })

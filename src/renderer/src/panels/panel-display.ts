@@ -10,18 +10,18 @@
  */
 
 import {
-  DEFAULT_HEADER_BLOCK_VISIBILITY,
-  type HeaderBlockVisibility
+  DEFAULT_HEADER_BLOCK_DISPLAY,
+  type HeaderBlockDisplay
 } from '../components/HeaderBlockVisibility'
 import { isRecord } from '../lib/is-record'
-import type { DeckViewToggles } from '../state/settings'
+import { LINEUP_VIEW_OPTIONS, type DeckViewToggles, type LineupView } from '../state/settings'
 import type { PanelId } from './params'
 
 /** The display each panel owns — `null` for a panel with nothing to choose. */
 export interface PanelDisplayByPanel {
   clock: null
   timecode: null
-  'header-block': HeaderBlockVisibility
+  'header-block': HeaderBlockDisplay
   /** Same toggles as the Deck view settings tab, owned by this window alone. */
   deck: DeckViewToggles
 }
@@ -54,6 +54,20 @@ export function parseBooleanFields<T extends Record<keyof T, boolean>>(
   return parsed
 }
 
+function parseLineupView(raw: unknown, fallback: LineupView): LineupView {
+  const option = LINEUP_VIEW_OPTIONS.find((candidate) => candidate.value === raw)
+  return option === undefined ? fallback : option.value
+}
+
+/** The Time window's show/hide toggles, plus its own choice of lineup readout. */
+function parseHeaderBlockDisplay(raw: unknown, fallback: HeaderBlockDisplay): HeaderBlockDisplay {
+  const { lineupView, ...visibility } = fallback
+  return {
+    ...parseBooleanFields(raw, visibility),
+    lineupView: parseLineupView(isRecord(raw) ? raw.lineupView : undefined, lineupView)
+  }
+}
+
 const NO_DISPLAY: PanelDisplayCodec<null> = {
   initial: () => null,
   parse: () => null
@@ -63,8 +77,8 @@ const PANEL_DISPLAY_CODECS: { [P in PanelId]: PanelDisplayCodec<PanelDisplayByPa
   clock: NO_DISPLAY,
   timecode: NO_DISPLAY,
   'header-block': {
-    initial: () => ({ ...DEFAULT_HEADER_BLOCK_VISIBILITY }),
-    parse: parseBooleanFields
+    initial: () => ({ ...DEFAULT_HEADER_BLOCK_DISPLAY }),
+    parse: parseHeaderBlockDisplay
   },
   deck: {
     // A copy, not a link: once open, the window is set from its own toolbar
