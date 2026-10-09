@@ -1,21 +1,33 @@
 # Decktector 🕵️
 
+**Website: [decktector-website.vercel.app](https://decktector-website.vercel.app/)**
+
 Real-time visualizer for Pioneer **Pro DJ Link** decks (CDJ/XDJ), in the spirit of
-TC Supply's BeatKontrol. Plug your Mac into the same network as your players and get,
-for every deck:
+TC Supply's BeatKontrol. Plug a computer (Windows, macOS or Linux) into the same
+network as your players and get, for every deck:
 
 - **Scrolling HD waveform** with a smoothly interpolated playhead and beat-grid ticks
 - **Whole-track minimap** with played/remaining position
 - **Track metadata**: title, artist, album, genre, key, label, artwork
+- **Hot cues and memory cues**, with a per-deck cue list and countdown, plus the
+  track's structure
 - **Player state**: play/cue/pause, master, sync, on-air, pitch, live BPM, time remaining
+
+Around the decks:
+
+- **Clock and lineup** — the night's sets, with a progress bar and per-artist notes
+- **Timecode output** — Art-Net TC, MIDI Time Code or LTC, following a chosen deck
+  or the on-air one
+- **[Remote view](#remote-view)** — a read-only copy of the screen in any browser on
+  the local network
+- **[Detachable panels](#detachable-panels)** — decks, clock, timecode or lineup in
+  their own OS windows
 
 Primary targets: **XDJ-XZ** and **XDJ-1000MK2** (works with 2 to 4 CDJ-2000-era players).
 
-> **Status — 1.0, the Rust rewrite.** The app now runs on a Rust backend with
-> Tauri, keeping the same UI. The shell, domain model, simulation engine, the Pro
-> DJ Link UDP layer and both metadata routes (NFS and dbserver —
-> title/artist/album/genre/key/label/bpm, beat grid, HD waveform, artwork) are in
-> place, with no virtual-player-number workaround needed.
+> **Status — 1.4.** Rust backend with a Tauri shell and a React UI. The Pro DJ Link
+> UDP layer and both metadata routes (NFS and dbserver) are in place, with no
+> virtual-player-number workaround needed on the primary route.
 >
 > **Validated against real hardware on 2026-08-19** — two CDJ-3000s and a
 > DJM-900NXS2, linked off one USB stick. Discovery, status, beat, the `export.pdb`
@@ -24,7 +36,7 @@ Primary targets: **XDJ-XZ** and **XDJ-1000MK2** (works with 2 to 4 CDJ-2000-era 
 > with title, artist, BPM, HD waveform, beat grid and artwork within a second of
 > connecting.
 >
-> **Known gap**: hot cues and memory cues are not read on either route — see
+> **Known gap**: the dbserver fallback still reads no cues — see
 > [Porting status](#porting-status). See [Architecture](#architecture) for how
 > the Rust core, Tauri shell and React UI fit together.
 
@@ -35,7 +47,13 @@ Primary targets: **XDJ-XZ** and **XDJ-1000MK2** (works with 2 to 4 CDJ-2000-era 
 - **Rekordbox must NOT be running** on the same machine — it competes for the same
   virtual-player slot on the Pro DJ Link network.
 - Tracks must come from Rekordbox-analyzed media (USB/SD) for metadata and waveforms
-  to be available.
+  to be available. Both export formats are read: the legacy `export.pdb` and
+  Rekordbox 7's encrypted `exportLibrary.db` (DeviceLibraryPlus), used when a stick
+  carries no `export.pdb`.
+
+To build from source:
+
+- [Node.js](https://nodejs.org) 22 (the version CI builds with) and npm.
 - A [Rust toolchain](https://rustup.rs) and the platform's webview: WebView2 on
   Windows (preinstalled on Windows 11), WebKitGTK on Linux, WKWebView on macOS. No
   native Node modules are involved anymore, so there is nothing to rebuild per
@@ -60,16 +78,23 @@ number:
 DECKTECTOR_VCDJ_ID=4 npm run dev
 ```
 
+```powershell
+$env:DECKTECTOR_VCDJ_ID = 4; npm run dev   # Windows PowerShell
+```
+
 Never point it at a number a device already uses — two devices sharing one breaks the
 network.
 
-This behaviour is documented here because it is a hard-won constraint the port has
-to preserve.
+This behaviour is documented here because it is a hard-won constraint any change to
+the network layer has to preserve.
 
 ## Getting started
 
 ```sh
 npm install
+
+# Run against real players on the network
+npm run dev
 
 # Run with two simulated decks (no hardware needed)
 npm run dev:sim
@@ -81,7 +106,9 @@ npm run dev:sim4
 ```sh
 npm run test:rust    # Rust tests, and regenerates the renderer's model types
 npm run lint:rust    # clippy, warnings as errors
-npm run typecheck    # renderer
+npm test             # renderer tests (Vitest)
+npm run lint         # renderer lint (ESLint)
+npm run typecheck    # renderer types
 ```
 
 ### Simulating from a recording
@@ -157,8 +184,9 @@ A `v*` tag's release takes its notes from that version's section of
 locally. The workflow fails early if the tag doesn't match the `package.json` version
 or the changelog has no section for it.
 
-The Rekordbox database `prolink` reads is SQLCipher-encrypted, so the build links a
-libcrypto. Nothing to run by hand on any platform:
+Rekordbox 7's `exportLibrary.db`, which `prolink` reads when a stick has no
+`export.pdb`, is SQLCipher-encrypted, so the build links a libcrypto. Nothing to
+run by hand on any platform:
 
 - **Windows** needs the OpenSSL development package, which `npm install` installs
   through winget if it is missing, then stages statically under `target/` — so the
@@ -200,9 +228,21 @@ anything.
 
 The link is gated by a token embedded in the URL, **regenerated every time the
 server starts** — closing and reopening the remote view drops anyone using the old
-link. This is a guard against someone on the same network stumbling onto the feed,
-not hardened authentication: **a venue network is not a trusted network**, and
-nothing sensitive should be exposed through this beyond what is already on screen.
+link, and **Rotate link & disconnect devices** does the same on demand. This is a
+guard against someone on the same network stumbling onto the feed, not hardened
+authentication: **a venue network is not a trusted network**, and nothing sensitive
+should be exposed through this beyond what is already on screen.
+
+The same settings tab narrows who can reach it:
+
+- **Encrypt traffic (HTTPS / WSS)** serves the page and its WebSocket over TLS, with
+  a self-signed certificate generated in memory each time the server starts.
+  Browsers warn about it on first visit; accept it from the warning page
+  (_Advanced_ / _Show details_ on most mobile browsers) to connect.
+- **Network interface** binds the server to one adapter — the booth network or a
+  private hotspot — instead of every interface, so it is never exposed on public
+  venue Wi-Fi.
+- **Max connected devices** caps simultaneous viewers (4 by default).
 
 This works the same in development, with no extra setup: `npm run dev` has no
 bundle to serve, so the remote server proxies asset requests through to Vite.
@@ -247,29 +287,41 @@ unrelated and unaffected.
 
 ```
 crates/
-├── prolink/            # Pro DJ Link protocol, no app dependency
-└── decktector-core/   # Domain layer, no UI dependency
-    ├── model.rs        #   Normalized model (DeckState, TrackInfo, WaveformData…)
-    ├── engine.rs       #   Engine trait + snapshot bookkeeping + event stream
-    └── sim/            #   Scripted simulation (npm run dev:sim)
-src-tauri/              # App shell: window, commands, engine → event bridge
-src/renderer/           # React UI: deck panels + canvas waveforms
-    └── src/model/      #   TypeScript generated from model.rs by `cargo test`
+├── prolink/                # Pro DJ Link protocol, no app dependency
+│   └── src/
+│       ├── nfs/            #   NFS route: export.pdb, exportLibrary.db, ANLZ cues
+│       ├── dbserver/       #   dbserver route (fallback)
+│       └── bin/            #   cdj-sim, prolink-capture, prolink-pcap, prolink-session
+├── prolink-engine/         # Engine over real players: metadata fetch, playhead position
+├── decktector-core/        # Domain layer, no UI dependency
+│   └── src/
+│       ├── model.rs        #   Normalized model (DeckState, TrackInfo, WaveformData…)
+│       ├── engine.rs       #   Engine trait + snapshot bookkeeping + event stream
+│       ├── structure/      #   Track structure analysis
+│       └── sim/            #   Scripted simulation (npm run dev:sim)
+├── decktector-net/         # Network interface discovery
+├── decktector-remote/      # Remote view: HTTP/WebSocket server, token, TLS, QR code
+├── decktector-timecode/    # Timecode output: Art-Net TC, MTC, LTC
+└── sim-audio/              # Simulator fixtures built from audio files
+src-tauri/                  # App shell: windows, commands, engine → event bridge
+src/renderer/               # React UI: deck panels + canvas waveforms
+    └── src/model/          #   TypeScript generated from model.rs by `cargo test`
 ```
 
 The UI only ever consumes the normalized model, and the model itself is generated
 from the Rust definitions — a divergence between engine and renderer fails the
 build rather than surfacing mid-set. The same engine layer also feeds the
-[remote view](#remote-view) over a WebSocket, without touching the protocol.
+[remote view](#remote-view) over a WebSocket and the timecode output, without
+touching the protocol.
 
 ### Porting status
 
-| Phase | Scope                                                                                                                                        | State                                                      |
-| ----- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| 1     | App shell, domain model, simulation engine                                                                                                   | done                                                       |
-| 2     | UDP layer: announce, discovery, status, beat, precise position                                                                               | done                                                       |
-| 3     | Metadata over dbserver: title/artist/album/genre/key/label/comment/bpm, beat grid, HD waveform                                               | done (cues and artwork not implemented — see below)        |
-| 4     | Metadata over NFS: `export.pdb` + `.EXT`/`.DAT` analysis files, needs no virtual player number — the primary route, dbserver is the fallback | done — validated against a CDJ-3000's own media, see below |
+| Phase | Scope                                                                                                                                                                             | State                                                      |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| 1     | App shell, domain model, simulation engine                                                                                                                                        | done                                                       |
+| 2     | UDP layer: announce, discovery, status, beat, precise position                                                                                                                    | done                                                       |
+| 3     | Metadata over dbserver: title/artist/album/genre/key/label/comment/bpm, beat grid, HD waveform                                                                                    | done (cues and artwork not implemented — see below)        |
+| 4     | Metadata over NFS: `export.pdb` or `exportLibrary.db` + `.EXT`/`.DAT` analysis files, cues included, needs no virtual player number — the primary route, dbserver is the fallback | done — validated against a CDJ-3000's own media, see below |
 
 Phase 2 listens for real player traffic passively rather than running the full
 virtual-CDJ channel-claim handshake: its exact byte layout isn't pinned down
@@ -290,13 +342,16 @@ dbserver has no artwork route wired up. Artwork is moot for a deck reading real
 media, since phase 4 gets it through NFS, which is part of why dbserver was
 demoted to the fallback route.
 
-**Cues are the one thing 1.0 does not read, on either route.** The NFS route
-can't either: a CDJ-3000's `.EXT` cue list (`PCO2`) is one of the sections
-`rekordcrate` 0.3 rejects outright, and its older `.DAT` list (`PCOB`) comes back
-empty even for a track whose raw bytes plainly hold three hot cues. Closing this
-means hand-rolling cue parsers for both formats, against the bytes the
-2026-08-19 session captured. Until then a track arrives with no cues rather than
-with wrong ones.
+**Cues come from the NFS route only.** `rekordcrate` 0.3 can't read them on
+current hardware: a CDJ-3000's `.EXT` cue list (`PCO2`) is one of the sections it
+rejects outright (real players write cue type `1`, which its enum doesn't allow),
+and the older `.DAT` list (`PCOB`) comes back empty even for a track whose raw
+bytes plainly hold three hot cues. Both formats are therefore hand-rolled in
+`crates/prolink/src/nfs/cues.rs` — hot cues A–H, memory cues, loops, comments and
+colours — pinned by tests on bytes extracted from real `.EXT` files. The `.EXT`
+list is tried first, then the `.DAT` one; on a Rekordbox 7 stick, cues stored in
+`exportLibrary.db` fill in when neither analysis file holds any. A track read over
+the dbserver fallback still arrives with no cues rather than with wrong ones.
 
 **Phase 4 carries real, explicit confidence differences worth reading before
 trusting it at a gig:**
@@ -310,7 +365,7 @@ trusting it at a gig:**
   full portmap → mount → lookup-chain → multi-chunk read flow and the
   give-up-cleanly-on-no-response path.
 - **Validated against hardware**: parsing the fetched analysis files (beat grid,
-  HD color waveform — not cues, see above) with the `rekordcrate` crate
+  HD color waveform — cues are hand-rolled, see above) with the `rekordcrate` crate
   (`crates/prolink-engine/src/metadata/nfs.rs`), whose hot-cue color table
   (`crates/prolink-engine/src/metadata/colors.rs`) is copied verbatim from its own
   doc comments. Two things a real CDJ-3000 forced: the file is read **section by
@@ -334,9 +389,12 @@ trusting it at a gig:**
 
 ### Protocol notes
 
-- Pro DJ Link on this hardware generation reports **no absolute playhead
-  position**; Decktector anchors the playhead on the beat counter + beat grid and
-  interpolates with the pitch (engine-side at 5 Hz, renderer-side at 60 fps).
+- Only the CDJ-3000 reports an **absolute playhead position** (its precise-position
+  packets, ~every 30 ms). Every older player — the XDJ-XZ and XDJ-1000MK2 included —
+  does not, so Decktector anchors the playhead on the beat counter + beat grid and
+  interpolates with the pitch (engine-side at ~5 Hz, renderer-side at 60 fps); a
+  CDJ-3000 falls back to the same estimate whenever its precise position goes stale
+  (`crates/prolink-engine/src/position.rs`).
 - The **XDJ-XZ** exposes its two decks behind a single IP and always claims player
   numbers 1 and 2; Decktector announces itself as virtual player 7 to stay clear
   of every number physical players can take (see
@@ -360,10 +418,12 @@ trusting it at a gig:**
 ## Credits
 
 - [rekordcrate](https://github.com/Holzhaus/rekordcrate) — Rust parser for
-  Rekordbox analysis files (`.DAT`/`.EXT`, beat grid/waveform/cues), used as-is.
-  Its own `export.pdb` parser's row fields are private in the published version,
-  so `crates/prolink/src/nfs/pdb.rs` is a from-scratch minimal parser instead,
-  using `rekordcrate`'s source as a layout reference — see
+  Rekordbox analysis files (`.DAT`/`.EXT`), used as-is for the beat grid and
+  waveforms. Its cue lists don't parse on current hardware, so
+  `crates/prolink/src/nfs/cues.rs` reads those instead; and its own `export.pdb`
+  parser's row fields are private in the published version, so
+  `crates/prolink/src/nfs/pdb.rs` is a from-scratch minimal parser, using
+  `rekordcrate`'s source as a layout reference — see
   [Porting status](#porting-status) for the confidence caveat that comes with
   that.
 
@@ -374,5 +434,6 @@ terms of the GNU General Public License as published by the Free Software
 Foundation, either version 3 of the License, or (at your option) any later
 version. See [LICENSE](LICENSE) for the full text.
 
-Any distributed copy or derivative work, paid or not, must ship with its
-complete source code under the same license.
+Anyone who distributes Decktector or a work based on it, paid or not, must do so
+under the same license and make the complete corresponding source code available
+to its recipients.
