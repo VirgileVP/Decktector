@@ -15,6 +15,7 @@ import { connectMainWindowCloseCascade } from './panels/close-panel-windows-on-e
 import { restorePanelWindows } from './panels/restore-panel-windows'
 import { connectDevicesToEngine, useDevicesStore } from './state/devices'
 import { connectDownloadToEngine } from './state/download'
+import { connectLineupBroadcast } from './state/lineup-broadcast'
 import { connectPanelWindowRegistry } from './state/panel-windows'
 import { connectRemoteToEngine } from './state/remote'
 import { connectSettingsBroadcast } from './state/settings-broadcast'
@@ -51,6 +52,7 @@ function App(): React.JSX.Element {
   useEffect(() => connectStoreToEngine(), [])
   useEffect(() => connectSettingsToApp('main'), [])
   useEffect(() => connectSettingsBroadcast(), [])
+  useEffect(() => connectLineupBroadcast(), [])
   useEffect(() => connectTimecodeToEngine(), [])
   useEffect(() => connectTimecodeFollowOnAir(), [])
   useEffect(() => connectDevicesToEngine(), [])

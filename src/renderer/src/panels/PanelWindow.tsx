@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { connectDevicesToEngine } from '../state/devices'
+import { connectLineupBroadcast } from '../state/lineup-broadcast'
 import { currentPanelWindowRecord } from '../state/panel-windows'
 import { pickDeckViewToggles, useSettings } from '../state/settings'
 import { connectSettingsBroadcast } from '../state/settings-broadcast'
@@ -26,6 +27,7 @@ export function PanelWindow({ params }: PanelWindowProps): React.JSX.Element {
   useEffect(() => connectStoreToEngine(), [])
   useEffect(() => connectSettingsToApp('panel'), [])
   useEffect(() => connectSettingsBroadcast(), [])
+  useEffect(() => connectLineupBroadcast(), [])
   useEffect(() => connectTimecodeToEngine(), [])
   useEffect(() => connectDevicesToEngine(), [])
 
