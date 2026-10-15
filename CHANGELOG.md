@@ -13,8 +13,23 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-16
+
+A steadier booth companion: decks keep updating through cable swaps, sleep and stick
+changes, and panel windows reopen where you left them.
+
+### Highlights
+
+- **Welcome notice** — on first launch, Decktector tells you it is free, open-source
+  (GPL-3.0) and independent from Pioneer DJ / AlphaTheta, with links to report bugs and
+  contribute on GitHub.
+- **About tab in Settings** — the same notice and links stay one click away after
+  dismissing it.
+
 ### Fixed
 
+- Pop-out panel windows reopen at the position and size they were saved with, instead
+  of their default bounds.
 - Closing or docking back a panel window no longer stops the decks updating until
   the app is restarted.
 - A USB stick swapped into the same slot no longer shows the previous stick's
