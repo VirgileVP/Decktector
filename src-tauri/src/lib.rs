@@ -21,7 +21,7 @@ use decktector_core::Engine;
 use decktector_remote::RemoteService;
 use decktector_timecode::TimecodeService;
 use prolink::discovery::DeviceWatcher;
-use prolink_engine::{InterfacePreference, ProlinkEngine};
+use prolink_engine::{supervise, InterfacePreference, ProlinkEngine, TASK_RESTART_DELAY};
 use tauri::{Manager, State, Window};
 
 use window_prefs::{SleepBlocker, WindowPrefs};
@@ -152,7 +152,10 @@ pub fn run() {
             });
             tauri::async_runtime::spawn(Arc::clone(&timecode).run());
             tauri::async_runtime::spawn(remote.hub().run());
-            tauri::async_runtime::spawn(Arc::clone(&device_watcher).run());
+            tauri::async_runtime::spawn(supervise("device discovery", TASK_RESTART_DELAY, {
+                let device_watcher = Arc::clone(&device_watcher);
+                move || Arc::clone(&device_watcher).run()
+            }));
             Ok(())
         })
         .on_window_event(|window, event| {

@@ -17,6 +17,8 @@ pub mod metadata;
 mod network;
 mod normalize;
 mod position;
+mod supervise;
 
 pub use engine::ProlinkEngine;
 pub use network::InterfacePreference;
+pub use supervise::{supervise, TASK_RESTART_DELAY};

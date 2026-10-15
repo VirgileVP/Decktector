@@ -22,6 +22,7 @@ use crate::metadata::{FetchRequest, LoadedTrack, MetadataFetcher};
 use crate::network::{self, InterfacePreference};
 use crate::normalize::to_deck_state;
 use crate::position::PositionTracker;
+use crate::supervise::{supervise, TASK_RESTART_DELAY};
 
 /// Decktector's device name, as it appears in other Pro DJ Link tools'
 /// device lists once presence has claimed a number.
@@ -86,17 +87,43 @@ impl Engine for ProlinkEngine {
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Arc::clone(&metadata_fetcher));
 
         let mut tasks = self.tasks_slot();
-        tasks.push(tokio::spawn(Arc::clone(&status_watcher).run()));
-        tasks.push(tokio::spawn(Arc::clone(&beat_watcher).run()));
-        tasks.push(tokio::spawn(run_reporting(
-            Arc::clone(&self.handle),
-            Arc::clone(&self.device_watcher),
-            self.interface_preference.subscribe(),
-            status_watcher,
-            beat_watcher,
-            Arc::clone(&metadata_fetcher),
-            presence,
-            Arc::clone(&self.presence_task),
+        tasks.push(tokio::spawn(supervise(
+            "status listener",
+            TASK_RESTART_DELAY,
+            {
+                let status_watcher = Arc::clone(&status_watcher);
+                move || Arc::clone(&status_watcher).run()
+            },
+        )));
+        tasks.push(tokio::spawn(supervise(
+            "beat listener",
+            TASK_RESTART_DELAY,
+            {
+                let beat_watcher = Arc::clone(&beat_watcher);
+                move || Arc::clone(&beat_watcher).run()
+            },
+        )));
+        tasks.push(tokio::spawn(supervise(
+            "deck reporting",
+            TASK_RESTART_DELAY,
+            {
+                let handle = Arc::clone(&self.handle);
+                let device_watcher = Arc::clone(&self.device_watcher);
+                let interface_preference = Arc::clone(&self.interface_preference);
+                let presence_task = Arc::clone(&self.presence_task);
+                move || {
+                    run_reporting(
+                        Arc::clone(&handle),
+                        Arc::clone(&device_watcher),
+                        interface_preference.subscribe(),
+                        Arc::clone(&status_watcher),
+                        Arc::clone(&beat_watcher),
+                        Arc::clone(&metadata_fetcher),
+                        Arc::clone(&presence),
+                        Arc::clone(&presence_task),
+                    )
+                }
+            },
         )));
         drop(tasks);
 

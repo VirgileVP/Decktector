@@ -81,7 +81,7 @@ pub fn parse_beat_message(data: &[u8]) -> Option<BeatMessage> {
     if !data.starts_with(&PROLINK_HEADER) {
         return None;
     }
-    match data[PROLINK_HEADER.len()] {
+    match *data.get(PROLINK_HEADER.len())? {
         BEAT_PACKET_TYPE if data.len() >= BEAT_PACKET_LEN => {
             let bpm_raw = read_u16(data, BEAT_BPM_OFFSET);
             Some(BeatMessage::Beat(BeatPacket {
@@ -209,6 +209,14 @@ impl BeatWatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Anything can land on the beat port. A bare header used to index one
+    /// byte past the end and panic, which ended the beat watcher for the
+    /// rest of the session.
+    #[test]
+    fn a_bare_header_is_not_a_beat_message() {
+        assert_eq!(parse_beat_message(&PROLINK_HEADER), None);
+    }
 
     #[test]
     fn parses_a_beat_packet() {

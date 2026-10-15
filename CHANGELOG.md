@@ -27,6 +27,8 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
   track, no longer shows an unrelated rekordbox track's title and waveform.
 - A deck loading a track with the same rekordbox number as the one it showed, but
   off another stick or player, now shows the new track instead of keeping the old one.
+- The network listeners restart on their own if one of them fails, instead of
+  leaving the decks frozen until the app is restarted.
 
 ## [1.4.0] - 2026-10-09
 
