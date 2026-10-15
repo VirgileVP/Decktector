@@ -21,6 +21,7 @@ use tokio::net::UdpSocket;
 use tokio::time::timeout;
 
 use super::mount::{self, FileHandle};
+use super::procedures::{FileAttributes, LookupResult};
 use super::{portmap, procedures};
 use crate::status::MediaSlot;
 
@@ -106,22 +107,37 @@ impl NfsClient {
         Ok(client)
     }
 
+    /// The attributes of the file at `path`, relative to the mounted slot's
+    /// root, without reading any of its bytes — enough to tell whether a
+    /// copy read earlier still matches what the media holds now.
+    pub async fn file_attributes(&mut self, path: &str) -> std::io::Result<FileAttributes> {
+        Ok(self.lookup_path(path).await?.attributes)
+    }
+
+    /// One `LOOKUP` per path segment, chaining file handles from the
+    /// mounted root. An empty path resolves to the root itself.
+    async fn lookup_path(&mut self, path: &str) -> std::io::Result<LookupResult> {
+        let mut resolved = LookupResult {
+            handle: self.root_handle,
+            attributes: FileAttributes::default(),
+        };
+        for segment in path.split('/').filter(|part| !part.is_empty()) {
+            let xid = self.fresh_xid();
+            let call = procedures::build_lookup_call(xid, resolved.handle, segment);
+            let reply = self.call(self.nfs_port, &call).await?;
+            resolved = procedures::parse_lookup_reply(&reply, xid)
+                .ok_or_else(|| protocol_error("lookup", segment))?;
+        }
+        Ok(resolved)
+    }
+
     /// Fetches a whole file by its path relative to the mounted slot's
     /// root (e.g. `"PIONEER/rekordbox/export.pdb"`) — one `LOOKUP` per
     /// path segment, chaining file handles, then a `READ` loop until the
     /// file size `LOOKUP` reported has been fully read.
     pub async fn read_file(&mut self, path: &str) -> std::io::Result<Vec<u8>> {
-        let mut handle = self.root_handle;
-        let mut size = 0u32;
-        for segment in path.split('/').filter(|part| !part.is_empty()) {
-            let xid = self.fresh_xid();
-            let call = procedures::build_lookup_call(xid, handle, segment);
-            let reply = self.call(self.nfs_port, &call).await?;
-            let result = procedures::parse_lookup_reply(&reply, xid)
-                .ok_or_else(|| protocol_error("lookup", segment))?;
-            handle = result.handle;
-            size = result.attributes.size;
-        }
+        let LookupResult { handle, attributes } = self.lookup_path(path).await?;
+        let size = attributes.size;
 
         let mut data = Vec::with_capacity(size as usize);
         let mut offset = 0u32;
@@ -155,17 +171,8 @@ impl NfsClient {
     {
         use tokio::io::AsyncWriteExt;
 
-        let mut handle = self.root_handle;
-        let mut size = 0u32;
-        for segment in path.split('/').filter(|part| !part.is_empty()) {
-            let xid = self.fresh_xid();
-            let call = procedures::build_lookup_call(xid, handle, segment);
-            let reply = self.call(self.nfs_port, &call).await?;
-            let result = procedures::parse_lookup_reply(&reply, xid)
-                .ok_or_else(|| protocol_error("lookup", segment))?;
-            handle = result.handle;
-            size = result.attributes.size;
-        }
+        let LookupResult { handle, attributes } = self.lookup_path(path).await?;
+        let size = attributes.size;
 
         if let Some(parent) = destination.parent() {
             tokio::fs::create_dir_all(parent).await?;

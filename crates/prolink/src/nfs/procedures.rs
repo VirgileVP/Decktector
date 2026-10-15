@@ -24,10 +24,14 @@ pub const FTYPE_REGULAR_FILE: u32 = 1;
 /// (see [`super::client`]'s doc comment on why).
 pub const NFS_MAXDATA: usize = 8192;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct FileAttributes {
     pub file_type: u32,
     pub size: u32,
+    /// The server's own number for the file, unique within its filesystem.
+    pub file_id: u32,
+    /// Last modification, in whole seconds since the Unix epoch.
+    pub modified_seconds: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -178,13 +182,17 @@ fn read_fattr(decoder: &mut XdrDecoder<'_>) -> Option<FileAttributes> {
     let _rdev = decoder.read_u32()?;
     let _blocks = decoder.read_u32()?;
     let _fsid = decoder.read_u32()?;
-    let _fileid = decoder.read_u32()?;
-    for _ in 0..3 {
-        // atime, mtime, ctime.
-        decoder.read_u32()?;
-        decoder.read_u32()?;
-    }
-    Some(FileAttributes { file_type, size })
+    let file_id = decoder.read_u32()?;
+    let _atime = (decoder.read_u32()?, decoder.read_u32()?);
+    let modified_seconds = decoder.read_u32()?;
+    let _modified_microseconds = decoder.read_u32()?;
+    let _ctime = (decoder.read_u32()?, decoder.read_u32()?);
+    Some(FileAttributes {
+        file_type,
+        size,
+        file_id,
+        modified_seconds,
+    })
 }
 
 fn write_fattr(encoder: &mut XdrEncoder, attributes: FileAttributes) {
@@ -193,12 +201,16 @@ fn write_fattr(encoder: &mut XdrEncoder, attributes: FileAttributes) {
         encoder.write_u32(0); // mode, nlink, uid, gid — not read back by this client.
     }
     encoder.write_u32(attributes.size);
-    for _ in 0..5 {
-        encoder.write_u32(0); // blocksize, rdev, blocks, fsid, fileid.
+    for _ in 0..4 {
+        encoder.write_u32(0); // blocksize, rdev, blocks, fsid.
     }
-    for _ in 0..6 {
-        encoder.write_u32(0); // atime, mtime, ctime (2 words each).
-    }
+    encoder.write_u32(attributes.file_id);
+    encoder.write_u32(0); // atime (2 words).
+    encoder.write_u32(0);
+    encoder.write_u32(attributes.modified_seconds);
+    encoder.write_u32(0); // mtime microseconds.
+    encoder.write_u32(0); // ctime (2 words).
+    encoder.write_u32(0);
 }
 
 #[cfg(test)]
@@ -214,6 +226,8 @@ mod tests {
         let attributes = FileAttributes {
             file_type: FTYPE_REGULAR_FILE,
             size: 123_456,
+            file_id: 7,
+            modified_seconds: 1_760_000_000,
         };
         let reply = build_lookup_reply(5, handle(0x11), attributes);
         let result = parse_lookup_reply(&reply, 5).expect("should parse");
@@ -234,6 +248,7 @@ mod tests {
         let attributes = FileAttributes {
             file_type: FTYPE_REGULAR_FILE,
             size: 5,
+            ..FileAttributes::default()
         };
         let reply = build_read_reply(9, attributes, &[1, 2, 3, 4, 5]);
         let result = parse_read_reply(&reply, 9).expect("should parse");
@@ -255,6 +270,7 @@ mod tests {
         let attributes = FileAttributes {
             file_type: FTYPE_REGULAR_FILE,
             size: 1,
+            ..FileAttributes::default()
         };
         let reply = build_lookup_reply(5, handle(0), attributes);
         assert!(parse_lookup_reply(&reply, 6).is_none());

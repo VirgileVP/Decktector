@@ -306,6 +306,7 @@ mod tests {
         FileAttributes {
             file_type: FTYPE_REGULAR_FILE,
             size,
+            ..FileAttributes::default()
         }
     }
 

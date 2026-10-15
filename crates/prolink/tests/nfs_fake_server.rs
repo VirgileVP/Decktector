@@ -28,6 +28,8 @@ const ROOT_HANDLE: FileHandle = [0xaa; 32];
 const PIONEER_HANDLE: FileHandle = [0xbb; 32];
 const REKORDBOX_HANDLE: FileHandle = [0xcc; 32];
 const PDB_HANDLE: FileHandle = [0xdd; 32];
+const PDB_FILE_ID: u32 = 42;
+const PDB_MODIFIED_SECONDS: u32 = 1_760_000_000;
 
 /// Starts the fake server on an ephemeral port and returns it. `payload` is
 /// what `"PIONEER/rekordbox/export.pdb"` resolves to.
@@ -77,15 +79,20 @@ fn handle_lookup(call: &RpcCall<'_>, pdb_size: u32) -> Option<Vec<u8>> {
     let dir: FileHandle = decoder.read_opaque_fixed(32)?.try_into().ok()?;
     let name = decoder.read_string_utf16le()?;
 
-    let (handle, size) = match (dir, name.as_str()) {
-        (h, "PIONEER") if h == ROOT_HANDLE => (PIONEER_HANDLE, 0),
-        (h, "rekordbox") if h == PIONEER_HANDLE => (REKORDBOX_HANDLE, 0),
-        (h, "export.pdb") if h == REKORDBOX_HANDLE => (PDB_HANDLE, pdb_size),
+    let directory = FileAttributes::default();
+    let (handle, attributes) = match (dir, name.as_str()) {
+        (h, "PIONEER") if h == ROOT_HANDLE => (PIONEER_HANDLE, directory),
+        (h, "rekordbox") if h == PIONEER_HANDLE => (REKORDBOX_HANDLE, directory),
+        (h, "export.pdb") if h == REKORDBOX_HANDLE => (
+            PDB_HANDLE,
+            FileAttributes {
+                file_type: procedures::FTYPE_REGULAR_FILE,
+                size: pdb_size,
+                file_id: PDB_FILE_ID,
+                modified_seconds: PDB_MODIFIED_SECONDS,
+            },
+        ),
         _ => return None,
-    };
-    let attributes = FileAttributes {
-        file_type: procedures::FTYPE_REGULAR_FILE,
-        size,
     };
     Some(procedures::build_lookup_reply(call.xid, handle, attributes))
 }
@@ -103,6 +110,7 @@ fn handle_read(call: &RpcCall<'_>, payload: &[u8]) -> Option<Vec<u8>> {
     let attributes = FileAttributes {
         file_type: procedures::FTYPE_REGULAR_FILE,
         size: payload.len() as u32,
+        ..FileAttributes::default()
     };
     Some(procedures::build_read_reply(call.xid, attributes, chunk))
 }
@@ -123,6 +131,23 @@ async fn fetches_a_multi_chunk_file_via_lookup_chain_and_read_loop() {
         .expect("should fetch");
 
     assert_eq!(bytes, payload);
+}
+
+#[tokio::test]
+async fn file_attributes_reports_what_the_server_holds_without_reading_the_file() {
+    let port = start_fake_server(vec![0; 5000]).await;
+    let mut client = NfsClient::open_with_portmap_port(LOOPBACK, LOOPBACK, MediaSlot::Usb, port)
+        .await
+        .expect("should open");
+
+    let attributes = client
+        .file_attributes("PIONEER/rekordbox/export.pdb")
+        .await
+        .expect("should look up");
+
+    assert_eq!(attributes.size, 5000);
+    assert_eq!(attributes.file_id, PDB_FILE_ID);
+    assert_eq!(attributes.modified_seconds, PDB_MODIFIED_SECONDS);
 }
 
 #[tokio::test]

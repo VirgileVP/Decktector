@@ -31,14 +31,14 @@ use decktector_core::model::{DeckId, TrackInfo};
 use decktector_core::structure::{self, StructureInput};
 use decktector_core::EngineHandle;
 use prolink::dbserver::{beatgrid, waveform as db_waveform, Connection};
-use prolink::nfs::pdb::Pdb;
 use prolink::presence::Presence;
 use prolink::status::MediaSlot;
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
-use super::{nfs, normalize};
+use super::nfs::{self, TrackDatabase};
+use super::normalize;
 
 const METADATA_TIMEOUT: Duration = Duration::from_secs(30);
 const ASSET_TIMEOUT: Duration = Duration::from_secs(15);
@@ -61,7 +61,7 @@ const PDB_CACHE_TTL: Duration = Duration::from_secs(120);
 /// its address - see [`MetadataFetcher::connections`] for why both halves
 /// of the key matter.
 type ConnectionPool = HashMap<(u8, Ipv4Addr), Arc<AsyncMutex<Connection>>>;
-type PdbCache = HashMap<(Ipv4Addr, MediaSlot), (Arc<Pdb>, Instant)>;
+type PdbCache = HashMap<(Ipv4Addr, MediaSlot), (Arc<TrackDatabase>, Instant)>;
 
 /// What one status packet supplies about the track it names — everything
 /// [`MetadataFetcher::spawn_fetch`] needs beyond what it already tracks
@@ -186,11 +186,13 @@ impl MetadataFetcher {
         self.lock(&self.in_flight).contains(&deck_id)
     }
 
-    fn cached_pdb(&self, player_ip: Ipv4Addr, slot: MediaSlot) -> Option<Arc<Pdb>> {
+    /// The database last read for `slot`, unless it has expired. Still to be
+    /// checked against the media before use — see [`nfs::load_database`].
+    fn cached_database(&self, player_ip: Ipv4Addr, slot: MediaSlot) -> Option<Arc<TrackDatabase>> {
         let mut cache = self.lock(&self.pdb_cache);
         match cache.get(&(player_ip, slot)) {
-            Some((pdb, fetched_at)) if fetched_at.elapsed() < PDB_CACHE_TTL => {
-                Some(Arc::clone(pdb))
+            Some((database, fetched_at)) if fetched_at.elapsed() < PDB_CACHE_TTL => {
+                Some(Arc::clone(database))
             }
             Some(_) => {
                 cache.remove(&(player_ip, slot));
@@ -200,9 +202,14 @@ impl MetadataFetcher {
         }
     }
 
-    fn update_cached_pdb(&self, player_ip: Ipv4Addr, slot: MediaSlot, pdb: Arc<Pdb>) {
+    fn update_cached_database(
+        &self,
+        player_ip: Ipv4Addr,
+        slot: MediaSlot,
+        database: Arc<TrackDatabase>,
+    ) {
         self.lock(&self.pdb_cache)
-            .insert((player_ip, slot), (pdb, Instant::now()));
+            .insert((player_ip, slot), (database, Instant::now()));
     }
 
     /// Drops everything held for a device that just left the network: its
@@ -350,29 +357,29 @@ impl MetadataFetcher {
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("no active media source known for deck {deck_id}"))?;
 
-        let cached_pdb = self.cached_pdb(active_source.player_ip, active_source.slot);
-        let pdb = match cached_pdb {
-            Some(pdb) => pdb,
-            None => {
-                let mut client = prolink::nfs::NfsClient::open(
-                    active_source.player_ip,
-                    self.bind_ip(),
-                    active_source.slot,
-                )
-                .await?;
-                let fresh_pdb = Arc::new(super::nfs::fetch_pdb(&mut client).await?);
-                self.update_cached_pdb(
-                    active_source.player_ip,
-                    active_source.slot,
-                    Arc::clone(&fresh_pdb),
-                );
-                fresh_pdb
-            }
-        };
+        let mut client = prolink::nfs::NfsClient::open(
+            active_source.player_ip,
+            self.bind_ip(),
+            active_source.slot,
+        )
+        .await?;
+        let cached = self.cached_database(active_source.player_ip, active_source.slot);
+        let (database, is_new) = nfs::load_database(&mut client, cached).await?;
+        if is_new {
+            self.update_cached_database(
+                active_source.player_ip,
+                active_source.slot,
+                Arc::clone(&database),
+            );
+        }
 
-        let track = pdb.tracks.get(&active_source.track_id).ok_or_else(|| {
-            anyhow::anyhow!("track {} not found in database", active_source.track_id)
-        })?;
+        let track = database
+            .pdb
+            .tracks
+            .get(&active_source.track_id)
+            .ok_or_else(|| {
+                anyhow::anyhow!("track {} not found in database", active_source.track_id)
+            })?;
 
         let raw_file_path = track.file_path.as_deref().ok_or_else(|| {
             anyhow::anyhow!("no audio file path recorded in database for this track")
@@ -406,12 +413,6 @@ impl MetadataFetcher {
 
         tokio::fs::create_dir_all(&destination_dir).await?;
 
-        let mut client = prolink::nfs::NfsClient::open(
-            active_source.player_ip,
-            self.bind_ip(),
-            active_source.slot,
-        )
-        .await?;
         client
             .download_file_to_path(raw_file_path, &dest_file, move |downloaded, total| {
                 progress_callback(downloaded, total);
@@ -434,19 +435,19 @@ impl MetadataFetcher {
         if self.is_failing(&self.nfs_failures, source_device) {
             return None;
         }
-        let cached_pdb = self.cached_pdb(player_ip, slot);
+        let cached_database = self.cached_database(player_ip, slot);
         let fetch = nfs::fetch_track_info(
             player_ip,
             self.bind_ip(),
             slot,
             track_id,
             status_bpm,
-            cached_pdb,
+            cached_database,
         );
         match timeout(NFS_CONNECT_TIMEOUT + NFS_FILE_TIMEOUT, fetch).await {
-            Ok(Ok((track_info, new_pdb))) => {
-                if let Some(pdb) = new_pdb {
-                    self.update_cached_pdb(player_ip, slot, pdb);
+            Ok(Ok((track_info, new_database))) => {
+                if let Some(database) = new_database {
+                    self.update_cached_database(player_ip, slot, database);
                 }
                 track_info
             }
@@ -779,13 +780,17 @@ mod tests {
         assert!(!fetcher.is_fetching(1));
 
         let ip: Ipv4Addr = "192.168.1.4".parse().unwrap();
-        assert!(fetcher.cached_pdb(ip, MediaSlot::Usb).is_none());
+        assert!(fetcher.cached_database(ip, MediaSlot::Usb).is_none());
 
-        let pdb = Arc::new(Pdb::default());
-        fetcher.update_cached_pdb(ip, MediaSlot::Usb, Arc::clone(&pdb));
-        assert!(fetcher.cached_pdb(ip, MediaSlot::Usb).is_some());
+        let database = Arc::new(TrackDatabase::new(
+            prolink::nfs::pdb::Pdb::default(),
+            "PIONEER/rekordbox/export.pdb",
+            prolink::nfs::procedures::FileAttributes::default(),
+        ));
+        fetcher.update_cached_database(ip, MediaSlot::Usb, database);
+        assert!(fetcher.cached_database(ip, MediaSlot::Usb).is_some());
 
         fetcher.set_bind_ip("192.168.1.100".parse().unwrap());
-        assert!(fetcher.cached_pdb(ip, MediaSlot::Usb).is_none());
+        assert!(fetcher.cached_database(ip, MediaSlot::Usb).is_none());
     }
 }

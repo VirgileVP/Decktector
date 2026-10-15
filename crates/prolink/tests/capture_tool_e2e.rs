@@ -374,6 +374,7 @@ fn handle_nfs_lookup(
     let attributes = FileAttributes {
         file_type: procedures::FTYPE_REGULAR_FILE,
         size,
+        ..FileAttributes::default()
     };
     Some(procedures::build_lookup_reply(call.xid, handle, attributes))
 }
@@ -389,6 +390,7 @@ fn handle_nfs_read(call: &RpcCall<'_>, payloads: &HashMap<FileHandle, Vec<u8>>) 
     let attributes = FileAttributes {
         file_type: procedures::FTYPE_REGULAR_FILE,
         size: payload.len() as u32,
+        ..FileAttributes::default()
     };
     Some(procedures::build_read_reply(call.xid, attributes, chunk))
 }

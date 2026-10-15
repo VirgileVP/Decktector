@@ -17,6 +17,8 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
 
 - Closing or docking back a panel window no longer stops the decks updating until
   the app is restarted.
+- A USB stick swapped into the same slot no longer shows the previous stick's
+  tracks — title, waveform and play-history line — for up to two minutes.
 
 ## [1.4.0] - 2026-10-09
 

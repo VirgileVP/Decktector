@@ -21,6 +21,7 @@ use decktector_core::model::{
 use decktector_core::structure::{self, StructureInput};
 use decktector_core::waveform::{build_preview_from_detail, PREVIEW_SEGMENT_COUNT};
 use prolink::nfs::pdb::{self, Pdb, Track};
+use prolink::nfs::procedures::FileAttributes;
 use prolink::nfs::{parse_anlz_cues, parse_export_library, AnlzCue, NfsClient};
 use prolink::status::MediaSlot;
 use rekordcrate::anlz::{Content, ContentKind, Cue, CueType, ExtendedCue, Header, Section};
@@ -42,18 +43,78 @@ const EXPORT_LIBRARY_CANDIDATE_PATHS: &[&str] = &[
 /// variant, not the base `.DAT` every player writes.
 const EXT_SUFFIX: &str = ".EXT";
 
+/// A parsed track database and the file it was read from.
+///
+/// Rekordbox track ids are only unique within one stick, and a player's
+/// slot changes stick whenever a DJ swaps media — typically at a changeover,
+/// a minute after the last track off the previous stick. Keeping the file's
+/// attributes alongside the parsed rows is what lets a cached copy be
+/// checked against what the slot holds now (see [`load_database`]) instead
+/// of answering for the new stick with the old stick's tracks.
+#[derive(Debug)]
+pub struct TrackDatabase {
+    pub pdb: Pdb,
+    source: DatabaseFile,
+}
+
+impl TrackDatabase {
+    pub fn new(pdb: Pdb, path: &'static str, attributes: FileAttributes) -> Self {
+        Self {
+            pdb,
+            source: DatabaseFile { path, attributes },
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct DatabaseFile {
+    path: &'static str,
+    attributes: FileAttributes,
+}
+
+impl DatabaseFile {
+    /// Whether `current`, the same path looked up again, is still the file
+    /// that was read: same size, same file id, same modification time.
+    fn is_unchanged(&self, current: &FileAttributes) -> bool {
+        self.attributes == *current
+    }
+}
+
+/// The track database for the mounted slot: `cached` when the file it was
+/// read from is still the one on the media, otherwise a fresh read. The
+/// flag says whether the database is a fresh read, for the caller to cache.
+pub async fn load_database(
+    client: &mut NfsClient,
+    cached: Option<Arc<TrackDatabase>>,
+) -> anyhow::Result<(Arc<TrackDatabase>, bool)> {
+    if let Some(cached) = cached {
+        let path = cached.source.path;
+        match client.file_attributes(path).await {
+            Ok(current) if cached.source.is_unchanged(&current) => return Ok((cached, false)),
+            Ok(_) => tracing::info!(
+                path,
+                "track database changed on the media; reading it again"
+            ),
+            Err(error) => {
+                tracing::debug!(path, %error, "cached track database is gone from the media")
+            }
+        }
+    }
+    Ok((Arc::new(fetch_database(client).await?), true))
+}
+
 /// Fetches and parses the track database: first tries `export.pdb` (Rekordbox 6 / CDJ legacy),
 /// and falls back to Rekordbox 7 / DeviceLibraryPlus `exportLibrary.db` (SQLCipher) if absent or unparseable.
-pub async fn fetch_pdb(client: &mut NfsClient) -> anyhow::Result<Pdb> {
-    if let Ok(pdb_bytes) = client.read_file(EXPORT_PDB_PATH).await {
+async fn fetch_database(client: &mut NfsClient) -> anyhow::Result<TrackDatabase> {
+    if let Some((attributes, pdb_bytes)) = read_with_attributes(client, EXPORT_PDB_PATH).await {
         if let Some(pdb) = pdb::parse(&pdb_bytes) {
-            return Ok(pdb);
+            return Ok(TrackDatabase::new(pdb, EXPORT_PDB_PATH, attributes));
         }
         tracing::warn!("read export.pdb but parsing failed; checking DeviceLibraryPlus exportLibrary.db fallback");
     }
 
     for &db_path in EXPORT_LIBRARY_CANDIDATE_PATHS {
-        if let Ok(db_bytes) = client.read_file(db_path).await {
+        if let Some((attributes, db_bytes)) = read_with_attributes(client, db_path).await {
             if !db_bytes.is_empty() {
                 match parse_export_library(&db_bytes) {
                     Ok(pdb) => {
@@ -62,7 +123,7 @@ pub async fn fetch_pdb(client: &mut NfsClient) -> anyhow::Result<Pdb> {
                             tracks = pdb.tracks.len(),
                             "successfully loaded DeviceLibraryPlus SQLite database"
                         );
-                        return Ok(pdb);
+                        return Ok(TrackDatabase::new(pdb, db_path, attributes));
                     }
                     Err(err) => {
                         tracing::warn!(
@@ -77,6 +138,17 @@ pub async fn fetch_pdb(client: &mut NfsClient) -> anyhow::Result<Pdb> {
     }
 
     anyhow::bail!("could not fetch or parse export.pdb or exportLibrary.db over NFS")
+}
+
+/// The file at `path` and the attributes it had when read; `None` when the
+/// media has no such file or reading it failed.
+async fn read_with_attributes(
+    client: &mut NfsClient,
+    path: &str,
+) -> Option<(FileAttributes, Vec<u8>)> {
+    let attributes = client.file_attributes(path).await.ok()?;
+    let bytes = client.read_file(path).await.ok()?;
+    Some((attributes, bytes))
 }
 
 /// Fetches everything about `track_id` over NFS: opens a client for `slot`,
@@ -94,24 +166,22 @@ pub async fn fetch_track_info(
     slot: MediaSlot,
     track_id: u32,
     status_bpm: Option<f64>,
-    cached_pdb: Option<Arc<Pdb>>,
-) -> anyhow::Result<(Option<TrackInfo>, Option<Arc<Pdb>>)> {
+    cached_database: Option<Arc<TrackDatabase>>,
+) -> anyhow::Result<(Option<TrackInfo>, Option<Arc<TrackDatabase>>)> {
     let mut client = NfsClient::open(player_ip, bind_ip, slot).await?;
 
-    let (pdb, is_new) = match cached_pdb {
-        Some(pdb) if pdb.tracks.contains_key(&track_id) => (pdb, false),
-        _ => (Arc::new(fetch_pdb(&mut client).await?), true),
-    };
+    let (database, is_new) = load_database(&mut client, cached_database).await?;
+    let pdb = &database.pdb;
 
     let Some(track) = pdb.tracks.get(&track_id) else {
-        return Ok((None, is_new.then_some(pdb)));
+        return Ok((None, is_new.then_some(database)));
     };
 
     let analysis = fetch_analysis(&mut client, &track.analyze_path).await;
-    let artwork = fetch_artwork(&mut client, &pdb, track).await;
+    let artwork = fetch_artwork(&mut client, pdb, track).await;
 
-    let track_info = build_track_info(&pdb, track, analysis, artwork, status_bpm);
-    Ok((Some(track_info), is_new.then_some(pdb)))
+    let track_info = build_track_info(pdb, track, analysis, artwork, status_bpm);
+    Ok((Some(track_info), is_new.then_some(database)))
 }
 
 /// A track's beat grid, waveform and cues, as read out of its `.DAT`/`.EXT`
@@ -490,6 +560,42 @@ async fn fetch_artwork(client: &mut NfsClient, pdb: &Pdb, track: &Track) -> Opti
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn database_file(size: u32, modified_seconds: u32) -> DatabaseFile {
+        DatabaseFile {
+            path: EXPORT_PDB_PATH,
+            attributes: FileAttributes {
+                file_type: prolink::nfs::procedures::FTYPE_REGULAR_FILE,
+                size,
+                file_id: 9,
+                modified_seconds,
+            },
+        }
+    }
+
+    #[test]
+    fn the_same_database_file_is_reused() {
+        let read = database_file(4096 * 300, 1_760_000_000);
+        assert!(read.is_unchanged(&read.attributes));
+    }
+
+    /// The changeover regression: the next DJ's stick goes into the same
+    /// slot within the cache's lifetime, its `export.pdb` the very same
+    /// page-rounded size. Its tracks must not be answered from the previous
+    /// stick's rows.
+    #[test]
+    fn a_swapped_stick_with_a_same_size_database_is_not_reused() {
+        let previous_stick = database_file(4096 * 300, 1_760_000_000);
+        let next_stick = database_file(4096 * 300, 1_760_086_400);
+        assert!(!previous_stick.is_unchanged(&next_stick.attributes));
+    }
+
+    #[test]
+    fn a_database_grown_by_a_new_export_is_not_reused() {
+        let read = database_file(4096 * 300, 1_760_000_000);
+        let reexported = database_file(4096 * 301, 1_760_000_000);
+        assert!(!read.is_unchanged(&reexported.attributes));
+    }
 
     /// Bit layout per Deep Symmetry's spec (MSB->LSB): red3 green3 blue3
     /// height5 pad2 — matches `prolink::dbserver::waveform`'s own test helper.
