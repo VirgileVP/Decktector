@@ -32,7 +32,7 @@ use decktector_core::structure::{self, StructureInput};
 use decktector_core::EngineHandle;
 use prolink::dbserver::{beatgrid, waveform as db_waveform, Connection};
 use prolink::presence::Presence;
-use prolink::status::MediaSlot;
+use prolink::status::{MediaSlot, TRACK_TYPE_REKORDBOX};
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
@@ -308,10 +308,13 @@ impl MetadataFetcher {
         // connection pool, both failure caches, every query field — belongs
         // to the player holding the media. Keeping the deck out of scope
         // there is what stops the two `u8`s being swapped again.
-        let track_info = match self
-            .try_nfs(source_device, player_ip, slot, track_id, status_bpm)
-            .await
-        {
+        let from_database = if nfs_route_applies(track_type) {
+            self.try_nfs(source_device, player_ip, slot, track_id, status_bpm)
+                .await
+        } else {
+            None
+        };
+        let track_info = match from_database {
             Some(track_info) => Some(track_info),
             None => {
                 self.try_dbserver(
@@ -575,6 +578,13 @@ impl MetadataFetcher {
     }
 }
 
+/// Whether the NFS route can answer for a track of this kind. It looks the
+/// id up in the media's track database, which only lists rekordbox-analysed
+/// tracks: any other id would hit an unrelated row and show the wrong track.
+fn nfs_route_applies(track_type: u8) -> bool {
+    track_type == TRACK_TYPE_REKORDBOX
+}
+
 fn assemble_dbserver_track_info(
     track_id: u32,
     items: &[prolink::dbserver::client::TrackMenuItem],
@@ -675,6 +685,22 @@ mod tests {
     /// that just failed to connect is skipped (not re-attempted) on the
     /// very next track change, so one bad player doesn't spend a fresh
     /// timeout on every subsequent track it loads.
+    #[test]
+    fn the_nfs_route_answers_for_rekordbox_tracks() {
+        assert!(nfs_route_applies(TRACK_TYPE_REKORDBOX));
+    }
+
+    /// An unanalysed file loaded from the browser, or a CD track, carries an
+    /// id that is not a database row: looking it up there showed whichever
+    /// rekordbox track happened to share the number.
+    #[test]
+    fn the_nfs_route_leaves_other_track_kinds_to_dbserver() {
+        const UNANALYSED_FILE: u8 = 0x02;
+        const AUDIO_CD: u8 = 0x05;
+        assert!(!nfs_route_applies(UNANALYSED_FILE));
+        assert!(!nfs_route_applies(AUDIO_CD));
+    }
+
     #[test]
     fn a_freshly_failed_device_is_skipped() {
         let fetcher = fetcher();

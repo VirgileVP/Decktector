@@ -23,6 +23,8 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
   still after a second and a half instead of running on as if it were still playing.
 - Decks resume updating on their own after the network cable is unplugged and
   plugged back, or the computer wakes from sleep, instead of needing a restart.
+- A file played straight from the browser without rekordbox analysis, or a CD
+  track, no longer shows an unrelated rekordbox track's title and waveform.
 
 ## [1.4.0] - 2026-10-09
 

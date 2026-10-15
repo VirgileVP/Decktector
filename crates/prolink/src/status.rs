@@ -206,6 +206,12 @@ pub struct DeviceStatus {
     pub track_id: Option<u32>,
 }
 
+/// [`DeviceStatus::track_type`] of a track analysed by rekordbox and listed
+/// in the media's track database. The other kinds (an unanalysed file
+/// loaded from the file browser, an audio CD track) carry an id that is not
+/// a row of that database.
+pub const TRACK_TYPE_REKORDBOX: u8 = 0x01;
+
 /// Parses a status packet's payload; `None` if it isn't one.
 pub fn parse_status(data: &[u8], source_ip: IpAddr) -> Option<DeviceStatus> {
     let _ = source_ip; // Not currently part of the parsed shape; kept for a uniform *Watcher call shape.
@@ -266,7 +272,7 @@ pub fn build_status(
     packet[DEVICE_NUMBER_OFFSET] = device_number;
     packet[TRACK_DEVICE_OFFSET] = device_number;
     packet[MEDIA_SLOT_OFFSET] = 0x03; // USB, the common case for tests/sim.
-    packet[TRACK_TYPE_OFFSET] = 0x01; // Rekordbox-analyzed, the only kind decktector reads.
+    packet[TRACK_TYPE_OFFSET] = TRACK_TYPE_REKORDBOX;
     packet[PLAY_STATE_OFFSET] = play_state.to_byte();
 
     let mut flags = 0u8;
