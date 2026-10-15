@@ -19,9 +19,18 @@ export interface MonitorBounds {
   height: number
 }
 
-interface MinSize {
+export interface WindowSize {
   width: number
   height: number
+}
+
+/**
+ * The bounds a panel window is created with. `x`/`y` are left out for a
+ * fresh pop-out so the OS picks where it appears.
+ */
+export interface InitialWindowBounds extends WindowSize {
+  x?: number
+  y?: number
 }
 
 function overlapArea(geometry: WindowGeometry, monitor: MonitorBounds): number {
@@ -64,7 +73,7 @@ function bestMonitorFor(
 export function clampToMonitors(
   geometry: WindowGeometry,
   monitors: readonly MonitorBounds[],
-  minSize: MinSize
+  minSize: WindowSize
 ): WindowGeometry {
   if (monitors.length === 0) return geometry
 
@@ -79,4 +88,17 @@ export function clampToMonitors(
   const y = Math.min(Math.max(geometry.y, monitor.y), maxY)
 
   return { x, y, width, height }
+}
+
+/**
+ * The saved geometry when there is one, the panel's default size otherwise.
+ * Passed to the window at creation rather than applied afterwards: a
+ * `setPosition`/`setSize` sent right after `new WebviewWindow` races the
+ * window's own creation and is silently lost.
+ */
+export function initialWindowBounds(
+  defaultSize: WindowSize,
+  savedGeometry: WindowGeometry | null
+): InitialWindowBounds {
+  return savedGeometry ?? { width: defaultSize.width, height: defaultSize.height }
 }

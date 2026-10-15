@@ -9,6 +9,7 @@ import { getAllWebviewWindows, WebviewWindow } from '@tauri-apps/api/webviewWind
 import { usePanelWindowsStore } from '../state/panel-windows'
 import { pickDeckViewToggles, useSettings } from '../state/settings'
 import { initialPanelDisplay } from './panel-display'
+import { initialWindowBounds, type WindowGeometry } from './panel-geometry'
 import { DEFAULT_PANEL_WINDOW_OPTIONS } from './panel-window-options'
 import { panelSearch, type PanelParams } from './params'
 import { PANELS } from './registry'
@@ -18,16 +19,20 @@ import { nextInstance, panelWindowLabel } from './window-label'
  * The actual Tauri call, shared by `openPanelWindow` (which assigns a fresh
  * label) and `restorePanelWindows` (which reuses a label from the previous
  * session) — everything about how a panel window is created lives here
- * exactly once.
+ * exactly once. `savedGeometry` (logical pixels, already fitted to the
+ * connected monitors) places the window where it was last session.
  */
-export function createPanelWebviewWindow(label: string, params: PanelParams): WebviewWindow {
+export function createPanelWebviewWindow(
+  label: string,
+  params: PanelParams,
+  savedGeometry: WindowGeometry | null = null
+): WebviewWindow {
   const definition = PANELS[params.panelId]
 
   const webview = new WebviewWindow(label, {
     url: `index.html${panelSearch(params)}`,
     title: definition.title(params),
-    width: definition.defaultSize.width,
-    height: definition.defaultSize.height,
+    ...initialWindowBounds(definition.defaultSize, savedGeometry),
     minWidth: definition.minSize.width,
     minHeight: definition.minSize.height,
     // Create-time only on Windows — see the "Gotchas" section of the panel

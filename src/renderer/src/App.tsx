@@ -67,7 +67,9 @@ function App(): React.JSX.Element {
   useEffect(() => connectPanelWindowRegistry(), [])
   useEffect(() => connectMainWindowCloseCascade(), [])
   useEffect(() => {
-    void restorePanelWindows()
+    restorePanelWindows().catch((error: unknown) => {
+      console.error('Failed to restore panel windows:', error)
+    })
   }, [])
 
   const [focusedDeckId] = useState<number | null>(() => remoteFocusedDeck(window.location))

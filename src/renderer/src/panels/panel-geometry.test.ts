@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { clampToMonitors, type MonitorBounds, type WindowGeometry } from './panel-geometry'
+import {
+  clampToMonitors,
+  initialWindowBounds,
+  type MonitorBounds,
+  type WindowGeometry
+} from './panel-geometry'
 
 const MIN_SIZE = { width: 160, height: 80 }
 
@@ -52,5 +57,18 @@ describe('clampToMonitors', () => {
   it('returns the geometry unchanged for an empty monitor list', () => {
     const geometry: WindowGeometry = { x: 42, y: 42, width: 400, height: 300 }
     expect(clampToMonitors(geometry, [], MIN_SIZE)).toEqual(geometry)
+  })
+})
+
+describe('initialWindowBounds', () => {
+  const DEFAULT_SIZE = { width: 480, height: 240 }
+
+  it('creates a restored window at its saved position and size', () => {
+    const saved: WindowGeometry = { x: -1500, y: 220, width: 900, height: 410 }
+    expect(initialWindowBounds(DEFAULT_SIZE, saved)).toEqual(saved)
+  })
+
+  it('creates a fresh pop-out at the default size, leaving placement to the OS', () => {
+    expect(initialWindowBounds(DEFAULT_SIZE, null)).toEqual(DEFAULT_SIZE)
   })
 })

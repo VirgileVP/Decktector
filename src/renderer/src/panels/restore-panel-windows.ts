@@ -5,7 +5,6 @@
  */
 
 import { isTauri } from '@tauri-apps/api/core'
-import { LogicalPosition, LogicalSize } from '@tauri-apps/api/dpi'
 import { availableMonitors } from '@tauri-apps/api/window'
 
 import {
@@ -27,17 +26,11 @@ async function readMonitorBounds(): Promise<MonitorBounds[]> {
   })
 }
 
-async function restoreOne(
-  record: PanelWindowRecord,
-  monitors: readonly MonitorBounds[]
-): Promise<void> {
-  const webview = createPanelWebviewWindow(record.label, record.params)
-  if (record.geometry === null) return
-
+function restoreOne(record: PanelWindowRecord, monitors: readonly MonitorBounds[]): void {
   const { minSize } = PANELS[record.params.panelId]
-  const geometry = clampToMonitors(record.geometry, monitors, minSize)
-  await webview.setPosition(new LogicalPosition(geometry.x, geometry.y))
-  await webview.setSize(new LogicalSize(geometry.width, geometry.height))
+  const geometry =
+    record.geometry === null ? null : clampToMonitors(record.geometry, monitors, minSize)
+  createPanelWebviewWindow(record.label, record.params, geometry)
 
   // Written directly rather than left to the window's own next report: the
   // window's mount-time report is suppressed for the whole restore pass
@@ -59,7 +52,7 @@ export async function restorePanelWindows(): Promise<void> {
   beginRestoringWindows()
   try {
     const monitors = await readMonitorBounds()
-    await Promise.all(records.map((record) => restoreOne(record, monitors)))
+    for (const record of records) restoreOne(record, monitors)
   } finally {
     endRestoringWindows()
   }
