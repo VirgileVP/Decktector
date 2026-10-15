@@ -29,6 +29,19 @@ use window_prefs::{SleepBlocker, WindowPrefs};
 /// Default number of simulated decks when none is requested.
 const DEFAULT_SIM_DECKS: u8 = 2;
 
+/// Label of the window declared in `tauri.conf.json`. Every other window is
+/// a detachable panel the renderer opens on its own.
+const MAIN_WINDOW_LABEL: &str = "main";
+
+/// Whether the window labelled `label` going away ends the app's session,
+/// and with it the engine. Only the main window's does: a panel closed or
+/// docked back must leave the engine running for the windows still open —
+/// stopping it there silenced presence, so players stopped sending status
+/// and every deck froze until the app was restarted.
+fn ends_session(label: &str) -> bool {
+    label == MAIN_WINDOW_LABEL
+}
+
 /// Current state of everything, for hydrating a fresh renderer.
 #[tauri::command]
 fn engine_snapshot(engine: State<'_, Arc<dyn Engine>>) -> EngineSnapshot {
@@ -144,8 +157,8 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             // Releasing the network sockets on the way out is the engine's
-            // job; the window closing is the only signal we get for it.
-            if let tauri::WindowEvent::Destroyed = event {
+            // job; the main window closing is the only signal we get for it.
+            if matches!(event, tauri::WindowEvent::Destroyed) && ends_session(window.label()) {
                 let engine = window.state::<Arc<dyn Engine>>().inner().clone();
                 tauri::async_runtime::spawn(async move {
                     if let Err(error) = engine.stop().await {
@@ -156,4 +169,17 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("failed to start Decktector");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_the_main_window_closing_ends_the_session() {
+        assert!(ends_session(MAIN_WINDOW_LABEL));
+        // Panel labels as the renderer builds them: `panel-<id>-<deck|x>-<n>`.
+        assert!(!ends_session("panel-deck-2-0"));
+        assert!(!ends_session("panel-clock-x-1"));
+    }
 }

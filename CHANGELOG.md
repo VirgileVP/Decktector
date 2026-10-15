@@ -13,6 +13,11 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
 
 ## [Unreleased]
 
+### Fixed
+
+- Closing or docking back a panel window no longer stops the decks updating until
+  the app is restarted.
+
 ## [1.4.0] - 2026-10-09
 
 Panel windows you can tailor, and a lineup ready for the booth.
