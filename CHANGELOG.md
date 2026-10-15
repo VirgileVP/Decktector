@@ -29,6 +29,8 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
   off another stick or player, now shows the new track instead of keeping the old one.
 - The network listeners restart on their own if one of them fails, instead of
   leaving the decks frozen until the app is restarted.
+- A deck no longer keeps showing its previous track after the app falls behind a
+  burst of player updates: the window catches up from the current state instead.
 
 ## [1.4.0] - 2026-10-09
 

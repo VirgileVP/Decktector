@@ -50,7 +50,7 @@ impl RemoteHub {
                 },
                 // A lagging hub costs freshness, not coherence: a connection
                 // that misses a burst re-hydrates from a fresh snapshot on
-                // its own lag, the same way the Tauri bridge just logs it.
+                // its own lag, as the Tauri bridge has its renderer resync.
                 Err(RecvError::Lagged(missed)) => {
                     tracing::warn!(missed, "remote hub fell behind the engine")
                 }
