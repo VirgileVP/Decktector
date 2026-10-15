@@ -153,15 +153,6 @@ impl EngineHandle {
             .is_some()
     }
 
-    /// The rekordbox track id currently held for `deck_id`, if any.
-    pub fn track_id(&self, deck_id: DeckId) -> Option<u32> {
-        self.lock()
-            .tracks
-            .get(&deck_id)
-            .and_then(Option::as_ref)
-            .map(|track| track.track_id)
-    }
-
     /// A send failure only means nobody is subscribed yet, which is normal
     /// while the window is still opening.
     fn emit(&self, event: EngineEvent) {
@@ -263,10 +254,9 @@ mod tests {
     }
 
     #[test]
-    fn track_id_and_has_track_report_accurate_state() {
+    fn has_track_reports_accurate_state() {
         let handle = EngineHandle::new();
         assert!(!handle.has_track(1));
-        assert_eq!(handle.track_id(1), None);
 
         let track = TrackInfo {
             track_id: 1234,
@@ -288,10 +278,8 @@ mod tests {
 
         handle.update_deck_track(1, Some(track));
         assert!(handle.has_track(1));
-        assert_eq!(handle.track_id(1), Some(1234));
 
         handle.update_deck_track(1, None);
         assert!(!handle.has_track(1));
-        assert_eq!(handle.track_id(1), None);
     }
 }

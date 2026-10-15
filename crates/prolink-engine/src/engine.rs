@@ -18,7 +18,7 @@ use prolink::status::{DeviceStatus, StatusWatcher};
 use tokio::sync::{broadcast, watch};
 use tokio::task::JoinHandle;
 
-use crate::metadata::{FetchRequest, MetadataFetcher};
+use crate::metadata::{FetchRequest, LoadedTrack, MetadataFetcher};
 use crate::network::{self, InterfacePreference};
 use crate::normalize::to_deck_state;
 use crate::position::PositionTracker;
@@ -240,7 +240,7 @@ async fn run_reporting(
     let mut beat_rx = beat_watcher.subscribe();
     let mut position = PositionTracker::new();
     let mut known_players: HashMap<DeckId, DeviceInfo> = HashMap::new();
-    let mut known_track_ids: HashMap<DeckId, Option<u32>> = HashMap::new();
+    let mut known_tracks: HashMap<DeckId, Option<LoadedTrack>> = HashMap::new();
     let mut fetch_cooldown: HashMap<DeckId, Instant> = HashMap::new();
     let mut current_bind_ip: Option<Ipv4Addr> = None;
     let mut warned_number_conflicts: BTreeSet<u8> = BTreeSet::new();
@@ -265,7 +265,7 @@ async fn run_reporting(
         &metadata_fetcher,
         &mut known_players,
         &mut position,
-        &mut known_track_ids,
+        &mut known_tracks,
         &mut fetch_cooldown,
         &initial_devices,
     );
@@ -293,7 +293,7 @@ async fn run_reporting(
                     &metadata_fetcher,
                     &mut known_players,
                     &mut position,
-                    &mut known_track_ids,
+                    &mut known_tracks,
                     &mut fetch_cooldown,
                     &devices,
                 );
@@ -324,7 +324,7 @@ async fn run_reporting(
                         &metadata_fetcher,
                         &mut position,
                         &known_players,
-                        &mut known_track_ids,
+                        &mut known_tracks,
                         &mut fetch_cooldown,
                         status,
                     ),
@@ -360,7 +360,7 @@ fn handle_status(
     metadata_fetcher: &Arc<MetadataFetcher>,
     position: &mut PositionTracker,
     known_players: &HashMap<DeckId, DeviceInfo>,
-    known_track_ids: &mut HashMap<DeckId, Option<u32>>,
+    known_tracks: &mut HashMap<DeckId, Option<LoadedTrack>>,
     fetch_cooldown: &mut HashMap<DeckId, Instant>,
     status: DeviceStatus,
 ) {
@@ -372,17 +372,18 @@ fn handle_status(
     handle.update_deck_state(to_deck_state(&status, playhead_ms, now));
 
     let deck_id = status.device_number;
+    let loaded = loaded_track(&status);
 
-    // Reset backoff if the track ID reported by the player changed
-    if known_track_ids.get(&deck_id) != Some(&status.track_id) {
+    // Reset backoff if the player reports a different track
+    if known_tracks.get(&deck_id) != Some(&loaded) {
         fetch_cooldown.remove(&deck_id);
     }
 
-    if let Some(track_id) = status.track_id {
-        if handle.track_id(deck_id) == Some(track_id) {
-            return; // Exact track metadata already loaded and present in handle; nothing to fetch.
+    if let Some(loaded) = &loaded {
+        if metadata_fetcher.is_showing(deck_id, loaded) {
+            return; // This exact track's metadata is already shown; nothing to fetch.
         }
-    } else if known_track_ids.get(&deck_id) == Some(&None) {
+    } else if known_tracks.get(&deck_id) == Some(&None) {
         return; // Already known to have no track loaded.
     }
 
@@ -396,52 +397,61 @@ fn handle_status(
         }
     }
 
-    let Some(track_id) = status.track_id else {
-        known_track_ids.insert(deck_id, None);
+    let Some(loaded) = loaded else {
+        known_tracks.insert(deck_id, None);
         fetch_cooldown.remove(&deck_id);
         metadata_fetcher.note_current_track(deck_id, None);
         handle.update_deck_track(deck_id, None);
         return;
     };
 
-    // The media may live in another player entirely: on a linked booth every
-    // deck plays off one stick, and asking a deck about a track it is only
-    // streaming gets an empty answer (and, over NFS, a mount failure on an
-    // empty slot).
-    let source_device = if status.track_source_device == 0 {
-        deck_id
-    } else {
-        status.track_source_device
-    };
     let Some(player_ip) = known_players
-        .get(&source_device)
+        .get(&loaded.source_device)
         .and_then(|player| player.ip.parse().ok())
     else {
         // No address for that player yet. Status packets arrive every
         // ~200ms and keep-alives only every ~1.5s, so at startup this is
-        // simply the normal order of events — and it is why the track id
-        // is recorded *below*, once a fetch has actually been spawned:
+        // simply the normal order of events — and it is why the track is
+        // recorded *below*, once a fetch has actually been spawned:
         // marking it as handled here would make this deck's opening track
         // the one track that never gets metadata, until the DJ happens to
         // load another one.
         return;
     };
 
-    known_track_ids.insert(deck_id, Some(track_id));
+    known_tracks.insert(deck_id, Some(loaded));
     fetch_cooldown.insert(deck_id, Instant::now());
-    metadata_fetcher.note_current_track(deck_id, Some(track_id));
+    metadata_fetcher.note_current_track(deck_id, Some(loaded));
     metadata_fetcher.spawn_fetch(
         Arc::clone(handle),
         FetchRequest {
             deck_id,
-            source_device,
+            track: loaded,
             player_ip,
-            slot: status.media_slot,
-            track_type: status.track_type,
-            track_id,
             status_bpm: status.track_bpm,
         },
     );
+}
+
+/// The track `status` reports loaded, if any, identified by where it lives
+/// as well as by its id.
+///
+/// The media may live in another player entirely: on a linked booth every
+/// deck plays off one stick, and asking a deck about a track it is only
+/// streaming gets an empty answer (and, over NFS, a mount failure on an
+/// empty slot).
+fn loaded_track(status: &DeviceStatus) -> Option<LoadedTrack> {
+    let source_device = if status.track_source_device == 0 {
+        status.device_number
+    } else {
+        status.track_source_device
+    };
+    status.track_id.map(|track_id| LoadedTrack {
+        source_device,
+        slot: status.media_slot,
+        track_type: status.track_type,
+        track_id,
+    })
 }
 
 /// Diffs `devices` against what was previously known and reports
@@ -458,7 +468,7 @@ fn sync_devices(
     metadata_fetcher: &Arc<MetadataFetcher>,
     known: &mut HashMap<DeckId, DeviceInfo>,
     position: &mut PositionTracker,
-    known_track_ids: &mut HashMap<DeckId, Option<u32>>,
+    known_tracks: &mut HashMap<DeckId, Option<LoadedTrack>>,
     fetch_cooldown: &mut HashMap<DeckId, Instant>,
     devices: &[DiscoveredDevice],
 ) {
@@ -480,7 +490,7 @@ fn sync_devices(
             handle.device_disconnected(info.clone());
             position.forget(deck_id);
             metadata_fetcher.forget_device(deck_id);
-            known_track_ids.remove(&deck_id);
+            known_tracks.remove(&deck_id);
             fetch_cooldown.remove(&deck_id);
         }
     }
@@ -543,6 +553,7 @@ fn now_ms() -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use prolink::status::{MediaSlot, TRACK_TYPE_REKORDBOX};
 
     fn test_device(number: u8, ip: &str, mac: &str) -> DiscoveredDevice {
         DiscoveredDevice {
@@ -694,13 +705,13 @@ mod tests {
     }
 
     #[test]
-    fn sync_devices_disconnect_clears_known_track_ids_and_cooldown() {
+    fn sync_devices_disconnect_clears_known_tracks_and_cooldown() {
         let handle = EngineHandle::new();
         let presence = Presence::new(None);
         let metadata_fetcher = MetadataFetcher::new(presence, Ipv4Addr::LOCALHOST);
         let mut known_players = HashMap::new();
         let mut position = PositionTracker::new();
-        let mut known_track_ids = HashMap::new();
+        let mut known_tracks = HashMap::new();
         let mut fetch_cooldown = HashMap::new();
 
         let peer = test_device(2, "192.168.1.20", "aa:bb:cc:dd:ee:02");
@@ -709,12 +720,20 @@ mod tests {
             &metadata_fetcher,
             &mut known_players,
             &mut position,
-            &mut known_track_ids,
+            &mut known_tracks,
             &mut fetch_cooldown,
             &[peer],
         );
 
-        known_track_ids.insert(2, Some(42));
+        known_tracks.insert(
+            2,
+            Some(LoadedTrack {
+                source_device: 2,
+                slot: MediaSlot::Usb,
+                track_type: TRACK_TYPE_REKORDBOX,
+                track_id: 42,
+            }),
+        );
         fetch_cooldown.insert(2, Instant::now());
 
         // Peer disappears:
@@ -723,13 +742,98 @@ mod tests {
             &metadata_fetcher,
             &mut known_players,
             &mut position,
-            &mut known_track_ids,
+            &mut known_tracks,
             &mut fetch_cooldown,
             &[],
         );
 
-        assert!(!known_track_ids.contains_key(&2));
+        assert!(!known_tracks.contains_key(&2));
         assert!(!fetch_cooldown.contains_key(&2));
+    }
+
+    fn status_of(deck: u8, source_device: u8, track_id: u32) -> DeviceStatus {
+        let mut status = prolink::status::parse_status(
+            &prolink::status::build_status(
+                deck,
+                prolink::status::RawPlayState::Playing,
+                false,
+                false,
+                false,
+                0.0,
+                Some(128.0),
+                Some(1),
+                Some(1),
+                Some(track_id),
+            ),
+            std::net::IpAddr::V4(Ipv4Addr::LOCALHOST),
+        )
+        .expect("a built status packet parses");
+        status.track_source_device = source_device;
+        status
+    }
+
+    fn shown_track(track_id: u32) -> decktector_core::model::TrackInfo {
+        decktector_core::model::TrackInfo {
+            track_id,
+            title: "Shown".to_string(),
+            artist: None,
+            album: None,
+            genre: None,
+            key: None,
+            label: None,
+            comment: None,
+            duration_ms: 0.0,
+            bpm: None,
+            artwork: None,
+            beat_grid: None,
+            waveform: None,
+            cues: Vec::new(),
+            events: Vec::new(),
+        }
+    }
+
+    /// The same-id regression: deck 1 shows track 15 off player 2's stick,
+    /// then loads track 15 off its own. Matching on the id alone took the
+    /// shown metadata for the new track's and never fetched it.
+    #[tokio::test]
+    async fn the_same_track_id_off_other_media_is_fetched() {
+        let (handle, metadata_fetcher) = engine_fixture();
+        let handle = Arc::new(handle);
+        let known_players = HashMap::from([
+            (
+                1,
+                DeviceInfo {
+                    deck_id: 1,
+                    name: "CDJ-3000".to_string(),
+                    ip: "127.0.0.1".to_string(),
+                },
+            ),
+            (
+                2,
+                DeviceInfo {
+                    deck_id: 2,
+                    name: "CDJ-3000".to_string(),
+                    ip: "127.0.0.1".to_string(),
+                },
+            ),
+        ]);
+        let linked_players_track = loaded_track(&status_of(1, 2, 15));
+        let mut known_tracks = HashMap::from([(1, linked_players_track)]);
+        handle.update_deck_track(1, Some(shown_track(15)));
+
+        handle_status(
+            &handle,
+            &metadata_fetcher,
+            &mut PositionTracker::new(),
+            &known_players,
+            &mut known_tracks,
+            &mut HashMap::new(),
+            status_of(1, 1, 15),
+        );
+
+        assert_eq!(known_tracks[&1], loaded_track(&status_of(1, 1, 15)));
+        assert!(metadata_fetcher.is_fetching(1));
+        metadata_fetcher.abort_all();
     }
 
     /// Gives a test device the shared-number marking [`DeviceWatcher`] would

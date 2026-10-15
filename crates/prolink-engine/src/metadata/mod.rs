@@ -18,4 +18,4 @@ mod fetcher;
 pub mod nfs;
 mod normalize;
 
-pub use fetcher::{FetchRequest, MetadataFetcher};
+pub use fetcher::{FetchRequest, LoadedTrack, MetadataFetcher};

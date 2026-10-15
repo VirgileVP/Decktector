@@ -25,6 +25,8 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
   plugged back, or the computer wakes from sleep, instead of needing a restart.
 - A file played straight from the browser without rekordbox analysis, or a CD
   track, no longer shows an unrelated rekordbox track's title and waveform.
+- A deck loading a track with the same rekordbox number as the one it showed, but
+  off another stick or player, now shows the new track instead of keeping the old one.
 
 ## [1.4.0] - 2026-10-09
 

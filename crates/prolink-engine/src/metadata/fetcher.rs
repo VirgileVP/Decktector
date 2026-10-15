@@ -63,21 +63,30 @@ const PDB_CACHE_TTL: Duration = Duration::from_secs(120);
 type ConnectionPool = HashMap<(u8, Ipv4Addr), Arc<AsyncMutex<Connection>>>;
 type PdbCache = HashMap<(Ipv4Addr, MediaSlot), (Arc<TrackDatabase>, Instant)>;
 
+/// Which track a deck has loaded. A rekordbox id is only unique within one
+/// player's media slot — every stick numbers its tracks from 1 — so the id
+/// alone cannot tell the next DJ's track 15 from the previous DJ's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LoadedTrack {
+    /// The player whose media holds the track — the deck itself on a
+    /// stand-alone player, a *different* player on a linked booth (see
+    /// `prolink::status::DeviceStatus::track_source_device`). Both the
+    /// address and the device number every query names have to be this
+    /// player's, not the deck's.
+    pub source_device: u8,
+    pub slot: MediaSlot,
+    pub track_type: u8,
+    pub track_id: u32,
+}
+
 /// What one status packet supplies about the track it names — everything
 /// [`MetadataFetcher::spawn_fetch`] needs beyond what it already tracks
 /// itself (the pooled dbserver connection, the failure caches).
 pub struct FetchRequest {
     pub deck_id: DeckId,
-    /// The player whose media holds the track — the deck itself on a
-    /// stand-alone player, a *different* player on a linked booth (see
-    /// `prolink::status::DeviceStatus::track_source_device`). Both the
-    /// address below and the device number every query names have to be
-    /// this player's, not the deck's.
-    pub source_device: u8,
+    pub track: LoadedTrack,
+    /// Address of [`LoadedTrack::source_device`].
     pub player_ip: Ipv4Addr,
-    pub slot: MediaSlot,
-    pub track_type: u8,
-    pub track_id: u32,
     /// The status packet's own BPM reading, used if neither metadata route
     /// carries one (see `metadata::normalize::bpm`).
     pub status_bpm: Option<f64>,
@@ -117,7 +126,7 @@ pub struct MetadataFetcher {
     /// and a deck is not what either route talks to.
     nfs_failures: Mutex<HashMap<u8, Instant>>,
     dbserver_failures: Mutex<HashMap<u8, Instant>>,
-    /// The track id `crate::engine::run_reporting` most recently saw for
+    /// The track `crate::engine::run_reporting` most recently saw for
     /// each deck — updated by [`Self::note_current_track`] from that same
     /// single-threaded task, read by a spawned fetch task after its network
     /// work completes to decide whether its result is still relevant.
@@ -125,18 +134,18 @@ pub struct MetadataFetcher {
     /// can't be touched from a spawned task without adding a lock to
     /// `run_reporting`'s hot path, which its own design deliberately
     /// avoids.
-    current_track: Mutex<HashMap<DeckId, Option<u32>>>,
+    current_track: Mutex<HashMap<DeckId, Option<LoadedTrack>>>,
     active_sources: Mutex<HashMap<DeckId, ActiveMediaSource>>,
     in_flight: Mutex<HashSet<DeckId>>,
     pdb_cache: Mutex<PdbCache>,
     tasks: Mutex<Vec<JoinHandle<()>>>,
 }
 
+/// The track whose metadata a deck currently shows, and where it was read.
 #[derive(Debug, Clone)]
 pub struct ActiveMediaSource {
     pub player_ip: Ipv4Addr,
-    pub slot: MediaSlot,
-    pub track_id: u32,
+    pub track: LoadedTrack,
 }
 
 impl MetadataFetcher {
@@ -174,11 +183,19 @@ impl MetadataFetcher {
         *self.bind_ip.read().unwrap_or_else(|p| p.into_inner())
     }
 
-    pub fn note_current_track(&self, deck_id: DeckId, track_id: Option<u32>) {
-        self.lock(&self.current_track).insert(deck_id, track_id);
-        if track_id.is_none() {
+    pub fn note_current_track(&self, deck_id: DeckId, track: Option<LoadedTrack>) {
+        self.lock(&self.current_track).insert(deck_id, track);
+        if track.is_none() {
             self.lock(&self.active_sources).remove(&deck_id);
         }
+    }
+
+    /// Whether `deck_id` already shows the metadata of exactly `track` —
+    /// not merely of a track with the same id off other media.
+    pub fn is_showing(&self, deck_id: DeckId, track: &LoadedTrack) -> bool {
+        self.lock(&self.active_sources)
+            .get(&deck_id)
+            .is_some_and(|source| source.track == *track)
     }
 
     /// Whether a background metadata fetch is currently in progress for `deck_id`.
@@ -273,20 +290,23 @@ impl MetadataFetcher {
         self.lock(failures).insert(source_device, Instant::now());
     }
 
-    fn is_superseded(&self, deck_id: DeckId, track_id: u32) -> bool {
-        self.lock(&self.current_track).get(&deck_id) != Some(&Some(track_id))
+    fn is_superseded(&self, deck_id: DeckId, track: &LoadedTrack) -> bool {
+        self.lock(&self.current_track).get(&deck_id) != Some(&Some(*track))
     }
 
     async fn fetch_and_report(self: Arc<Self>, handle: Arc<EngineHandle>, request: FetchRequest) {
         let FetchRequest {
             deck_id,
-            source_device,
+            track,
             player_ip,
+            status_bpm,
+        } = request;
+        let LoadedTrack {
+            source_device,
             slot,
             track_type,
             track_id,
-            status_bpm,
-        } = request;
+        } = track;
 
         struct InFlightGuard {
             fetcher: Arc<MetadataFetcher>,
@@ -332,17 +352,11 @@ impl MetadataFetcher {
         let Some(track_info) = track_info else {
             return; // Both routes failed or had nothing for this track — leave the deck's last-known metadata as is.
         };
-        if self.is_superseded(deck_id, track_id) {
+        if self.is_superseded(deck_id, &track) {
             return;
         }
-        self.lock(&self.active_sources).insert(
-            deck_id,
-            ActiveMediaSource {
-                player_ip,
-                slot,
-                track_id,
-            },
-        );
+        self.lock(&self.active_sources)
+            .insert(deck_id, ActiveMediaSource { player_ip, track });
         handle.update_deck_track(deck_id, Some(track_info));
     }
 
@@ -360,29 +374,22 @@ impl MetadataFetcher {
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("no active media source known for deck {deck_id}"))?;
 
-        let mut client = prolink::nfs::NfsClient::open(
-            active_source.player_ip,
-            self.bind_ip(),
-            active_source.slot,
-        )
-        .await?;
-        let cached = self.cached_database(active_source.player_ip, active_source.slot);
+        let ActiveMediaSource {
+            player_ip,
+            track: LoadedTrack { slot, track_id, .. },
+        } = active_source;
+        let mut client = prolink::nfs::NfsClient::open(player_ip, self.bind_ip(), slot).await?;
+        let cached = self.cached_database(player_ip, slot);
         let (database, is_new) = nfs::load_database(&mut client, cached).await?;
         if is_new {
-            self.update_cached_database(
-                active_source.player_ip,
-                active_source.slot,
-                Arc::clone(&database),
-            );
+            self.update_cached_database(player_ip, slot, Arc::clone(&database));
         }
 
         let track = database
             .pdb
             .tracks
-            .get(&active_source.track_id)
-            .ok_or_else(|| {
-                anyhow::anyhow!("track {} not found in database", active_source.track_id)
-            })?;
+            .get(&track_id)
+            .ok_or_else(|| anyhow::anyhow!("track {track_id} not found in database"))?;
 
         let raw_file_path = track.file_path.as_deref().ok_or_else(|| {
             anyhow::anyhow!("no audio file path recorded in database for this track")
@@ -763,19 +770,50 @@ mod tests {
         assert!(!fetcher.is_failing(&fetcher.dbserver_failures, 2));
     }
 
+    fn loaded(source_device: u8, track_id: u32) -> LoadedTrack {
+        LoadedTrack {
+            source_device,
+            slot: MediaSlot::Usb,
+            track_type: TRACK_TYPE_REKORDBOX,
+            track_id,
+        }
+    }
+
     #[test]
     fn a_result_for_the_still_current_track_is_not_superseded() {
         let fetcher = fetcher();
-        fetcher.note_current_track(1, Some(4207));
-        assert!(!fetcher.is_superseded(1, 4207));
+        fetcher.note_current_track(1, Some(loaded(1, 4207)));
+        assert!(!fetcher.is_superseded(1, &loaded(1, 4207)));
     }
 
     #[test]
     fn a_result_for_a_track_the_deck_has_since_left_is_superseded() {
         let fetcher = fetcher();
-        fetcher.note_current_track(1, Some(4207));
-        fetcher.note_current_track(1, Some(9999)); // The deck moved on before the fetch finished.
-        assert!(fetcher.is_superseded(1, 4207));
+        fetcher.note_current_track(1, Some(loaded(1, 4207)));
+        fetcher.note_current_track(1, Some(loaded(1, 9999))); // The deck moved on before the fetch finished.
+        assert!(fetcher.is_superseded(1, &loaded(1, 4207)));
+    }
+
+    /// Same id, other media: the deck loaded track 15 off its own stick
+    /// after track 15 off the linked player's. The first result must not
+    /// count as the second's.
+    #[test]
+    fn the_same_id_off_other_media_is_another_track() {
+        let fetcher = fetcher();
+        let linked_players_track = loaded(2, 15);
+        let own_track = loaded(1, 15);
+        fetcher.note_current_track(1, Some(own_track));
+        fetcher.lock(&fetcher.active_sources).insert(
+            1,
+            ActiveMediaSource {
+                player_ip: Ipv4Addr::LOCALHOST,
+                track: linked_players_track,
+            },
+        );
+
+        assert!(fetcher.is_superseded(1, &linked_players_track));
+        assert!(!fetcher.is_showing(1, &own_track));
+        assert!(fetcher.is_showing(1, &linked_players_track));
     }
 
     #[test]
