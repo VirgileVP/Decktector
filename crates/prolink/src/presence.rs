@@ -413,26 +413,11 @@ impl Presence {
         name: String,
         bind_ip: Ipv4Addr,
     ) {
-        // Real players broadcast their keep-alives *from* ANNOUNCE_PORT, so
-        // that is what we do; an ephemeral source port is the fallback
-        // rather than the default, since a peer that filters on the source
-        // port would silently never send us status. Sharing the port with
-        // this process's own listener is what `bind_udp_socket_on`'s
-        // SO_REUSEADDR/SO_REUSEPORT is for.
-        let socket = match crate::bind_udp_socket_on(bind_ip, ANNOUNCE_PORT) {
-            Ok(socket) => socket,
+        let mut socket = match open_socket(bind_ip).await {
+            Ok(socket) => Some(socket),
             Err(error) => {
-                tracing::warn!(%error, port = ANNOUNCE_PORT, "could not send presence from the standard announce port; falling back to an ephemeral one");
-                match UdpSocket::bind((bind_ip, 0)).await.and_then(|socket| {
-                    socket.set_broadcast(true)?;
-                    Ok(socket)
-                }) {
-                    Ok(socket) => socket,
-                    Err(error) => {
-                        tracing::error!(%error, "failed to open the Pro DJ Link presence socket");
-                        return;
-                    }
-                }
+                tracing::error!(%error, "failed to open the Pro DJ Link presence socket");
+                return;
             }
         };
 
@@ -458,9 +443,20 @@ impl Presence {
                     let devices = device_watcher.devices();
                     self.ensure_claimed(&devices);
                     if let Some(number) = self.device_number() {
-                        let packet = build_keepalive(number, &name, mac, bind_ip, peer_count(&devices));
-                        if let Err(error) = socket.send_to(&packet, (BROADCAST_ADDR, ANNOUNCE_PORT)).await {
-                            tracing::warn!(%error, "failed to broadcast our presence keep-alive");
+                        if socket.is_none() {
+                            socket = reopen_socket(bind_ip).await;
+                        }
+                        if let Some(open) = &socket {
+                            let packet = build_keepalive(number, &name, mac, bind_ip, peer_count(&devices));
+                            if let Err(error) = open.send_to(&packet, (BROADCAST_ADDR, ANNOUNCE_PORT)).await {
+                                // A socket bound to an adapter's address can
+                                // stay dead after the link drops, even once
+                                // the same address is back; a fresh one is
+                                // what gets keep-alives — and so status —
+                                // flowing again.
+                                tracing::warn!(%error, "failed to broadcast our presence keep-alive; reopening the socket");
+                                socket = None;
+                            }
                         }
                     }
                 }
@@ -473,7 +469,43 @@ impl Presence {
             }
         }
     }
+}
 
+/// Opens the socket keep-alives leave from, on `bind_ip`.
+///
+/// Real players broadcast their keep-alives *from* [`ANNOUNCE_PORT`], so
+/// that is what we do; an ephemeral source port is the fallback rather than
+/// the default, since a peer that filters on the source port would silently
+/// never send us status. Sharing the port with this process's own listener
+/// is what `bind_udp_socket_on`'s SO_REUSEADDR/SO_REUSEPORT is for.
+async fn open_socket(bind_ip: Ipv4Addr) -> std::io::Result<UdpSocket> {
+    let announce_port_error = match crate::bind_udp_socket_on(bind_ip, ANNOUNCE_PORT) {
+        Ok(socket) => return Ok(socket),
+        Err(error) => error,
+    };
+    let socket = UdpSocket::bind((bind_ip, 0)).await?;
+    socket.set_broadcast(true)?;
+    tracing::warn!(error = %announce_port_error, port = ANNOUNCE_PORT, "could not send presence from the standard announce port; fell back to an ephemeral one");
+    Ok(socket)
+}
+
+/// [`open_socket`] again after a failed send. Failing here is expected while
+/// the link is still down, so it is retried on the next tick rather than
+/// reported each time.
+async fn reopen_socket(bind_ip: Ipv4Addr) -> Option<UdpSocket> {
+    match open_socket(bind_ip).await {
+        Ok(socket) => {
+            tracing::info!(%bind_ip, "reopened the Pro DJ Link presence socket");
+            Some(socket)
+        }
+        Err(error) => {
+            tracing::debug!(%error, %bind_ip, "presence socket still cannot be reopened");
+            None
+        }
+    }
+}
+
+impl Presence {
     /// Picks a number if we don't have one yet, or re-picks if the one we
     /// hold has been taken over by a real device in the meantime — our own
     /// broadcast is excluded from that check via [`is_own_broadcast`], or every tick

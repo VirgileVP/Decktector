@@ -21,6 +21,8 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
   tracks — title, waveform and play-history line — for up to two minutes.
 - When a deck's status stops arriving, its waveform and the timecode output hold
   still after a second and a half instead of running on as if it were still playing.
+- Decks resume updating on their own after the network cable is unplugged and
+  plugged back, or the computer wakes from sleep, instead of needing a restart.
 
 ## [1.4.0] - 2026-10-09
 

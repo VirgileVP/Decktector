@@ -206,6 +206,13 @@ fn sync_network_and_presence(
             }
         }
     } else {
+        // Every peer timing out at once is what an unplugged cable, a
+        // sleeping laptop or a renegotiated link looks like from here — and
+        // the adapter often comes back on the very same address, which the
+        // comparison above would take for "nothing changed" while the
+        // presence socket bound to it went dead with the link. Forgetting
+        // the binding makes the next peer to appear rebind presence afresh.
+        *current_bind_ip = None;
         handle.set_network_state(NetworkState::Searching);
     }
 }
@@ -611,6 +618,58 @@ mod tests {
         assert_eq!(handle.snapshot().network_state, NetworkState::Searching);
 
         // Cleanup presence task if running
+        if let Some(task) = presence_task_slot.lock().unwrap().take() {
+            task.abort();
+        };
+    }
+
+    /// The network-loss regression: the link drops long enough for every
+    /// player to time out, then comes back on the same address. Presence
+    /// must be started afresh rather than left on the socket that went down
+    /// with the link — without it players never send status again.
+    #[tokio::test]
+    async fn peers_returning_on_the_same_address_restart_presence() {
+        let handle = EngineHandle::new();
+        let device_watcher = DeviceWatcher::new();
+        let presence = Presence::new(None);
+        let metadata_fetcher = MetadataFetcher::new(Arc::clone(&presence), Ipv4Addr::UNSPECIFIED);
+        let presence_task_slot = Arc::new(Mutex::new(None));
+        let mut current_bind_ip = None;
+        let peer = test_device(1, "127.0.0.1", "aa:bb:cc:dd:ee:01");
+        let sync = |devices: &[DiscoveredDevice], current_bind_ip: &mut Option<Ipv4Addr>| {
+            sync_network_and_presence(
+                &handle,
+                &device_watcher,
+                &presence,
+                &metadata_fetcher,
+                &presence_task_slot,
+                current_bind_ip,
+                None,
+                devices,
+            );
+        };
+
+        sync(std::slice::from_ref(&peer), &mut current_bind_ip);
+        let first_presence = presence_task_slot
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(JoinHandle::id);
+
+        sync(&[], &mut current_bind_ip);
+        assert_eq!(current_bind_ip, None);
+
+        sync(std::slice::from_ref(&peer), &mut current_bind_ip);
+        let second_presence = presence_task_slot
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(JoinHandle::id);
+
+        assert!(current_bind_ip.is_some());
+        assert!(first_presence.is_some());
+        assert_ne!(first_presence, second_presence);
+
         if let Some(task) = presence_task_slot.lock().unwrap().take() {
             task.abort();
         };
