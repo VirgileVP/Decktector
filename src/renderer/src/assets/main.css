@@ -458,7 +458,7 @@ input[type='checkbox']:focus-visible {
 .settings-panel {
   display: flex;
   flex-direction: column;
-  width: min(560px, 100%);
+  width: min(620px, 100%);
   height: min(640px, 100%);
   background: var(--bg-panel);
   border: 1px solid var(--border-strong);
@@ -516,9 +516,13 @@ input[type='checkbox']:focus-visible {
 .settings-tabs {
   display: flex;
   flex-shrink: 0;
-  gap: 4px;
+  gap: 2px;
   margin-bottom: 16px;
   border-bottom: 1px solid var(--border);
+  /* Labels never wrap; at a large interface scale the row scrolls sideways
+     instead of breaking "Remote view" over two lines. */
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .settings-tab-panel {
@@ -531,7 +535,9 @@ input[type='checkbox']:focus-visible {
 }
 
 .settings-tab {
-  padding: 6px 12px;
+  flex-shrink: 0;
+  padding: 6px 10px;
+  white-space: nowrap;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -2523,12 +2529,28 @@ input[type='checkbox']:focus-visible {
   color: var(--text);
 }
 
-.welcome-error {
-  color: var(--warn);
-}
-
 .welcome-dismiss {
   border-color: var(--text-muted);
+}
+
+/* Settings › About carries the same text, laid out like the dialog body. */
+.about-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.about-links {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.project-link-error {
+  color: var(--warn);
 }
 
 /* ---------- Panel windows ---------- */

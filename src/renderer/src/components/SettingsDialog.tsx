@@ -17,6 +17,7 @@ import {
   type DeckViewPreset,
   type Settings
 } from '../state/settings'
+import { AboutSettings } from './AboutSettings'
 import { DECK_VIEW_TOGGLE_GROUPS } from './deck-view-toggle-rows'
 import { DeckLabelsEditor } from './DeckLabelsEditor'
 import { DevicesPanel } from './DevicesPanel'
@@ -33,7 +34,8 @@ const SETTINGS_TABS = [
   'Line up',
   'Timecode',
   'Remote view',
-  'Devices'
+  'Devices',
+  'About'
 ] as const
 export type SettingsTab = (typeof SETTINGS_TABS)[number]
 
@@ -43,9 +45,10 @@ const WIDE_TABS: readonly SettingsTab[] = ['Line up']
 /** Tabs desktop-only gear needs — a remote browser has nothing to send timecode to,
  *  must not be able to control the very server that is showing it this screen, and
  *  must not see raw network identifiers (IP/MAC) for gear on a venue LAN that the
- *  remote link itself treats as untrusted. */
+ *  remote link itself treats as untrusted. About opens its links through the shell,
+ *  like the welcome notice it mirrors. */
 const IS_TAURI = isTauri()
-const SHELL_ONLY_TABS: readonly SettingsTab[] = ['Timecode', 'Remote view', 'Devices']
+const SHELL_ONLY_TABS: readonly SettingsTab[] = ['Timecode', 'Remote view', 'Devices', 'About']
 const VISIBLE_SETTINGS_TABS = SETTINGS_TABS.filter(
   (tab) => IS_TAURI || !SHELL_ONLY_TABS.includes(tab)
 )
@@ -515,6 +518,8 @@ export function SettingsDialog({
               <DevicesPanel />
             </>
           )}
+
+          {IS_TAURI && activeTab === 'About' && <AboutSettings />}
         </div>
       </div>
     </div>
