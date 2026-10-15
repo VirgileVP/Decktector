@@ -1,14 +1,25 @@
 import type { DeckState } from '../model'
 
 /**
+ * How far past its last status a playing deck's position is projected:
+ * several missed ~200ms status packets, not the length of a network outage.
+ * Mirrors `MAX_EXTRAPOLATION_MS` in the timecode generator.
+ */
+export const MAX_EXTRAPOLATION_MS = 1500
+
+/**
  * Estimates the current playhead position by extrapolating from the last
  * status packet (anchor `playheadMs` at `reportedAt`) using the pitch.
  * Status packets arrive at ~5 Hz; this makes the playhead move at 60 fps.
+ * Once status stops arriving the playhead holds after
+ * {@link MAX_EXTRAPOLATION_MS} rather than scrolling on for a deck that may
+ * have stopped long ago.
  */
 export function estimatePlayheadMs(deck: DeckState | undefined, nowMs: number): number | null {
   if (!deck || deck.playheadMs === null) return null
   if (deck.playState !== 'playing') return deck.playheadMs
-  return deck.playheadMs + (nowMs - deck.reportedAt) * (1 + deck.pitch / 100)
+  const elapsedMs = Math.min(nowMs - deck.reportedAt, MAX_EXTRAPOLATION_MS)
+  return deck.playheadMs + elapsedMs * (1 + deck.pitch / 100)
 }
 
 export function formatTimeMs(ms: number): string {

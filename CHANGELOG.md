@@ -19,6 +19,8 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
   the app is restarted.
 - A USB stick swapped into the same slot no longer shows the previous stick's
   tracks — title, waveform and play-history line — for up to two minutes.
+- When a deck's status stops arriving, its waveform and the timecode output hold
+  still after a second and a half instead of running on as if it were still playing.
 
 ## [1.4.0] - 2026-10-09
 

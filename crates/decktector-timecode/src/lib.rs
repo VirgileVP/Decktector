@@ -504,15 +504,23 @@ struct MtcSession {
     frame_rate: FrameRate,
 }
 
+/// How far past its last status a playing deck's position is projected —
+/// several missed ~200ms status packets, not the length of a network
+/// outage. Mirrors `MAX_EXTRAPOLATION_MS` in the renderer's `lib/playhead.ts`.
+const MAX_EXTRAPOLATION_MS: f64 = 1_500.0;
+
 /// Mirrors the renderer's own extrapolation in `lib/playhead.ts`: status
 /// packets land at ~5 Hz, so the position between them is projected forward
-/// from the last anchor using the deck's pitch.
+/// from the last anchor using the deck's pitch. Once status stops arriving
+/// the projection holds at [`MAX_EXTRAPOLATION_MS`]: timecode freezes with
+/// the deck instead of running on for a deck that may have stopped long ago.
 fn extrapolate_playhead_ms(deck: &DeckState, now_ms: f64) -> Option<f64> {
     let playhead_ms = deck.playhead_ms?;
     if deck.play_state != PlayState::Playing {
         return Some(playhead_ms);
     }
-    Some(playhead_ms + (now_ms - deck.reported_at) * (1.0 + deck.pitch / 100.0))
+    let elapsed_ms = (now_ms - deck.reported_at).min(MAX_EXTRAPOLATION_MS);
+    Some(playhead_ms + elapsed_ms * (1.0 + deck.pitch / 100.0))
 }
 
 fn epoch_ms() -> f64 {
@@ -562,6 +570,14 @@ mod tests {
         let deck = deck(10_000.0, PlayState::Playing, 4.0, 1_000.0);
         // 500ms of wall time at +4% pitch.
         assert_eq!(extrapolate_playhead_ms(&deck, 1_500.0), Some(10_520.0));
+    }
+
+    #[test]
+    fn a_deck_whose_status_stopped_arriving_holds_its_timecode() {
+        let deck = deck(10_000.0, PlayState::Playing, 0.0, 1_000.0);
+        let held = extrapolate_playhead_ms(&deck, 1_000.0 + MAX_EXTRAPOLATION_MS);
+        // A minute without status: the deck may have stopped long ago.
+        assert_eq!(extrapolate_playhead_ms(&deck, 61_000.0), held);
     }
 
     #[test]
