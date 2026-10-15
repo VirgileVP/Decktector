@@ -368,11 +368,9 @@ impl TimecodeService {
             return None;
         }
         let deck_id = state.source_deck_id?;
-        let snapshot = self.engine.handle().snapshot();
-        let deck = snapshot
-            .decks
-            .into_iter()
-            .find(|deck| deck.deck_id == deck_id)?;
+        // Runs on every tick (up to ~120 a second for MTC): read the source
+        // deck alone, not a whole snapshot that clones every track's waveform.
+        let deck = self.engine.handle().deck_state(deck_id)?;
         let elapsed_ms = extrapolate_playhead_ms(&deck, epoch_ms())?;
         Some((
             TimeCode::from_elapsed_ms(elapsed_ms, state.config.frame_rate),

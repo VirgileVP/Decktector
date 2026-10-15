@@ -109,6 +109,16 @@ impl EngineHandle {
         }
     }
 
+    /// Current state of one deck, if it has reported any.
+    ///
+    /// For per-tick readers such as the timecode generator: unlike
+    /// [`Self::snapshot`], it clones neither the other decks nor any track
+    /// (whose waveform is the bulk of the snapshot), so the bookkeeping lock
+    /// the reporting side also takes is held only briefly.
+    pub fn deck_state(&self, deck_id: DeckId) -> Option<DeckState> {
+        self.lock().decks.get(&deck_id).cloned()
+    }
+
     pub fn set_network_state(&self, network_state: NetworkState) {
         self.lock().network_state = network_state;
         self.emit(EngineEvent::NetworkState(network_state));
@@ -196,6 +206,7 @@ pub trait Engine: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::PlayState;
 
     fn device(deck_id: DeckId) -> DeviceInfo {
         DeviceInfo {
@@ -225,6 +236,44 @@ mod tests {
         let snapshot = handle.snapshot();
         assert!(snapshot.devices.is_empty());
         assert!(snapshot.tracks.is_empty());
+    }
+
+    fn deck_state(deck_id: DeckId) -> DeckState {
+        DeckState {
+            deck_id,
+            play_state: PlayState::Playing,
+            is_master: false,
+            is_synced: false,
+            is_on_air: false,
+            pitch: 0.0,
+            track_bpm: None,
+            effective_bpm: None,
+            beat_in_measure: None,
+            track_id: None,
+            playhead_ms: Some(1_000.0),
+            reported_at: 0.0,
+        }
+    }
+
+    #[test]
+    fn deck_state_reads_one_deck_without_the_others() {
+        let handle = EngineHandle::new();
+        handle.update_deck_state(deck_state(1));
+        handle.update_deck_state(deck_state(2));
+
+        assert_eq!(handle.deck_state(2), Some(deck_state(2)));
+        assert_eq!(handle.deck_state(3), None);
+    }
+
+    #[test]
+    fn deck_state_is_gone_once_its_device_disconnects() {
+        let handle = EngineHandle::new();
+        handle.device_connected(device(2));
+        handle.update_deck_state(deck_state(2));
+
+        handle.device_disconnected(device(2));
+
+        assert_eq!(handle.deck_state(2), None);
     }
 
     #[test]
