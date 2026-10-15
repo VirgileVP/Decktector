@@ -8,9 +8,11 @@ import { DeckViewToggle } from './components/DeckViewToggle'
 import { HeaderBlock } from './components/HeaderBlock'
 import { RemoteLinkBanner } from './components/RemoteLinkBanner'
 import { SettingsDialog, type SettingsTab } from './components/SettingsDialog'
+import { WelcomeDialog } from './components/WelcomeDialog'
 import { DECK_ACCENT_COLOR } from './lib/deck-colors'
 import { loadDeckView, saveDeckView, type DeckView } from './lib/deck-view'
 import { remoteFocusedDeck } from './lib/remote-url'
+import { acknowledgeWelcomeNotice, loadShouldShowWelcomeNotice } from './lib/welcome-notice'
 import { connectMainWindowCloseCascade } from './panels/close-panel-windows-on-exit'
 import { restorePanelWindows } from './panels/restore-panel-windows'
 import { connectDevicesToEngine, useDevicesStore } from './state/devices'
@@ -25,6 +27,10 @@ import { connectStoreToEngine, useDecktectorStore } from './state/store'
 import { connectTimecodeToEngine } from './state/timecode'
 import { connectTimecodeFollowOnAir } from './state/timecode-follow'
 import { useClockNow } from './state/wall-clock'
+
+/** The welcome notice opens links through the desktop shell, and a remote
+ *  viewer is someone watching a set, not someone installing the app. */
+const IS_TAURI = isTauri()
 
 /** Evenly spaced teeth of the settings gear icon, in degrees. */
 const GEAR_TOOTH_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315] as const
@@ -72,6 +78,11 @@ function App(): React.JSX.Element {
   }
 
   const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null)
+  const [welcomeOpen, setWelcomeOpen] = useState(() => IS_TAURI && loadShouldShowWelcomeNotice())
+  const closeWelcome = (): void => {
+    acknowledgeWelcomeNotice()
+    setWelcomeOpen(false)
+  }
   const deckViewToggles = useDeckViewToggles()
 
   const networkState = useDecktectorStore((s) => s.networkState)
@@ -106,7 +117,7 @@ function App(): React.JSX.Element {
         <img className="neon-logo" src={neonLogo} alt="NEON" />
         <HeaderBlock />
         <div className="header-right">
-          {networkFailed && isTauri() ? (
+          {networkFailed && IS_TAURI ? (
             // The Devices tab is shell-only (see `SettingsDialog.tsx`), so this
             // shortcut only makes sense — and only renders as interactive — in
             // the desktop shell; a remote viewer gets the same plain, inert
@@ -160,6 +171,8 @@ function App(): React.JSX.Element {
       {settingsTab !== null && (
         <SettingsDialog initialTab={settingsTab} onClose={() => setSettingsTab(null)} />
       )}
+
+      {welcomeOpen && <WelcomeDialog onClose={closeWelcome} />}
 
       <main className={`deck-grid view-${effectiveView}`}>
         {visibleDeckIds.length === 0 ? (

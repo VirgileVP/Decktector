@@ -8,6 +8,7 @@ mod devices;
 mod download;
 mod events;
 mod lineup_file;
+mod project_links;
 mod remote;
 mod timecode;
 mod track_log;
@@ -108,6 +109,7 @@ pub fn run() {
         .manage(interface_preference)
         .manage(SleepBlocker::default())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             engine_snapshot,
             set_window_prefs,
@@ -125,7 +127,8 @@ pub fn run() {
             devices::set_prolink_interface,
             download::download_deck_track,
             lineup_file::export_lineup_file,
-            lineup_file::import_lineup_file
+            lineup_file::import_lineup_file,
+            project_links::open_project_link
         ])
         .setup(move |app| {
             // Resolving the asset source needs the resource-dir lookup,

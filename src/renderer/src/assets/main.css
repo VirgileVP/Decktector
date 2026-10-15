@@ -2511,6 +2511,26 @@ input[type='checkbox']:focus-visible {
   color: var(--warn);
 }
 
+/* ---------- Welcome dialog ---------- */
+
+/* Reuses the confirm dialog's frame; only the tone differs — this is a
+   greeting, not a warning. */
+.welcome-panel {
+  width: min(460px, 100%);
+}
+
+.welcome-title {
+  color: var(--text);
+}
+
+.welcome-error {
+  color: var(--warn);
+}
+
+.welcome-dismiss {
+  border-color: var(--text-muted);
+}
+
 /* ---------- Panel windows ---------- */
 
 /* Every panel window is created `transparent: true` — on Windows that flag
