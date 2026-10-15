@@ -38,6 +38,15 @@ const GREETING: u32 = 1;
 /// is what the CDJ-3000 echoed back in the reference exchange.
 const SETUP_TRANSACTION_ID: u32 = 0xffff_fffe;
 
+/// Most menu items [`Connection::fetch_metadata`] reserves room for up front.
+///
+/// The item count comes straight from the player, so it is untrusted: a
+/// corrupt or hostile `u32` would otherwise size an allocation of billions of
+/// entries and abort the process. A metadata menu holds a couple of dozen
+/// items, so this covers every real answer; a larger count still has all its
+/// items read, the vector just grows as they arrive.
+const MAX_PREALLOCATED_MENU_ITEMS: usize = 64;
+
 /// The single packed argument every menu and asset query opens with: the
 /// player being asked about, which menu it should render into, which media
 /// slot to read, and the track's type, one byte each in a 4-byte number
@@ -253,7 +262,7 @@ impl Connection {
             return Err(unexpected_message("a menu header", header.message_type));
         }
 
-        let mut items = Vec::with_capacity(item_count as usize);
+        let mut items = Vec::with_capacity(menu_item_capacity(item_count));
         for _ in 0..item_count {
             let item = self.read_message().await?;
             if item.message_type != queries::MENU_ITEM {
@@ -473,6 +482,14 @@ impl Connection {
     }
 }
 
+/// Room to reserve for `item_count` menu items announced by the player —
+/// see [`MAX_PREALLOCATED_MENU_ITEMS`].
+fn menu_item_capacity(item_count: u32) -> usize {
+    usize::try_from(item_count)
+        .unwrap_or(usize::MAX)
+        .min(MAX_PREALLOCATED_MENU_ITEMS)
+}
+
 fn unexpected_message(expected: &str, got_type: u16) -> std::io::Error {
     std::io::Error::new(
         std::io::ErrorKind::InvalidData,
@@ -509,6 +526,16 @@ mod tests {
         assert_eq!(&request[..4], &[0x00, 0x00, 0x00, 0x0f]);
         assert_eq!(&request[4..18], b"RemoteDBServer");
         assert_eq!(request[18], 0x00);
+    }
+
+    #[test]
+    fn a_plausible_item_count_is_reserved_as_announced() {
+        assert_eq!(menu_item_capacity(12), 12);
+    }
+
+    #[test]
+    fn an_absurd_item_count_does_not_size_the_allocation() {
+        assert_eq!(menu_item_capacity(u32::MAX), MAX_PREALLOCATED_MENU_ITEMS);
     }
 
     #[test]

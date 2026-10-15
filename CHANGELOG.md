@@ -31,6 +31,8 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
   leaving the decks frozen until the app is restarted.
 - A deck no longer keeps showing its previous track after the app falls behind a
   burst of player updates: the window catches up from the current state instead.
+- A player answering a track lookup with a corrupt item count can no longer crash
+  the app.
 
 ## [1.4.0] - 2026-10-09
 
