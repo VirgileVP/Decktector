@@ -1052,7 +1052,7 @@ dependencies = [
 
 [[package]]
 name = "decktector"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1075,7 +1075,7 @@ dependencies = [
 
 [[package]]
 name = "decktector-core"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1089,7 +1089,7 @@ dependencies = [
 
 [[package]]
 name = "decktector-net"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "anyhow",
  "if-addrs",
@@ -1099,7 +1099,7 @@ dependencies = [
 
 [[package]]
 name = "decktector-remote"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -1126,7 +1126,7 @@ dependencies = [
 
 [[package]]
 name = "decktector-timecode"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "anyhow",
  "cpal",
@@ -3520,7 +3520,7 @@ dependencies = [
 
 [[package]]
 name = "prolink"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "anyhow",
  "binrw",
@@ -3543,7 +3543,7 @@ dependencies = [
 
 [[package]]
 name = "prolink-engine"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4271,7 +4271,7 @@ dependencies = [
 
 [[package]]
 name = "sim-audio"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",

@@ -13,6 +13,11 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-10-22
+
+Decktector now tells you when a new version is out, and the decks get a few booth
+comforts: a look-ahead waveform, an end-of-track warning and keyboard shortcuts.
+
 ### Added
 
 - **New version notice** — at launch, Decktector checks GitHub for a newer release and
