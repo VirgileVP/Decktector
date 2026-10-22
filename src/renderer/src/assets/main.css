@@ -10,7 +10,7 @@
      padding and a little air, and mirrored on the left so the block stays
      centred on the window rather than between two unequal groups. */
   --header-gutter: 296px;
-  --idle-bar-opacity: 0.6;
+  --idle-bar-opacity: 0.35;
   /* Interface scale, driven by the settings panel. */
   --ui-scale: 1;
   /* For the wall clock and TC readout only. `tabular-nums` on the body font
@@ -1625,7 +1625,9 @@ input[type='checkbox']:focus-visible {
 
 .deck-idle .deck-bar,
 .deck-idle .deck-beats,
-.deck-idle .deck-no {
+.deck-idle .deck-no,
+.deck-idle .cue-list,
+.deck-idle .event-list {
   opacity: var(--idle-bar-opacity);
 }
 

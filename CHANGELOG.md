@@ -33,6 +33,8 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
 
 - The Timecode settings now say up front that timecode output is still in development.
 - The _Neon_ theme is now called _Original_.
+- _Dim decks that are off air_ fades idle decks much further, cue list and track
+  structure included, so the live deck stands out more clearly.
 
 ## [1.5.0] - 2026-10-16
 
