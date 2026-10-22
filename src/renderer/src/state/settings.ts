@@ -4,7 +4,7 @@ import { useShallow } from 'zustand/react/shallow'
 
 import { DEFAULT_ON_AIR_SOURCE, parseOnAirSource, type OnAirSource } from '../lib/deck-activity'
 import { sanitizeDeckLabels, type DeckLabels } from '../lib/deck-labels'
-import { DEFAULT_THEME, type ThemeId } from '../lib/theme'
+import { DEFAULT_THEME, parseTheme, type ThemeId } from '../lib/theme'
 import {
   DEFAULT_WAVEFORM_PLAYHEAD_POSITION,
   parseWaveformPlayheadPosition,
@@ -346,6 +346,7 @@ export function mergePersistedSettings<T extends Settings>(persisted: unknown, c
   return {
     ...current,
     ...stored,
+    theme: parseTheme(stored.theme),
     onAirSource: parseOnAirSource(stored.onAirSource),
     waveformPlayheadPosition: parseWaveformPlayheadPosition(stored.waveformPlayheadPosition),
     deckLabels: sanitizeDeckLabels(stored.deckLabels)

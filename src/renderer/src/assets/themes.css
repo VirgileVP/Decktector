@@ -11,7 +11,7 @@
  */
 
 :root,
-[data-theme='neon'] {
+[data-theme='original'] {
   color-scheme: dark;
   --bg: #08090b;
   --bg-panel: #0d0e12;

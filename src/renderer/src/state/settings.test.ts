@@ -37,6 +37,14 @@ describe('mergePersistedSettings', () => {
     ).toBe(true)
   })
 
+  it('restores a stored theme and falls back to the default for unknown ones', () => {
+    expect(DEFAULT_SETTINGS.theme).toBe('original')
+    expect(mergePersistedSettings({ theme: 'amber' }, DEFAULT_SETTINGS).theme).toBe('amber')
+    // `neon` was the original theme's id before it was renamed.
+    expect(mergePersistedSettings({ theme: 'neon' }, DEFAULT_SETTINGS).theme).toBe('original')
+    expect(mergePersistedSettings({ theme: 42 }, DEFAULT_SETTINGS).theme).toBe('original')
+  })
+
   it('restores a stored waveform playhead position and rejects unknown ones', () => {
     expect(mergePersistedSettings({}, DEFAULT_SETTINGS).waveformPlayheadPosition).toBe('center')
     expect(

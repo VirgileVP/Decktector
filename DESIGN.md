@@ -101,7 +101,7 @@ components:
 
 **Creative North Star: "The Broadcast Console"**
 
-Decktector is read by the people around the booth, not by the DJ at the decks: a VJ keying a deck into a video mixer, a lighting operator glancing at a tablet, a technician verifying network state. The system reads as a piece of monitoring hardware built into software — a broadcast console, not a media player skin. Surfaces stay dark, dense and near-flat by default; light exists to carry meaning (on-air red, sync blue, a fixed hardware-green timecode LED) before it exists to decorate. Six selectable themes (neon, dark, light, contrast, amber, midnight) swap the palette's channel values without changing this structure — every surface, spacing and radius decision in this file holds across all six.
+Decktector is read by the people around the booth, not by the DJ at the decks: a VJ keying a deck into a video mixer, a lighting operator glancing at a tablet, a technician verifying network state. The system reads as a piece of monitoring hardware built into software — a broadcast console, not a media player skin. Surfaces stay dark, dense and near-flat by default; light exists to carry meaning (on-air red, sync blue, a fixed hardware-green timecode LED) before it exists to decorate. Six selectable themes (original, dark, light, contrast, amber, midnight) swap the palette's channel values without changing this structure — every surface, spacing and radius decision in this file holds across all six.
 
 The system is mid-evolution: its current instrumented character (very small text, 3–4px radii, glow as the only depth cue) is being softened toward "doux et confiant" — the same console, held with a steadier hand. New and touched components should read a half-step warmer and a half-step more settled than the oldest code, without losing the console's density or its state-first color logic.
 
@@ -115,7 +115,7 @@ The system is mid-evolution: its current instrumented character (very small text
 
 ## Colors
 
-Every color below is a CSS custom property that six themes redefine; the hex/rgb values here are the **neon** theme (the default, `:root`). Prose describes the role; only the frontmatter value is normative for neon.
+Every color below is a CSS custom property that six themes redefine; the hex/rgb values here are the **original** theme (the default, `:root`). Prose describes the role; only the frontmatter value is normative for original.
 
 ### Primary
 

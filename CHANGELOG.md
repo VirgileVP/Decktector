@@ -32,6 +32,7 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
 ### Changed
 
 - The Timecode settings now say up front that timecode output is still in development.
+- The _Neon_ theme is now called _Original_.
 
 ## [1.5.0] - 2026-10-16
 
