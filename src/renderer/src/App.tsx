@@ -8,6 +8,7 @@ import { DeckViewToggle } from './components/DeckViewToggle'
 import { HeaderBlock } from './components/HeaderBlock'
 import { RemoteLinkBanner } from './components/RemoteLinkBanner'
 import { SettingsDialog, type SettingsTab } from './components/SettingsDialog'
+import { UpdateNotice } from './components/UpdateNotice'
 import { WelcomeDialog } from './components/WelcomeDialog'
 import { DECK_ACCENT_COLOR } from './lib/deck-colors'
 import { loadDeckView, saveDeckView, type DeckView } from './lib/deck-view'
@@ -26,6 +27,7 @@ import { connectSettingsToApp } from './state/settings-sync'
 import { connectStoreToEngine, useDecktectorStore } from './state/store'
 import { connectTimecodeToEngine } from './state/timecode'
 import { connectTimecodeFollowOnAir } from './state/timecode-follow'
+import { connectUpdateCheck } from './state/update-check'
 import { useClockNow } from './state/wall-clock'
 
 /** The welcome notice opens links through the desktop shell, and a remote
@@ -66,6 +68,7 @@ function App(): React.JSX.Element {
   useEffect(() => connectRemoteToEngine(), [])
   useEffect(() => connectPanelWindowRegistry(), [])
   useEffect(() => connectMainWindowCloseCascade(), [])
+  useEffect(() => connectUpdateCheck(), [])
   useEffect(() => {
     restorePanelWindows().catch((error: unknown) => {
       console.error('Failed to restore panel windows:', error)
@@ -175,6 +178,8 @@ function App(): React.JSX.Element {
       )}
 
       {welcomeOpen && <WelcomeDialog onClose={closeWelcome} />}
+
+      <UpdateNotice />
 
       <main className={`deck-grid view-${effectiveView}`}>
         {visibleDeckIds.length === 0 ? (

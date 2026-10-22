@@ -2561,6 +2561,44 @@ input[type='checkbox']:focus-visible {
   color: var(--warn);
 }
 
+/* ---------- Update notice ---------- */
+
+/* A corner card rather than a banner, so it never covers a deck mid-set;
+   modals still stack above it. */
+.update-notice {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 10;
+  width: min(280px, calc(100vw - 32px));
+  padding: 12px 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+}
+
+.update-notice-text {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.update-notice-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.about-update {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 /* ---------- Panel windows ---------- */
 
 /* Every panel window is created `transparent: true` — on Windows that flag

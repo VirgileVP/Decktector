@@ -9,12 +9,15 @@ use tauri_plugin_opener::OpenerExt;
 
 const REPOSITORY_URL: &str = "https://github.com/VirgileVP/Decktector";
 const ISSUES_URL: &str = "https://github.com/VirgileVP/Decktector/issues";
+/// GitHub redirects this to the newest published release, whose assets are the installers.
+const LATEST_RELEASE_URL: &str = "https://github.com/VirgileVP/Decktector/releases/latest";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ProjectLink {
     Repository,
     Issues,
+    LatestRelease,
 }
 
 impl ProjectLink {
@@ -22,6 +25,7 @@ impl ProjectLink {
         match self {
             Self::Repository => REPOSITORY_URL,
             Self::Issues => ISSUES_URL,
+            Self::LatestRelease => LATEST_RELEASE_URL,
         }
     }
 }
@@ -42,8 +46,10 @@ mod tests {
     fn deserializes_the_names_the_renderer_sends() {
         let repository: ProjectLink = serde_json::from_str("\"repository\"").unwrap();
         let issues: ProjectLink = serde_json::from_str("\"issues\"").unwrap();
+        let latest_release: ProjectLink = serde_json::from_str("\"latestRelease\"").unwrap();
         assert_eq!(repository, ProjectLink::Repository);
         assert_eq!(issues, ProjectLink::Issues);
+        assert_eq!(latest_release, ProjectLink::LatestRelease);
     }
 
     #[test]
@@ -53,7 +59,11 @@ mod tests {
 
     #[test]
     fn every_link_stays_on_the_project_repository() {
-        for link in [ProjectLink::Repository, ProjectLink::Issues] {
+        for link in [
+            ProjectLink::Repository,
+            ProjectLink::Issues,
+            ProjectLink::LatestRelease,
+        ] {
             assert!(link.url().starts_with(REPOSITORY_URL));
         }
     }

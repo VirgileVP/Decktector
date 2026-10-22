@@ -15,6 +15,9 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
 
 ### Added
 
+- **New version notice** — at launch, Decktector checks GitHub for a newer release and
+  offers a link to download it. _Later_ hides the notice until the next release, and
+  Settings › About always shows when an update is available.
 - The About tab shows which version of Decktector is running.
 
 ## [1.5.0] - 2026-10-16
