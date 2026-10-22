@@ -25,6 +25,8 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
   red and blinks, like on a CDJ.
 - **Keyboard shortcuts** — F11 toggles fullscreen (in panel windows too), and Ctrl+,
   (Cmd+, on macOS) opens the settings.
+- **Reset all settings** — a button at the bottom of Interface puts every setting back
+  to its default, after a confirmation. The lineup is kept.
 - The About tab shows which version of Decktector is running.
 
 ## [1.5.0] - 2026-10-16

@@ -24,6 +24,7 @@ import { DeckLabelsEditor } from './DeckLabelsEditor'
 import { DevicesPanel } from './DevicesPanel'
 import { LineupEditor } from './LineupEditor'
 import { OnAirSourceSetting } from './OnAirSourceSetting'
+import { ResetSettingsSetting } from './ResetSettingsSetting'
 import { ChoiceRow, SliderRow, TextRow, ToggleRow } from './SettingControls'
 import { TrackDownloadSetting } from './TrackDownloadSetting'
 
@@ -280,6 +281,11 @@ export function SettingsDialog({
                   />
                 </section>
               )}
+
+              <section className="settings-section">
+                <h3>Reset</h3>
+                <ResetSettingsSetting onReset={settings.resetAll} />
+              </section>
             </>
           )}
 
