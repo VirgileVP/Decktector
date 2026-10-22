@@ -13,6 +13,10 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
 
 ## [Unreleased]
 
+### Added
+
+- The About tab shows which version of Decktector is running.
+
 ## [1.5.0] - 2026-10-16
 
 A steadier booth companion: decks keep updating through cable swaps, sleep and stick
