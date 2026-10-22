@@ -19,6 +19,8 @@ import type { PanelDisplay } from './panel-display'
 import { reportPanelWindow } from './panel-window-report'
 import type { PanelParams } from './params'
 import { readWindowGeometry } from './read-window-geometry'
+import { useAppShortcuts } from '../components/useAppShortcuts'
+import { toggleFullscreen } from '../state/fullscreen'
 import { UI_SCALE_RANGE } from '../state/settings'
 import { currentPanelWindowRecord } from '../state/panel-windows'
 
@@ -111,6 +113,9 @@ export function PanelChrome({
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
+
+  // Settings live in the main window; a panel window only goes fullscreen.
+  useAppShortcuts({ toggleFullscreen })
 
   useEffect(() => applyPanelWindowOptions(options), [options])
 

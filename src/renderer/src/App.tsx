@@ -9,6 +9,7 @@ import { HeaderBlock } from './components/HeaderBlock'
 import { RemoteLinkBanner } from './components/RemoteLinkBanner'
 import { SettingsDialog, type SettingsTab } from './components/SettingsDialog'
 import { UpdateNotice } from './components/UpdateNotice'
+import { useAppShortcuts } from './components/useAppShortcuts'
 import { WelcomeDialog } from './components/WelcomeDialog'
 import { DECK_ACCENT_COLOR } from './lib/deck-colors'
 import { loadDeckView, saveDeckView, type DeckView } from './lib/deck-view'
@@ -18,6 +19,7 @@ import { connectMainWindowCloseCascade } from './panels/close-panel-windows-on-e
 import { restorePanelWindows } from './panels/restore-panel-windows'
 import { connectDevicesToEngine, useDevicesStore } from './state/devices'
 import { connectDownloadToEngine } from './state/download'
+import { toggleFullscreen } from './state/fullscreen'
 import { connectLineupBroadcast } from './state/lineup-broadcast'
 import { connectPanelWindowRegistry } from './state/panel-windows'
 import { connectRemoteToEngine } from './state/remote'
@@ -89,6 +91,12 @@ function App(): React.JSX.Element {
     setWelcomeOpen(false)
   }
   const deckViewToggles = useDeckViewToggles()
+
+  useAppShortcuts({
+    toggleFullscreen,
+    // Keeps whichever tab is already open rather than jumping back to the first.
+    openSettings: () => setSettingsTab((tab) => tab ?? 'Interface')
+  })
 
   const networkState = useDecktectorStore((s) => s.networkState)
   const lastDeviceSeenAt = useDevicesStore((s) => s.lastSeenAt)
