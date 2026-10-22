@@ -342,6 +342,10 @@ export function SettingsDialog({
           {IS_TAURI && activeTab === 'Timecode' && (
             <section className="settings-section">
               <h3>Timecode</h3>
+              <p className="setting-hint setting-warning" role="note">
+                Timecode output is still in development. Check it against your console before
+                relying on it during a show, and expect behaviour to change in future releases.
+              </p>
               <ChoiceRow
                 label="Output"
                 hint="Which deck to send from is picked in the header, or follows the on-air deck below"

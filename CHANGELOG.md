@@ -29,6 +29,10 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
   to its default, after a confirmation. The lineup is kept.
 - The About tab shows which version of Decktector is running.
 
+### Changed
+
+- The Timecode settings now say up front that timecode output is still in development.
+
 ## [1.5.0] - 2026-10-16
 
 A steadier booth companion: decks keep updating through cable swaps, sleep and stick
