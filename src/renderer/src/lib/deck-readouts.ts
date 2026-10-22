@@ -10,3 +10,11 @@ export function formatPitch(pitch: number | null): string {
 export function formatBpm(bpm: number | null): string {
   return bpm !== null ? bpm.toFixed(1) : '--.-'
 }
+
+/** Time left under which the time readout warns the track is about to end, like a CDJ. */
+export const TRACK_END_WARNING_MS = 30_000
+
+/** Whether a loaded track is close enough to its end for the time readout to warn. */
+export function isNearTrackEnd(remainingMs: number | null): boolean {
+  return remainingMs !== null && remainingMs <= TRACK_END_WARNING_MS
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatBpm, formatPitch } from './deck-readouts'
+import { formatBpm, formatPitch, isNearTrackEnd, TRACK_END_WARNING_MS } from './deck-readouts'
 
 describe('formatPitch', () => {
   it('signs a positive or zero pitch with a plus', () => {
@@ -24,5 +24,18 @@ describe('formatBpm', () => {
 
   it('shows a placeholder when no BPM is known', () => {
     expect(formatBpm(null)).toBe('--.-')
+  })
+})
+
+describe('isNearTrackEnd', () => {
+  it('warns from the threshold down to the end of the track', () => {
+    expect(isNearTrackEnd(TRACK_END_WARNING_MS)).toBe(true)
+    expect(isNearTrackEnd(1000)).toBe(true)
+    expect(isNearTrackEnd(0)).toBe(true)
+  })
+
+  it('stays quiet earlier in the track or with nothing loaded', () => {
+    expect(isNearTrackEnd(TRACK_END_WARNING_MS + 1)).toBe(false)
+    expect(isNearTrackEnd(null)).toBe(false)
   })
 })

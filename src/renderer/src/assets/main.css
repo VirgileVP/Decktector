@@ -1946,6 +1946,21 @@ input[type='checkbox']:focus-visible {
   color: var(--onair);
 }
 
+/* Last seconds of the track: the time turns red and blinks, like a CDJ. */
+.deck-stat-ending .deck-stat-value {
+  color: var(--onair);
+}
+
+.deck-stat-ending :is(.deck-stat-value, .deck-stat-remain) {
+  animation: pulse 1s steps(1, end) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deck-stat-ending :is(.deck-stat-value, .deck-stat-remain) {
+    animation: none;
+  }
+}
+
 :is(.view-quad, .view-grid) .deck-stat-pitch {
   display: none;
 }

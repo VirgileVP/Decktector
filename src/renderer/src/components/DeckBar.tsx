@@ -1,5 +1,5 @@
 import type { DeckId, TrackInfo } from '../model'
-import { formatBpm, formatPitch } from '../lib/deck-readouts'
+import { formatBpm, formatPitch, isNearTrackEnd } from '../lib/deck-readouts'
 import { formatTimeMs } from '../lib/playhead'
 import { TRANSPORT_GLYPHS } from '../lib/transport'
 import type { DownloadState } from '../state/download'
@@ -31,6 +31,7 @@ export function DeckBar({ deckId, track, fields, layout }: DeckBarProps): React.
   const playState = deck?.playState ?? 'empty'
   const playhead = deck?.playheadMs ?? null
   const remaining = track && playhead !== null ? track.durationMs - playhead : null
+  const nearTrackEnd = isNearTrackEnd(remaining)
   const bpmText = formatBpm(deck?.effectiveBpm ?? deck?.trackBpm ?? null)
 
   // The engine resolves artwork to a data: URL, so it drops straight into
@@ -157,7 +158,7 @@ export function DeckBar({ deckId, track, fields, layout }: DeckBarProps): React.
       <div className="deck-stats">
         {fields.time && (
           <DeckStat
-            className="deck-stat-time"
+            className={nearTrackEnd ? 'deck-stat-time deck-stat-ending' : 'deck-stat-time'}
             label="TIME"
             value={playhead !== null ? formatTimeMs(playhead) : '--:--'}
             sub={

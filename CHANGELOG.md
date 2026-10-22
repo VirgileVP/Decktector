@@ -21,6 +21,8 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
 - **Waveform playhead position** — a new _Waveform playhead_ setting in Interface moves
   the detail waveform's playhead to the left, so most of the width shows what is coming
   up instead of what has already played.
+- **End-of-track warning** — in the last 30 seconds of a track, the deck's time turns
+  red and blinks, like on a CDJ.
 - The About tab shows which version of Decktector is running.
 
 ## [1.5.0] - 2026-10-16
