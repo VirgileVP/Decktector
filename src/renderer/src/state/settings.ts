@@ -5,6 +5,11 @@ import { useShallow } from 'zustand/react/shallow'
 import { DEFAULT_ON_AIR_SOURCE, parseOnAirSource, type OnAirSource } from '../lib/deck-activity'
 import { sanitizeDeckLabels, type DeckLabels } from '../lib/deck-labels'
 import { DEFAULT_THEME, type ThemeId } from '../lib/theme'
+import {
+  DEFAULT_WAVEFORM_PLAYHEAD_POSITION,
+  parseWaveformPlayheadPosition,
+  type WaveformPlayheadPosition
+} from '../lib/waveform-playhead'
 import type { FrameRate } from '../model'
 
 /** Bounds of the sliders in the settings panel. */
@@ -183,6 +188,9 @@ export interface Settings {
   /** Blurs the detail waveform slightly so neighbouring rekordbox colors blend
    *  into a gradient instead of a hard-edged patchwork of solid columns. */
   waveformSmoothing: boolean
+  /** Where the detail waveform's playhead sits — centred, or on the left so
+   *  most of the width shows what is coming up. */
+  waveformPlayheadPosition: WaveformPlayheadPosition
   /** Fade decks that are not on air so the live ones read at a glance. */
   dimIdleDecks: boolean
   /** Which signal decides a deck is live — the mixer's on-air flag or
@@ -274,6 +282,7 @@ export const DEFAULT_SETTINGS: Settings = {
   waveformSaturation: 1,
   waveformMirrored: true,
   waveformSmoothing: true,
+  waveformPlayheadPosition: DEFAULT_WAVEFORM_PLAYHEAD_POSITION,
   dimIdleDecks: true,
   onAirSource: DEFAULT_ON_AIR_SOURCE,
   uiScale: 1,
@@ -338,6 +347,7 @@ export function mergePersistedSettings<T extends Settings>(persisted: unknown, c
     ...current,
     ...stored,
     onAirSource: parseOnAirSource(stored.onAirSource),
+    waveformPlayheadPosition: parseWaveformPlayheadPosition(stored.waveformPlayheadPosition),
     deckLabels: sanitizeDeckLabels(stored.deckLabels)
   }
 }
@@ -348,6 +358,7 @@ function pickSettings(state: Settings): Settings {
     waveformSaturation,
     waveformMirrored,
     waveformSmoothing,
+    waveformPlayheadPosition,
     dimIdleDecks,
     onAirSource,
     uiScale,
@@ -392,6 +403,7 @@ function pickSettings(state: Settings): Settings {
     waveformSaturation,
     waveformMirrored,
     waveformSmoothing,
+    waveformPlayheadPosition,
     dimIdleDecks,
     onAirSource,
     uiScale,

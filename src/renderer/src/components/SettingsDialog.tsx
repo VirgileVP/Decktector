@@ -2,6 +2,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core'
 import { useEffect, useRef, useState } from 'react'
 
 import { THEMES } from '../lib/theme'
+import { WAVEFORM_PLAYHEAD_POSITION_OPTIONS } from '../lib/waveform-playhead'
 import type { NetworkInterfaceInfo } from '../model'
 import { useRemoteStore } from '../state/remote'
 import {
@@ -229,6 +230,13 @@ export function SettingsDialog({
                   hint="Centers waveforms symmetrically around their center line like on a CDJ"
                   checked={settings.waveformMirrored}
                   onChange={update('waveformMirrored')}
+                />
+                <ChoiceRow
+                  label="Waveform playhead"
+                  hint="Where the playhead sits on the detail waveform — on the left, most of the width shows what is coming up instead of what has already played"
+                  value={settings.waveformPlayheadPosition}
+                  options={WAVEFORM_PLAYHEAD_POSITION_OPTIONS}
+                  onChange={update('waveformPlayheadPosition')}
                 />
                 <ToggleRow
                   label="Smooth waveform colors"

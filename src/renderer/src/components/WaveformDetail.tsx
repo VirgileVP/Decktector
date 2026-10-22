@@ -6,6 +6,7 @@ import { canvasFont } from '../lib/canvas-font'
 import { startFrameLoop } from '../lib/frame-loop'
 import { canvasInk, type CanvasInk } from '../lib/ink'
 import { estimatePlayheadMs } from '../lib/playhead'
+import { playheadX } from '../lib/waveform-playhead'
 import { stripCovers, stripRangeFor, stripWidthPx, type StripRange } from '../lib/waveform-strip'
 import { useSettings } from '../state/settings'
 import { useDecktectorStore } from '../state/store'
@@ -57,7 +58,8 @@ interface PaintedStrip {
 
 /**
  * Scrolling detailed waveform, mirrored around its center line: the
- * playhead stays fixed in the middle while the waveform moves under it.
+ * playhead stays fixed — in the middle, or on the left when the operator
+ * prefers to see more of what is coming — while the waveform moves under it.
  * Cue/loop markers and beat-grid ticks are drawn in the same pass.
  * Drawing happens in a rAF loop that reads the store directly, so the
  * playhead is interpolated at 60 fps between 5 Hz status packets.
@@ -119,6 +121,7 @@ export function WaveformDetail({
       const mirrored = useSettings.getState().waveformMirrored
       const smoothing = useSettings.getState().waveformSmoothing
       const saturation = useSettings.getState().waveformSaturation
+      const playheadPosition = useSettings.getState().waveformPlayheadPosition
 
       // A new palette repaints everything, including a deck sitting still that
       // would otherwise keep its signature — and its old colours — forever.
@@ -135,7 +138,7 @@ export function WaveformDetail({
       // decks settle on a fixed signature and stop drawing altogether.
       const playheadStep = hasWave ? Math.round(playhead / (msPerPx / dpr)) : 0
       const paletteKey = `${mirrored}|${smoothing}|${saturation}`
-      const signature = `${width}|${height}|${dpr}|${windowSec}|${paletteKey}|${hasWave}|${playheadStep}`
+      const signature = `${width}|${height}|${dpr}|${windowSec}|${paletteKey}|${playheadPosition}|${hasWave}|${playheadStep}`
       if (signature === lastSignature) return
       lastSignature = signature
 
@@ -157,9 +160,9 @@ export function WaveformDetail({
         return
       }
 
-      const centerX = width / 2
-      const windowStartMs = playhead - centerX * msPerPx
-      const windowEndMs = playhead + (width - centerX) * msPerPx
+      const playheadPx = playheadX(width, playheadPosition)
+      const windowStartMs = playhead - playheadPx * msPerPx
+      const windowEndMs = playhead + (width - playheadPx) * msPerPx
 
       // Loop regions first, under everything else
       drawLoopRegions(ctx, track, windowStartMs, windowEndMs, msPerPx, height)
@@ -171,7 +174,9 @@ export function WaveformDetail({
         !stripCovers(strip.range, windowStartMs, windowEndMs)
       ) {
         strip = paintStrip(strip?.canvas ?? document.createElement('canvas'), stripKey, {
-          playheadMs: playhead,
+          // Centred on the window, not the playhead, so the strip keeps the
+          // same slack either side wherever the playhead sits.
+          centerMs: (windowStartMs + windowEndMs) / 2,
           widthPx: stripWidthPx(width, dpr),
           height,
           dpr,
@@ -192,7 +197,7 @@ export function WaveformDetail({
           dpr,
           width,
           height,
-          centerX,
+          playheadPx,
           stripWidth: stripWidthPx(width, dpr)
         })
       }
@@ -200,12 +205,12 @@ export function WaveformDetail({
       drawBeatTicks(ctx, track, windowStartMs, windowEndMs, msPerPx, height, ink)
       drawCueMarkers(ctx, track, windowStartMs, windowEndMs, msPerPx, height, ink)
 
-      // Fixed centered playhead
+      // Fixed playhead
       ctx.save()
       ctx.shadowColor = accentColor
       ctx.shadowBlur = 6
       ctx.fillStyle = ink.playhead
-      ctx.fillRect(centerX - 0.75, 0, 1.5, height)
+      ctx.fillRect(playheadPx - 0.75, 0, 1.5, height)
       ctx.restore()
 
       // Current zoom window, bottom-right corner
@@ -228,7 +233,8 @@ export function WaveformDetail({
 }
 
 interface StripPaintOptions {
-  playheadMs: number
+  /** Time the strip is centred on. */
+  centerMs: number
   widthPx: number
   height: number
   dpr: number
@@ -243,7 +249,7 @@ interface StripPaintOptions {
 }
 
 /**
- * Paints the envelope around the playhead into the off-screen strip, opaque:
+ * Paints the envelope around the visible window into the off-screen strip, opaque:
  * the played/still-to-come dimming is applied when blitting, so one strip
  * serves both sides of the playhead.
  */
@@ -266,7 +272,7 @@ function paintStrip(
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.clearRect(0, 0, widthPx, height)
 
-  const range = stripRangeFor(options.playheadMs, msPerPx, widthPx)
+  const range = stripRangeFor(options.centerMs, msPerPx, widthPx)
   const { midY, baselineY, peakMax, halfPeakMax } = waveGeometry(height)
   /** Last colour handed to the context, packed; skips redundant fillStyle sets. */
   let lastPacked = -1
@@ -347,7 +353,8 @@ interface BlitOptions {
   dpr: number
   width: number
   height: number
-  centerX: number
+  /** Canvas x of the playhead: everything left of it has been played. */
+  playheadPx: number
   stripWidth: number
 }
 
@@ -358,7 +365,7 @@ interface BlitOptions {
 function blitStrip(
   ctx: CanvasRenderingContext2D,
   strip: PaintedStrip,
-  { windowStartMs, msPerPx, dpr, width, height, centerX, stripWidth }: BlitOptions
+  { windowStartMs, msPerPx, dpr, width, height, playheadPx, stripWidth }: BlitOptions
 ): void {
   const offset = ((windowStartMs - strip.range.startMs) / msPerPx) * dpr
   // Snapped to whole device pixels so the copy stays a straight blit, and
@@ -369,16 +376,16 @@ function blitStrip(
   ctx.imageSmoothingEnabled = false
 
   ctx.globalAlpha = PLAYED_DIM_ALPHA
-  ctx.drawImage(strip.canvas, sx, 0, centerX * dpr, sourceHeight, 0, 0, centerX, height)
+  ctx.drawImage(strip.canvas, sx, 0, playheadPx * dpr, sourceHeight, 0, 0, playheadPx, height)
   ctx.globalAlpha = LIVE_ALPHA
-  const rightWidth = width - centerX
+  const rightWidth = width - playheadPx
   ctx.drawImage(
     strip.canvas,
-    sx + centerX * dpr,
+    sx + playheadPx * dpr,
     0,
     rightWidth * dpr,
     sourceHeight,
-    centerX,
+    playheadPx,
     0,
     rightWidth,
     height

@@ -23,7 +23,7 @@ describe('stripWidthPx', () => {
 })
 
 describe('stripRangeFor', () => {
-  it('centres the strip on the playhead', () => {
+  it('centres the strip on the given time', () => {
     const range = stripRangeFor(10_000, 10, 300)
     expect(range.startMs).toBe(8500)
     expect(range.endMs).toBe(11_500)

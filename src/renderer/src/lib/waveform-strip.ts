@@ -5,8 +5,9 @@
  * and one CSS colour parse per pixel of width, sixty times a second, per deck.
  * Instead the envelope is painted once into a strip several canvas widths wide
  * and blitted from there, so a frame costs two `drawImage` calls. The strip is
- * repainted only when the visible window would leave it — with the window
- * centred, that is after the playhead has travelled the slack on one side.
+ * repainted only when the visible window would leave it — with the strip
+ * centred on the window, that is after the playhead has travelled the slack
+ * on one side, wherever the playhead sits inside the window.
  */
 
 /** How many canvas widths the strip spans. */
@@ -30,9 +31,9 @@ export function stripWidthPx(widthPx: number, dpr: number): number {
   return Math.max(widthPx, Math.min(widthPx * STRIP_SPAN, MAX_STRIP_DEVICE_PX / dpr))
 }
 
-/** The strip to paint for a playhead, centred so it has the same slack either way. */
-export function stripRangeFor(playheadMs: number, msPerPx: number, stripWidth: number): StripRange {
-  const startMs = playheadMs - (stripWidth / 2) * msPerPx
+/** The strip to paint around `centerMs` (the visible window's middle), with the same slack either way. */
+export function stripRangeFor(centerMs: number, msPerPx: number, stripWidth: number): StripRange {
+  const startMs = centerMs - (stripWidth / 2) * msPerPx
   return { startMs, endMs: startMs + stripWidth * msPerPx }
 }
 

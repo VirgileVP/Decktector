@@ -18,6 +18,9 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
 - **New version notice** — at launch, Decktector checks GitHub for a newer release and
   offers a link to download it. _Later_ hides the notice until the next release, and
   Settings › About always shows when an update is available.
+- **Waveform playhead position** — a new _Waveform playhead_ setting in Interface moves
+  the detail waveform's playhead to the left, so most of the width shows what is coming
+  up instead of what has already played.
 - The About tab shows which version of Decktector is running.
 
 ## [1.5.0] - 2026-10-16

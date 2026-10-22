@@ -37,6 +37,18 @@ describe('mergePersistedSettings', () => {
     ).toBe(true)
   })
 
+  it('restores a stored waveform playhead position and rejects unknown ones', () => {
+    expect(mergePersistedSettings({}, DEFAULT_SETTINGS).waveformPlayheadPosition).toBe('center')
+    expect(
+      mergePersistedSettings({ waveformPlayheadPosition: 'left' }, DEFAULT_SETTINGS)
+        .waveformPlayheadPosition
+    ).toBe('left')
+    expect(
+      mergePersistedSettings({ waveformPlayheadPosition: 'right' }, DEFAULT_SETTINGS)
+        .waveformPlayheadPosition
+    ).toBe('center')
+  })
+
   it('keeps the other stored settings and sanitizes deck labels', () => {
     const merged = mergePersistedSettings(
       { uiScale: 1.25, deckLabels: { 1: ' CH1 ', 9: 'nope' } },
