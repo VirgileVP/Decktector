@@ -27,9 +27,10 @@ use std::net::Ipv4Addr;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
 use std::time::{Duration, Instant};
 
-use decktector_core::model::{DeckId, TrackInfo};
+use decktector_core::model::{BeatGridBeat, DeckId, TrackInfo, WaveformData};
 use decktector_core::structure::{self, StructureInput};
 use decktector_core::EngineHandle;
+use prolink::dbserver::client::TrackMenuItem;
 use prolink::dbserver::{beatgrid, waveform as db_waveform, Connection};
 use prolink::presence::Presence;
 use prolink::status::{MediaSlot, TRACK_TYPE_REKORDBOX};
@@ -37,6 +38,9 @@ use tokio::sync::Mutex as AsyncMutex;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
+use super::analysis_wait::{
+    player_may_still_be_analysing, AnalysisWait, ANALYSIS_RETRY_INTERVAL, MAXIMUM_ANALYSIS_WAIT,
+};
 use super::nfs::{self, TrackDatabase};
 use super::normalize;
 
@@ -319,7 +323,7 @@ impl MetadataFetcher {
                     .remove(&self.deck_id);
             }
         }
-        let _guard = InFlightGuard {
+        let in_flight = InFlightGuard {
             fetcher: Arc::clone(&self),
             deck_id,
         };
@@ -334,30 +338,107 @@ impl MetadataFetcher {
         } else {
             None
         };
-        let track_info = match from_database {
-            Some(track_info) => Some(track_info),
+        let (track_info, awaiting_analysis) = match from_database {
+            Some(track_info) => (track_info, None),
             None => {
-                self.try_dbserver(
-                    source_device,
-                    player_ip,
-                    slot,
-                    track_type,
-                    track_id,
-                    status_bpm,
-                )
-                .await
+                let Some(dbserver_track) = self.try_dbserver(player_ip, &track).await else {
+                    return; // Both routes failed or had nothing for this track — leave the deck's last-known metadata as is.
+                };
+                let track_info = dbserver_track.to_track_info(track_id, status_bpm);
+                let awaiting_analysis = (player_may_still_be_analysing(track_type)
+                    && !dbserver_track.analysis.is_complete())
+                .then_some(dbserver_track);
+                (track_info, awaiting_analysis)
             }
         };
 
-        let Some(track_info) = track_info else {
-            return; // Both routes failed or had nothing for this track — leave the deck's last-known metadata as is.
-        };
         if self.is_superseded(deck_id, &track) {
             return;
         }
         self.lock(&self.active_sources)
             .insert(deck_id, ActiveMediaSource { player_ip, track });
         handle.update_deck_track(deck_id, Some(track_info));
+
+        // The deck shows its metadata now: no fetch is in flight for it any
+        // more, even while the player's own analysis is still awaited.
+        drop(in_flight);
+        if let Some(dbserver_track) = awaiting_analysis {
+            self.await_player_analysis(
+                &handle,
+                deck_id,
+                track,
+                player_ip,
+                status_bpm,
+                dbserver_track,
+            )
+            .await;
+        }
+    }
+
+    /// Asks again, on [`AnalysisWait`]'s schedule, for the beat grid and
+    /// waveform the player is still computing for a track it loaded without
+    /// rekordbox analysis, and shows each new piece as it arrives. Stops
+    /// once both are in, the deck has moved on, or the wait runs out.
+    async fn await_player_analysis(
+        &self,
+        handle: &EngineHandle,
+        deck_id: DeckId,
+        track: LoadedTrack,
+        player_ip: Ipv4Addr,
+        status_bpm: Option<f64>,
+        mut dbserver_track: DbserverTrack,
+    ) {
+        tracing::debug!(
+            deck_id,
+            track_id = track.track_id,
+            "waiting for the player to analyse the track"
+        );
+        let wait = AnalysisWait::new(ANALYSIS_RETRY_INTERVAL, MAXIMUM_ANALYSIS_WAIT);
+        while wait.next_attempt().await {
+            if self.is_superseded(deck_id, &track) {
+                return;
+            }
+            let fresh = self.fetch_analysis_again(player_ip, &track).await;
+            if !dbserver_track.analysis.absorb(fresh) {
+                continue;
+            }
+            if self.is_superseded(deck_id, &track) {
+                return;
+            }
+            handle.update_deck_track(
+                deck_id,
+                Some(dbserver_track.to_track_info(track.track_id, status_bpm)),
+            );
+            if dbserver_track.analysis.is_complete() {
+                return;
+            }
+        }
+        tracing::debug!(
+            deck_id,
+            track_id = track.track_id,
+            "gave up waiting for the player's analysis"
+        );
+    }
+
+    /// One more request for `track`'s beat grid and waveform, on the pooled
+    /// connection to the player holding it. Nothing on any failure: the
+    /// next attempt simply asks again.
+    async fn fetch_analysis_again(
+        &self,
+        player_ip: Ipv4Addr,
+        track: &LoadedTrack,
+    ) -> DbserverAnalysis {
+        if self.is_failing(&self.dbserver_failures, track.source_device) {
+            return DbserverAnalysis::default();
+        }
+        let Some(connection) = self.connection_for(track.source_device, player_ip).await else {
+            return DbserverAnalysis::default();
+        };
+        let mut connection = connection.lock().await;
+        if self.presence.device_number().is_none() {
+            return DbserverAnalysis::default(); // Same gate as `try_dbserver`.
+        }
+        fetch_dbserver_analysis(&mut connection, track).await
     }
 
     /// Downloads the audio file currently loaded on `deck_id` over NFS into `destination_dir`.
@@ -476,18 +557,19 @@ impl MetadataFetcher {
 
     async fn try_dbserver(
         &self,
-        source_device: u8,
         player_ip: Ipv4Addr,
-        slot: MediaSlot,
-        track_type: u8,
-        track_id: u32,
-        status_bpm: Option<f64>,
-    ) -> Option<TrackInfo> {
+        track: &LoadedTrack,
+    ) -> Option<DbserverTrack> {
+        let LoadedTrack {
+            source_device,
+            slot,
+            track_type,
+            track_id,
+        } = *track;
         if self.is_failing(&self.dbserver_failures, source_device) {
             return None;
         }
         let connection = self.connection_for(source_device, player_ip).await?;
-        let slot = slot.to_byte();
 
         let mut connection = connection.lock().await;
         // Only a gate: our own number identified us once, in the setup
@@ -499,7 +581,7 @@ impl MetadataFetcher {
 
         let items = match timeout(
             METADATA_TIMEOUT,
-            connection.fetch_metadata(source_device, slot, track_type, track_id),
+            connection.fetch_metadata(source_device, slot.to_byte(), track_type, track_id),
         )
         .await
         {
@@ -513,37 +595,8 @@ impl MetadataFetcher {
             }
         };
 
-        let beat_grid_blob = timeout(
-            ASSET_TIMEOUT,
-            connection.fetch_beat_grid(source_device, slot, track_type, track_id),
-        )
-        .await
-        .ok()
-        .and_then(Result::ok)
-        .flatten();
-        let waveform_blob = timeout(
-            ASSET_TIMEOUT,
-            connection.fetch_anlz_tag(
-                source_device,
-                slot,
-                track_type,
-                track_id,
-                db_waveform::COLOR_WAVEFORM_DETAIL_TAG,
-                db_waveform::COLOR_WAVEFORM_FILE_EXTENSION,
-            ),
-        )
-        .await
-        .ok()
-        .and_then(Result::ok)
-        .flatten();
-
-        Some(assemble_dbserver_track_info(
-            track_id,
-            &items,
-            status_bpm,
-            beat_grid_blob.as_deref(),
-            waveform_blob.as_deref(),
-        ))
+        let analysis = fetch_dbserver_analysis(&mut connection, track).await;
+        Some(DbserverTrack { items, analysis })
     }
 
     /// The pooled dbserver connection to the player holding the media,
@@ -592,17 +645,108 @@ fn nfs_route_applies(track_type: u8) -> bool {
     track_type == TRACK_TYPE_REKORDBOX
 }
 
+/// What the dbserver route read for a track: its menu items, and whatever
+/// analysis the player could give at the time.
+struct DbserverTrack {
+    items: Vec<TrackMenuItem>,
+    analysis: DbserverAnalysis,
+}
+
+impl DbserverTrack {
+    fn to_track_info(&self, track_id: u32, status_bpm: Option<f64>) -> TrackInfo {
+        assemble_dbserver_track_info(track_id, &self.items, status_bpm, &self.analysis)
+    }
+}
+
+/// A track's beat grid and waveform as read from the dbserver. Each is
+/// `None` until the player has one to give — an empty answer counts as
+/// none, since that is what a player still analysing a track sends.
+#[derive(Debug, Default)]
+struct DbserverAnalysis {
+    beat_grid: Option<Vec<BeatGridBeat>>,
+    waveform: Option<WaveformData>,
+}
+
+impl DbserverAnalysis {
+    fn from_blobs(beat_grid_blob: Option<&[u8]>, waveform_blob: Option<&[u8]>) -> Self {
+        Self {
+            beat_grid: beat_grid_blob
+                .map(|blob| normalize::beat_grid(&beatgrid::parse_beat_grid(blob)))
+                .filter(|grid| !grid.is_empty()),
+            waveform: waveform_blob.and_then(|blob| {
+                normalize::waveform_data(&db_waveform::parse_color_waveform_detail(blob))
+            }),
+        }
+    }
+
+    fn is_complete(&self) -> bool {
+        self.beat_grid.is_some() && self.waveform.is_some()
+    }
+
+    /// Takes from `fresh` whatever this is still missing; whether it took
+    /// anything. What is already held is kept, never replaced.
+    fn absorb(&mut self, fresh: Self) -> bool {
+        let mut took_any = false;
+        if self.beat_grid.is_none() && fresh.beat_grid.is_some() {
+            self.beat_grid = fresh.beat_grid;
+            took_any = true;
+        }
+        if self.waveform.is_none() && fresh.waveform.is_some() {
+            self.waveform = fresh.waveform;
+            took_any = true;
+        }
+        took_any
+    }
+}
+
+/// Requests `track`'s beat grid and waveform on an open dbserver
+/// connection, each bounded by [`ASSET_TIMEOUT`]. A failed or timed-out
+/// request reads as "not available", like an empty answer.
+async fn fetch_dbserver_analysis(
+    connection: &mut Connection,
+    track: &LoadedTrack,
+) -> DbserverAnalysis {
+    let LoadedTrack {
+        source_device,
+        slot,
+        track_type,
+        track_id,
+    } = *track;
+    let slot = slot.to_byte();
+    let beat_grid_blob = timeout(
+        ASSET_TIMEOUT,
+        connection.fetch_beat_grid(source_device, slot, track_type, track_id),
+    )
+    .await
+    .ok()
+    .and_then(Result::ok)
+    .flatten();
+    let waveform_blob = timeout(
+        ASSET_TIMEOUT,
+        connection.fetch_anlz_tag(
+            source_device,
+            slot,
+            track_type,
+            track_id,
+            db_waveform::COLOR_WAVEFORM_DETAIL_TAG,
+            db_waveform::COLOR_WAVEFORM_FILE_EXTENSION,
+        ),
+    )
+    .await
+    .ok()
+    .and_then(Result::ok)
+    .flatten();
+    DbserverAnalysis::from_blobs(beat_grid_blob.as_deref(), waveform_blob.as_deref())
+}
+
 fn assemble_dbserver_track_info(
     track_id: u32,
-    items: &[prolink::dbserver::client::TrackMenuItem],
+    items: &[TrackMenuItem],
     status_bpm: Option<f64>,
-    beat_grid_blob: Option<&[u8]>,
-    waveform_blob: Option<&[u8]>,
+    analysis: &DbserverAnalysis,
 ) -> TrackInfo {
-    let beat_grid =
-        beat_grid_blob.map(|blob| normalize::beat_grid(&beatgrid::parse_beat_grid(blob)));
-    let waveform = waveform_blob
-        .and_then(|blob| normalize::waveform_data(&db_waveform::parse_color_waveform_detail(blob)));
+    let beat_grid = analysis.beat_grid.clone();
+    let waveform = analysis.waveform.clone();
     let duration_ms = normalize::duration_ms(items);
     let cues = Vec::new(); // Cue-list wire format not yet confirmed — see prolink::dbserver::cues.
 
@@ -647,7 +791,6 @@ fn assemble_dbserver_track_info(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use prolink::dbserver::client::TrackMenuItem;
     use prolink::dbserver::queries::MenuItemType;
 
     fn menu_item(item_type: MenuItemType, text: &str) -> TrackMenuItem {
@@ -664,7 +807,8 @@ mod tests {
             menu_item(MenuItemType::TrackTitle, "Strobe"),
             menu_item(MenuItemType::Artist, "deadmau5"),
         ];
-        let track = assemble_dbserver_track_info(4207, &items, Some(128.0), None, None);
+        let track =
+            assemble_dbserver_track_info(4207, &items, Some(128.0), &DbserverAnalysis::default());
 
         assert_eq!(track.track_id, 4207);
         assert_eq!(track.title, "Strobe");
@@ -680,8 +824,64 @@ mod tests {
 
     #[test]
     fn a_missing_title_item_falls_back_to_an_empty_title_rather_than_panicking() {
-        let track = assemble_dbserver_track_info(1, &[], None, None, None);
+        let track = assemble_dbserver_track_info(1, &[], None, &DbserverAnalysis::default());
         assert_eq!(track.title, "");
+    }
+
+    /// One full-height white column behind the leading bytes the dbserver
+    /// waveform parser skips.
+    fn waveform_blob() -> Vec<u8> {
+        let mut blob = vec![0u8; 28];
+        let bits: u16 = (31u16 << 2) | (7u16 << 13) | (7u16 << 10) | (7u16 << 7);
+        blob.extend_from_slice(&bits.to_be_bytes());
+        blob
+    }
+
+    /// One beat at 128 BPM behind the header the beat grid parser skips.
+    fn beat_grid_blob() -> Vec<u8> {
+        let mut blob = vec![0u8; 20];
+        blob.extend_from_slice(&1u16.to_le_bytes());
+        blob.extend_from_slice(&12_800u16.to_le_bytes());
+        blob.extend_from_slice(&0u32.to_le_bytes());
+        blob.extend_from_slice(&[0u8; 8]);
+        blob
+    }
+
+    /// What a player still analysing an unanalysed file answers: blobs too
+    /// short to hold anything. That must read as "not there yet", or the
+    /// fetcher would stop waiting for the real analysis.
+    #[test]
+    fn empty_analysis_answers_count_as_missing() {
+        let analysis = DbserverAnalysis::from_blobs(Some(&[0u8; 4]), Some(&[0u8; 4]));
+        assert!(analysis.beat_grid.is_none());
+        assert!(analysis.waveform.is_none());
+        assert!(!analysis.is_complete());
+    }
+
+    #[test]
+    fn analysis_with_both_beat_grid_and_waveform_is_complete() {
+        let analysis =
+            DbserverAnalysis::from_blobs(Some(&beat_grid_blob()), Some(&waveform_blob()));
+        assert!(analysis.is_complete());
+    }
+
+    #[test]
+    fn absorbing_takes_only_what_is_still_missing() {
+        let mut held = DbserverAnalysis::from_blobs(Some(&beat_grid_blob()), None);
+        let fresh = DbserverAnalysis::from_blobs(None, Some(&waveform_blob()));
+
+        assert!(held.absorb(fresh));
+        assert!(held.is_complete());
+    }
+
+    /// A later attempt that gets less than an earlier one must not wipe
+    /// what the deck already shows.
+    #[test]
+    fn absorbing_an_emptier_answer_keeps_what_is_held_and_reports_nothing_new() {
+        let mut held = DbserverAnalysis::from_blobs(Some(&beat_grid_blob()), None);
+
+        assert!(!held.absorb(DbserverAnalysis::default()));
+        assert!(held.beat_grid.is_some());
     }
 
     fn fetcher() -> Arc<MetadataFetcher> {

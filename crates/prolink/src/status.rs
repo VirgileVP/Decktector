@@ -212,6 +212,11 @@ pub struct DeviceStatus {
 /// a row of that database.
 pub const TRACK_TYPE_REKORDBOX: u8 = 0x01;
 
+/// [`DeviceStatus::track_type`] of a file loaded from the player's file
+/// browser without rekordbox analysis. The player analyses it itself after
+/// loading it, so its beat grid and waveform only appear some time later.
+pub const TRACK_TYPE_UNANALYZED: u8 = 0x02;
+
 /// [`DeviceStatus::track_type`] of a streamed track (Beatport Link,
 /// Streaming Direct Play). Not on any media, but a player still answers
 /// for it like for a rekordbox track (`beat-link`'s `CdjStatus.TrackType`).

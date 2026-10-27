@@ -13,6 +13,7 @@
 //!   wire format is unimplemented (see `prolink::dbserver::cues`) and it
 //!   has no artwork route wired up (see `fetcher`'s doc comment on why).
 
+mod analysis_wait;
 mod colors;
 mod fetcher;
 pub mod nfs;
