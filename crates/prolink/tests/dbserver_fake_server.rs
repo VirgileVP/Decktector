@@ -278,7 +278,7 @@ async fn fetches_and_parses_a_waveform_blob() {
         read_message(&mut stream, &mut buffer).await; // SETUP_REQ
         send(&mut stream, 0, queries::SETUP_REQ, vec![]).await;
 
-        read_message(&mut stream, &mut buffer).await; // ANLZ_TAG_REQ
+        let request = read_message(&mut stream, &mut buffer).await;
         let mut blob = vec![0u8; 28]; // Leading junk this parser skips.
                                       // One full-height white column.
         let bits: u16 = (31u16 << 2) | (7u16 << 13) | (7u16 << 10) | (7u16 << 7);
@@ -290,6 +290,7 @@ async fn fetches_and_parses_a_waveform_blob() {
             vec![Field::Blob(blob)],
         )
         .await;
+        request
     });
 
     let mut connection = Connection::connect(LOOPBACK, LOOPBACK, port, OUR_DEVICE_NUMBER)
@@ -313,7 +314,25 @@ async fn fetches_and_parses_a_waveform_blob() {
     assert_eq!(columns[0].height, 1.0);
     assert_eq!(columns[0].color, [255, 255, 255]);
 
-    server.await.expect("server task should finish cleanly");
+    // Every argument a number field, in `beat-link`'s order. The file
+    // extension used to go out as the text ".EXT", a request no player
+    // recognises.
+    let request = server.await.expect("server task should finish cleanly");
+    assert_eq!(request.message_type, queries::ANLZ_TAG_REQ);
+    assert_eq!(
+        request.arguments,
+        vec![
+            Field::U32(u32::from_be_bytes([
+                TARGET_DEVICE_NUMBER,
+                queries::MENU_TARGET_MAIN,
+                SLOT,
+                TRACK_TYPE,
+            ])),
+            Field::U32(TRACK_ID),
+            Field::U32(0x3556_5750), // "PWV5", byte-reversed
+            Field::U32(0x0054_5845), // "EXT", byte-reversed, NUL-padded
+        ]
+    );
 }
 
 /// The `b5cbf4f`-class regression, at the transport level: a server that

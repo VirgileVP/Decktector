@@ -10,8 +10,8 @@
 //!
 //! Requests this codebase's waveform fetch sends: `tag_fourcc` is the
 //! `PWV5` (color waveform detail) tag magic, byte-reversed for the wire —
-//! `0x35565750` — with `file_extension` `".EXT"`, matching where Rekordbox
-//! stores color waveform data.
+//! `0x35565750` — with `file_extension` the `EXT` extension packed the same
+//! way, matching where Rekordbox stores color waveform data.
 
 /// One waveform column, protocol-shaped — deliberately not
 /// `decktector_core::model::WaveformSegment`: this crate stays free of
@@ -32,7 +32,11 @@ pub struct DbWaveformColumn {
 /// [`super::client::Connection::fetch_anlz_tag`] needs for a waveform
 /// fetch.
 pub const COLOR_WAVEFORM_DETAIL_TAG: u32 = 0x3556_5750;
-pub const COLOR_WAVEFORM_FILE_EXTENSION: &str = ".EXT";
+/// `"EXT"` read as a little-endian number with a NUL fourth byte —
+/// `beat-link`'s `Message.ALNZ_FILE_TYPE_EXT`. A number field, not a text
+/// one: sent as the string `".EXT"`, the request was never one a player
+/// recognises.
+pub const COLOR_WAVEFORM_FILE_EXTENSION: u32 = 0x0054_5845;
 
 /// Bytes to skip at the start of the response before the column data
 /// starts — `beat-link`'s own documented, hardware-derived constant

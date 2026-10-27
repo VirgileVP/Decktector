@@ -357,9 +357,10 @@ impl Connection {
         .await
     }
 
-    /// `tag_fourcc` is the 4-byte ANLZ tag magic to request, byte-reversed
-    /// for the wire (see `dbserver::waveform`'s doc comment for the
-    /// concrete value this codebase asks for).
+    /// `tag_fourcc` is the 4-byte ANLZ tag magic to request and
+    /// `file_extension` the analysis file holding it, both packed into a
+    /// number the same byte-reversed way (see `dbserver::waveform` for the
+    /// concrete values this codebase asks for).
     pub async fn fetch_anlz_tag(
         &mut self,
         target_device_number: u8,
@@ -367,7 +368,7 @@ impl Connection {
         track_type: u8,
         track_id: u32,
         tag_fourcc: u32,
-        file_extension: &str,
+        file_extension: u32,
     ) -> std::io::Result<Option<Vec<u8>>> {
         self.fetch_blob(
             queries::ANLZ_TAG_REQ,
@@ -375,7 +376,7 @@ impl Connection {
                 Field::U32(rmst_argument(target_device_number, slot, track_type)),
                 Field::U32(track_id),
                 Field::U32(tag_fourcc),
-                Field::Str(file_extension.to_string()),
+                Field::U32(file_extension),
             ],
         )
         .await
