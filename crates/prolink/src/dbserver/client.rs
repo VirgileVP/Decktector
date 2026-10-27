@@ -235,7 +235,10 @@ impl Connection {
         };
 
         let available = self
-            .simple_request(queries::METADATA_REQ, rmst(vec![Field::U32(track_id)]))
+            .simple_request(
+                queries::metadata_request_for(track_type),
+                rmst(vec![Field::U32(track_id)]),
+            )
             .await?;
         // The first argument echoes the request type; the item count is the
         // second. `find_map` would stop at the echo.

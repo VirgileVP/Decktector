@@ -185,6 +185,44 @@ async fn a_zero_item_count_yields_an_empty_metadata_list_without_a_render_step()
     server.await.expect("server task should finish cleanly");
 }
 
+/// An unanalysed file off a USB stick: asked about with the rekordbox
+/// metadata request, a player renders an empty menu and the deck shows
+/// nothing at all.
+#[tokio::test]
+async fn an_unanalysed_track_is_asked_about_with_the_unanalyzed_metadata_request() {
+    const UNANALYSED_FILE: u8 = 0x02;
+    let (listener, port) = start_listener().await;
+
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.expect("accept");
+        greet(&mut stream).await;
+        let mut buffer = Vec::new();
+        read_message(&mut stream, &mut buffer).await; // SETUP_REQ
+        send(&mut stream, 0, queries::SETUP_REQ, vec![]).await;
+
+        let metadata_req = read_message(&mut stream, &mut buffer).await;
+        send(
+            &mut stream,
+            1,
+            queries::MENU_AVAILABLE,
+            menu_available_args(0),
+        )
+        .await;
+        metadata_req.message_type
+    });
+
+    let mut connection = Connection::connect(LOOPBACK, LOOPBACK, port, OUR_DEVICE_NUMBER)
+        .await
+        .expect("should connect");
+    connection
+        .fetch_metadata(TARGET_DEVICE_NUMBER, SLOT, UNANALYSED_FILE, TRACK_ID)
+        .await
+        .expect("should fetch");
+
+    let request_type = server.await.expect("server task should finish cleanly");
+    assert_eq!(request_type, queries::UNANALYZED_METADATA_REQ);
+}
+
 #[tokio::test]
 async fn fetches_and_parses_a_beat_grid_blob() {
     let (listener, port) = start_listener().await;
