@@ -17,6 +17,14 @@ export const EVENT_LABELS: Record<TrackEventKind, string> = {
  */
 export const EVENT_CONFIDENCE_HEDGE = 0.7
 
+/**
+ * The section's name: rekordbox's own for a phrase it analysed ("Verse 2"),
+ * otherwise the name of the kind it was inferred to be.
+ */
+export function eventName(event: TrackEvent): string {
+  return event.label ?? EVENT_LABELS[event.kind]
+}
+
 /** Where the playhead sits inside the track's event list. */
 export interface EventProgress {
   /** Index in the event list of the section being counted down. */

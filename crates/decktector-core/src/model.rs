@@ -152,18 +152,24 @@ pub enum TrackEventKind {
     Outro,
 }
 
-/// One section of the track, inferred from its waveform and beat grid rather
-/// than read from the player.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+/// One section of the track: a phrase rekordbox's own analysis found when
+/// the track carries one, otherwise inferred from its waveform and beat
+/// grid.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "TrackEvent.ts")]
 pub struct TrackEvent {
     pub kind: TrackEventKind,
     pub start_ms: f64,
     pub end_ms: f64,
-    /// 0-1 — how much the label can be trusted. A section a DJ cue confirms
-    /// scores 1.0; a purely inferred one stays lower, so the UI can hedge.
+    /// 0-1 — how much the label can be trusted. A rekordbox phrase or a
+    /// section a DJ cue confirms scores 1.0; a purely inferred one stays
+    /// lower, so the UI can hedge.
     pub confidence: f32,
+    /// Rekordbox's name for the phrase ("Verse 2", "Up 3"); null for an
+    /// inferred section, which goes by its kind.
+    #[serde(default)]
+    pub label: Option<String>,
 }
 
 /// Static description of a loaded track, fetched once per track change.

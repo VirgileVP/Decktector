@@ -154,9 +154,11 @@ fn collect_tracks(pdb: &Pdb, player_root: &Path, tracks: &mut BTreeMap<String, T
 /// tempo and no beat grid, and a deck loading one would play seven seconds
 /// of it and report no beat at all.
 fn is_usable(analysis: &Analysis, track: &Track) -> bool {
-    let (beat_grid, waveform, _) = analysis;
-    waveform.is_some()
-        && beat_grid.as_ref().is_some_and(|beats| !beats.is_empty())
+    analysis.waveform.is_some()
+        && analysis
+            .beat_grid
+            .as_ref()
+            .is_some_and(|beats| !beats.is_empty())
         && track.tempo_centibpm > 0
 }
 

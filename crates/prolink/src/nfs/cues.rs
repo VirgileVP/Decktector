@@ -19,6 +19,8 @@
 //! caused whole-file deserialization failures. This module hand-rolls lenient,
 //! robust parsers for both formats.
 
+use super::anlz;
+
 /// One decoded cue point or loop from an ANLZ section (`PCO2` or `PCOB`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnlzCue {
@@ -295,36 +297,15 @@ fn parse_pcpt_entry(entry: &[u8]) -> Option<AnlzCue> {
 /// are combined.
 /// If no `PCO2` sections are present, any `PCOB` sections are returned as fallback.
 pub fn parse_anlz_cues(bytes: &[u8]) -> Vec<AnlzCue> {
-    if bytes.len() < 12 {
-        return Vec::new();
-    }
-
-    let file_header_size = u32::from_be_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]) as usize;
-    let total_size =
-        (u32::from_be_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]) as usize).min(bytes.len());
-
-    let mut position = file_header_size;
     let mut pco2_cues = Vec::new();
     let mut pcob_cues = Vec::new();
 
-    while position + 12 <= total_size {
-        let remaining = &bytes[position..total_size];
-        let tag = &remaining[..4];
-        let sec_total_size =
-            u32::from_be_bytes([remaining[8], remaining[9], remaining[10], remaining[11]]) as usize;
-
-        if sec_total_size < 12 || sec_total_size > remaining.len() {
-            break;
+    for section in anlz::sections(bytes) {
+        if &section.tag == PCO2_MAGIC {
+            pco2_cues.extend(parse_pco2(section.bytes));
+        } else if &section.tag == PCOB_MAGIC {
+            pcob_cues.extend(parse_pcob(section.bytes));
         }
-
-        let section_bytes = &remaining[..sec_total_size];
-        if tag == PCO2_MAGIC {
-            pco2_cues.extend(parse_pco2(section_bytes));
-        } else if tag == PCOB_MAGIC {
-            pcob_cues.extend(parse_pcob(section_bytes));
-        }
-
-        position += sec_total_size;
     }
 
     if !pco2_cues.is_empty() {

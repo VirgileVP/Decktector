@@ -88,6 +88,7 @@ mod tests {
             start_ms,
             end_ms: start_ms + 1_000.0,
             confidence: 0.5,
+            label: None,
         }
     }
 

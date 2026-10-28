@@ -15,6 +15,10 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
 
 ### Added
 
+- **Rekordbox phrases** — a track rekordbox has run its phrase analysis on now shows
+  those phrases as its structure, under rekordbox's own names (_Intro_, _Verse 2_,
+  _Up 3_, _Chorus_…), instead of a structure guessed from the waveform. Tracks without
+  phrase analysis keep the guessed structure, still marked as a guess.
 - **Cues over the dbserver fallback** — a track read over the dbserver route, rather
   than straight off the player's media, now shows its hot cues, memory cues and loops.
   Their colours and comments still come from the media route only.

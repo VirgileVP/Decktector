@@ -356,6 +356,14 @@ colours — pinned by tests on bytes extracted from real `.EXT` files. The `.EXT
 list is tried first, then the `.DAT` one; on a Rekordbox 7 stick, cues stored in
 `exportLibrary.db` fill in when neither analysis file holds any.
 
+**Track structure comes from rekordbox's phrase analysis when there is one.** The
+`.EXT`'s `PSSI` section holds the phrases rekordbox found — masked since
+rekordbox 6 — and `rekordcrate` 0.3 keeps them private, so
+`crates/prolink/src/nfs/phrases.rs` reads them, after Deep Symmetry's analysis,
+pinned on a rekordbox export. A track without phrase analysis, or read over the
+dbserver fallback, gets a structure inferred from its waveform and beat grid
+instead (`crates/decktector-core/src/structure/`), shown as a guess.
+
 **Phase 4 carries real, explicit confidence differences worth reading before
 trusting it at a gig:**
 
@@ -428,7 +436,10 @@ trusting it at a gig:**
   `crates/prolink/src/nfs/pdb.rs` is a from-scratch minimal parser, using
   `rekordcrate`'s source as a layout reference — see
   [Porting status](#porting-status) for the confidence caveat that comes with
-  that.
+  that. The phrase-analysis tests use a `PSSI` section from one of its demo
+  track exports.
+- [Deep Symmetry's DJ Link analysis](https://djl-analysis.deepsymmetry.org/) —
+  the reference for the phrase analysis layout, its masking and its phrase names.
 - [usr-ein/prolink](https://github.com/usr-ein/prolink) — its capture corpus of
   two CDJ-2000NXSs holds the cue list replies the dbserver cue parser is pinned
   on.

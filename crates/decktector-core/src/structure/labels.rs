@@ -61,6 +61,7 @@ pub fn label_sections(
             start_ms: section.start_ms,
             end_ms: section.end_ms,
             confidence: confidence(section, median),
+            label: None,
         });
     }
 

@@ -12,12 +12,14 @@
 //! in `prolink-engine::metadata::nfs`, the same split every other protocol
 //! module in this crate already uses.
 
+pub mod anlz;
 pub mod client;
 pub mod cues;
 pub mod devicelibraryplus;
 pub mod extract;
 pub mod mount;
 pub mod pdb;
+pub mod phrases;
 pub mod portmap;
 pub mod procedures;
 pub mod rpc;
@@ -26,3 +28,4 @@ pub mod xdr;
 pub use client::NfsClient;
 pub use cues::{parse_anlz_cues, parse_pco2, parse_pcob, AnlzCue};
 pub use devicelibraryplus::parse_export_library;
+pub use phrases::{parse_song_structure, Phrase, PhraseKind, PhraseMood, SongStructure};

@@ -20,5 +20,6 @@ mod cues;
 mod fetcher;
 pub mod nfs;
 mod normalize;
+mod phrases;
 
 pub use fetcher::{FetchRequest, LoadedTrack, MetadataFetcher};

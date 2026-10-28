@@ -1,9 +1,10 @@
 //! Adapts the NFS route (`prolink::nfs`) into the same `TrackInfo`-shaped
 //! pieces [`super::normalize`] produces from dbserver — fetches
 //! `export.pdb`, looks up the loaded track, fetches its `.EXT` analysis
-//! file, and assembles metadata, beat grid, HD color waveform, and cues
-//! with their colours and comments — which the dbserver route cannot give
-//! (see `prolink::nfs::pdb`'s doc comment for why `pdb`-module parsing is
+//! file, and assembles metadata, beat grid, HD color waveform, cues with
+//! their colours and comments, and rekordbox's phrases — the last three
+//! things the dbserver route cannot give in full (see
+//! `prolink::nfs::pdb`'s doc comment for why `pdb`-module parsing is
 //! hand-rolled rather than `rekordcrate`'s).
 
 use std::io::Cursor;
@@ -17,11 +18,13 @@ use binrw::Endian;
 use decktector_core::model::{
     BeatGridBeat, CueKind, TrackCue, TrackInfo, WaveformData, WaveformSegment,
 };
-use decktector_core::structure::{self, StructureInput};
+use decktector_core::structure::StructureInput;
 use decktector_core::waveform::{build_preview_from_detail, PREVIEW_SEGMENT_COUNT};
 use prolink::nfs::pdb::{self, Pdb, Track};
 use prolink::nfs::procedures::FileAttributes;
-use prolink::nfs::{parse_anlz_cues, parse_export_library, NfsClient};
+use prolink::nfs::{
+    parse_anlz_cues, parse_export_library, parse_song_structure, NfsClient, SongStructure,
+};
 use prolink::status::MediaSlot;
 use rekordcrate::anlz::{Content, ContentKind, Cue, CueType, ExtendedCue, Header, Section};
 
@@ -32,6 +35,7 @@ const HEADER_LEN: usize = 12;
 use super::colors;
 use super::cues::{default_color, hot_cue_button_letter, track_cues};
 use super::normalize::normalize_tempo;
+use super::phrases;
 
 const EXPORT_PDB_PATH: &str = "PIONEER/rekordbox/export.pdb";
 const EXPORT_LIBRARY_CANDIDATE_PATHS: &[&str] = &[
@@ -184,14 +188,15 @@ pub async fn fetch_track_info(
     Ok((Some(track_info), is_new.then_some(database)))
 }
 
-/// A track's beat grid, waveform and cues, as read out of its `.DAT`/`.EXT`
-/// pair — the three things that come from analysis files rather than from
-/// the database.
-pub type Analysis = (
-    Option<Vec<BeatGridBeat>>,
-    Option<WaveformData>,
-    Vec<TrackCue>,
-);
+/// What a track's `.DAT`/`.EXT` pair holds, as opposed to its database row.
+#[derive(Debug, Default)]
+pub struct Analysis {
+    pub beat_grid: Option<Vec<BeatGridBeat>>,
+    pub waveform: Option<WaveformData>,
+    pub cues: Vec<TrackCue>,
+    /// Rekordbox's phrase analysis, when the track has one.
+    pub song_structure: Option<SongStructure>,
+}
 
 /// Assembles one [`TrackInfo`] from bytes already in hand.
 ///
@@ -207,7 +212,12 @@ pub fn build_track_info(
     artwork: Option<String>,
     status_bpm: Option<f64>,
 ) -> TrackInfo {
-    let (beat_grid, waveform, mut cues) = analysis;
+    let Analysis {
+        beat_grid,
+        waveform,
+        mut cues,
+        song_structure,
+    } = analysis;
     if cues.is_empty() {
         if let Some(db_cues) = pdb.cues.get(&track.id) {
             cues = track_cues(db_cues);
@@ -216,12 +226,15 @@ pub fn build_track_info(
     let duration_ms = f64::from(track.duration_sec) * 1000.0;
     let bpm = normalize_tempo(f64::from(track.tempo_centibpm)).or(status_bpm);
 
-    let events = structure::analyze(&StructureInput {
-        waveform: waveform.as_ref(),
-        beat_grid: beat_grid.as_deref(),
-        duration_ms,
-        cues: &cues,
-    });
+    let events = phrases::sections(
+        song_structure.as_ref(),
+        &StructureInput {
+            waveform: waveform.as_ref(),
+            beat_grid: beat_grid.as_deref(),
+            duration_ms,
+            cues: &cues,
+        },
+    );
 
     TrackInfo {
         track_id: track.id,
@@ -254,7 +267,7 @@ pub fn build_track_info(
 /// data, and a track is still worth showing without a waveform.
 async fn fetch_analysis(client: &mut NfsClient, dat_path: &str) -> Analysis {
     if dat_path.trim().is_empty() {
-        return (None, None, Vec::new());
+        return Analysis::default();
     }
     // Both files, because the two things this route wants live in
     // different ones: the HD colour waveform and the extended cues are only
@@ -377,7 +390,13 @@ pub fn parse_analysis(ext_bytes: &[u8], dat_bytes: &[u8]) -> Analysis {
 
     cues.sort_by(|a, b| a.offset_ms.total_cmp(&b.offset_ms));
 
-    (beat_grid, waveform, cues)
+    Analysis {
+        beat_grid,
+        waveform,
+        cues,
+        // Phrase analysis is written to the `.EXT` only.
+        song_structure: parse_song_structure(ext_bytes),
+    }
 }
 
 fn build_waveform(detail: &rekordcrate::anlz::WaveformColorDetail) -> Option<WaveformData> {
@@ -603,7 +622,7 @@ mod tests {
             .step_by(2)
             .map(|i| u8::from_str_radix(&ext[i..i + 2], 16).unwrap())
             .collect::<Vec<u8>>();
-        let (_grid, _wave, cues) = parse_analysis(&bytes, &[]);
+        let cues = parse_analysis(&bytes, &[]).cues;
         assert_eq!(cues.len(), 2);
         assert_eq!(cues[0].offset_ms, 10000.0);
         assert_eq!(cues[0].button, Some("A".to_string()));
@@ -650,7 +669,7 @@ mod tests {
         pdb.cues.insert(42, vec![db_cue1, db_cue2]);
 
         // Empty cues from analysis
-        let analysis: Analysis = (None, None, Vec::new());
+        let analysis = Analysis::default();
         let info = build_track_info(&pdb, &track, analysis, None, None);
 
         assert_eq!(info.cues.len(), 2);
@@ -664,5 +683,111 @@ mod tests {
         assert_eq!(info.cues[1].button, Some("B".to_string()));
         assert_eq!(info.cues[1].label, Some("Drop".to_string()));
         assert_eq!(info.cues[1].color, "#ff0000");
+    }
+
+    fn track_of(duration_sec: u32) -> Track {
+        Track {
+            id: 7,
+            title: "Phrased".to_string(),
+            artist_id: 0,
+            album_id: 0,
+            genre_id: 0,
+            key_id: 0,
+            label_id: 0,
+            artwork_id: 0,
+            duration_sec,
+            tempo_centibpm: 12000,
+            analyze_path: String::new(),
+            file_path: None,
+        }
+    }
+
+    /// 120 BPM from 0 ms.
+    fn beat_grid_of(beats: usize) -> Vec<BeatGridBeat> {
+        (0..beats)
+            .map(|index| BeatGridBeat {
+                offset_ms: index as f64 * 500.0,
+                beat_in_measure: (index % 4) as u8 + 1,
+            })
+            .collect()
+    }
+
+    /// The track structure used to be inferred from the waveform even when
+    /// rekordbox had analysed the track's phrases itself.
+    #[test]
+    fn a_track_with_rekordbox_phrases_shows_them_instead_of_an_inferred_structure() {
+        let song_structure = SongStructure {
+            mood: prolink::nfs::PhraseMood::Mid,
+            end_beat: 65,
+            phrases: vec![
+                prolink::nfs::Phrase {
+                    start_beat: 1,
+                    kind: prolink::nfs::PhraseKind::Intro,
+                    variant: None,
+                },
+                prolink::nfs::Phrase {
+                    start_beat: 33,
+                    kind: prolink::nfs::PhraseKind::Chorus,
+                    variant: None,
+                },
+            ],
+        };
+        let analysis = Analysis {
+            beat_grid: Some(beat_grid_of(80)),
+            song_structure: Some(song_structure),
+            ..Analysis::default()
+        };
+
+        let info = build_track_info(&Pdb::default(), &track_of(40), analysis, None, None);
+
+        let labels: Vec<_> = info
+            .events
+            .iter()
+            .map(|event| (event.label.as_deref(), event.start_ms, event.end_ms))
+            .collect();
+        assert_eq!(
+            labels,
+            vec![
+                (Some("Intro"), 0.0, 16_000.0),
+                (Some("Chorus"), 16_000.0, 32_000.0)
+            ]
+        );
+    }
+
+    /// An unmasked `PSSI` section in the mid mood: `(first beat, kind)`
+    /// per phrase.
+    fn pssi_section(end_beat: u16, phrases: &[(u16, u16)]) -> Vec<u8> {
+        let mut section = vec![0u8; 0x20];
+        section[..4].copy_from_slice(b"PSSI");
+        section[4..8].copy_from_slice(&0x20u32.to_be_bytes());
+        let total = (0x20 + 24 * phrases.len()) as u32;
+        section[8..12].copy_from_slice(&total.to_be_bytes());
+        section[0x0c..0x10].copy_from_slice(&24u32.to_be_bytes());
+        section[0x10..0x12].copy_from_slice(&(phrases.len() as u16).to_be_bytes());
+        section[0x12..0x14].copy_from_slice(&2u16.to_be_bytes());
+        section[0x1a..0x1c].copy_from_slice(&end_beat.to_be_bytes());
+        for (index, (beat, kind)) in phrases.iter().enumerate() {
+            let mut entry = vec![0u8; 24];
+            entry[0..2].copy_from_slice(&(index as u16 + 1).to_be_bytes());
+            entry[2..4].copy_from_slice(&beat.to_be_bytes());
+            entry[4..6].copy_from_slice(&kind.to_be_bytes());
+            section.extend(entry);
+        }
+        section
+    }
+
+    #[test]
+    fn the_song_structure_is_read_from_the_ext() {
+        let section = pssi_section(65, &[(1, 1), (33, 9)]);
+        let mut bytes = Vec::from(*b"PMAI");
+        bytes.extend(12u32.to_be_bytes());
+        bytes.extend(((12 + section.len()) as u32).to_be_bytes());
+        bytes.extend(section);
+
+        let analysis = parse_analysis(&bytes, &[]);
+
+        let phrases = analysis.song_structure.expect("a song structure").phrases;
+        assert_eq!(phrases.len(), 2);
+        assert_eq!(phrases[1].label(), "Chorus");
     }
 }

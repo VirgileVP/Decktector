@@ -2,12 +2,19 @@
 import type { TrackEventKind } from "./TrackEventKind";
 
 /**
- * One section of the track, inferred from its waveform and beat grid rather
- * than read from the player.
+ * One section of the track: a phrase rekordbox's own analysis found when
+ * the track carries one, otherwise inferred from its waveform and beat
+ * grid.
  */
 export type TrackEvent = { kind: TrackEventKind, startMs: number, endMs: number, 
 /**
- * 0-1 — how much the label can be trusted. A section a DJ cue confirms
- * scores 1.0; a purely inferred one stays lower, so the UI can hedge.
+ * 0-1 — how much the label can be trusted. A rekordbox phrase or a
+ * section a DJ cue confirms scores 1.0; a purely inferred one stays
+ * lower, so the UI can hedge.
  */
-confidence: number, };
+confidence: number, 
+/**
+ * Rekordbox's name for the phrase ("Verse 2", "Up 3"); null for an
+ * inferred section, which goes by its kind.
+ */
+label: string | null, };

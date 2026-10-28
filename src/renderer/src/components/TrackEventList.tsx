@@ -5,7 +5,7 @@ import { startFrameLoop } from '../lib/frame-loop'
 import { estimatePlayheadMs } from '../lib/playhead'
 import {
   EVENT_CONFIDENCE_HEDGE,
-  EVENT_LABELS,
+  eventName,
   eventProgressAt,
   formatEventSeconds
 } from '../lib/track-events'
@@ -115,7 +115,7 @@ function EventName({ event }: { event: TrackEvent }): React.JSX.Element {
   const isGuess = event.confidence < EVENT_CONFIDENCE_HEDGE
   return (
     <span className="event-name">
-      {EVENT_LABELS[event.kind]}
+      {eventName(event)}
       {isGuess && (
         <span className="event-guess" title="Inferred from the waveform, no cue confirms it">
           ?
