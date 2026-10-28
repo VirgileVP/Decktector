@@ -300,6 +300,7 @@ impl Connection {
             .arguments
             .iter()
             .find_map(Field::as_blob)
+            .filter(|blob| !blob.is_empty())
             .map(<[u8]>::to_vec))
     }
 

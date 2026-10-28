@@ -27,9 +27,25 @@
 //! treated as unknown (a player can pack several messages into one segment
 //! or split one across reads), which is why
 //! [`super::client::Connection::read_message`] accumulates and re-parses.
+//!
+//! **An empty blob is not sent at all.** Binary answers carry each blob
+//! right after a number giving its length, and when that length is zero a
+//! player leaves the blob field out while the tag blob still declares it —
+//! so the message holds one argument fewer than its header says. Every
+//! empty answer a real player gave has this shape: a CDJ-3000's beat grid
+//! for a track it has no analysis for (`capture/reference-20260819/`), and
+//! two CDJ-2000NXSs' cue lists for tracks with no cues (`usr-ein/prolink`'s
+//! capture corpus). [`Message::decode`] puts the empty blob back in place,
+//! which is what lets it answer at once rather than wait for an argument
+//! that never comes.
 
 /// Every message starts with this 4-byte value.
 pub const MAGIC: u32 = 0x872349ae;
+
+/// [`Field::type_tag`] of a blob.
+const BLOB_TYPE_TAG: u8 = 0x14;
+/// [`Field::argument_type`] of a blob — its code in a message's tag blob.
+const BLOB_ARGUMENT_TYPE: u8 = 0x03;
 
 /// Smallest possible header: the magic, transaction id, message type and
 /// argument count fields (tags included) plus an empty tag blob. Only used
@@ -63,7 +79,7 @@ impl Field {
             Self::U8(_) => 0x0f,
             Self::U16(_) => 0x10,
             Self::U32(_) => 0x11,
-            Self::Blob(_) => 0x14,
+            Self::Blob(_) => BLOB_TYPE_TAG,
             Self::Str(_) => 0x26,
         }
     }
@@ -76,7 +92,7 @@ impl Field {
     fn argument_type(&self) -> u8 {
         match self {
             Self::U8(_) | Self::U16(_) | Self::U32(_) => 0x06,
-            Self::Blob(_) => 0x03,
+            Self::Blob(_) => BLOB_ARGUMENT_TYPE,
             Self::Str(_) => 0x02,
         }
     }
@@ -133,7 +149,7 @@ impl Field {
                     4,
                 )
             }),
-            0x14 => {
+            BLOB_TYPE_TAG => {
                 if data.len() < 4 {
                     return None;
                 }
@@ -241,11 +257,9 @@ impl Message {
     /// [`Self::decode`], but accepting a message that stops short of the
     /// argument count its own header declares.
     ///
-    /// Real players do this. A CDJ-3000 asked for the beat grid of a track
-    /// it has no analysis for answers `4602` with a header declaring five
-    /// arguments, sends four (the fourth a zero *number* where the header's
-    /// tag blob promised a blob), and then goes silent
-    /// (`capture/reference-20260819/`). Strictly, that message never ends.
+    /// A safety net, not a shape any player is known to send: the short
+    /// answers seen so far were all empty blobs left out (see this module's
+    /// doc comment), which [`Self::decode`] reads in full on its own.
     ///
     /// Only for use once the connection has gone quiet — see
     /// [`super::client::Connection::read_message`]. On a live stream a
@@ -276,13 +290,20 @@ impl Message {
         if arg_count > MAX_ARGS {
             return None;
         }
-        // The tag blob is read for its length only: each argument's own tag
-        // byte says how to decode it, and a player that disagrees with its
-        // own blob would still be decoded correctly this way.
-        next(&mut offset)?.as_blob()?;
+        // Each argument's own tag byte says how to decode it, so a player
+        // that disagrees with its own tag blob is still decoded correctly.
+        // The blob is only consulted for the one thing the arguments cannot
+        // say themselves: that an empty blob was declared and left out.
+        let Field::Blob(declared_types) = next(&mut offset)? else {
+            return None;
+        };
 
         let mut arguments = Vec::with_capacity(arg_count);
-        for _ in 0..arg_count {
+        for index in 0..arg_count {
+            if is_omitted_empty_blob(&declared_types, index, &arguments, data.get(offset)) {
+                arguments.push(Field::Blob(Vec::new()));
+                continue;
+            }
             match next(&mut offset) {
                 Some(argument) => arguments.push(argument),
                 None if allow_missing_arguments => break,
@@ -299,6 +320,20 @@ impl Message {
             offset,
         ))
     }
+}
+
+/// Whether argument `index` is an empty blob the player left out: declared
+/// a blob, right after a zero length, and with no blob field where it would
+/// start. A blob field that *is* there, empty or not, is read as sent.
+fn is_omitted_empty_blob(
+    declared_types: &[u8],
+    index: usize,
+    decoded: &[Field],
+    next_tag: Option<&u8>,
+) -> bool {
+    declared_types.get(index) == Some(&BLOB_ARGUMENT_TYPE)
+        && matches!(decoded.last(), Some(Field::U32(0)))
+        && next_tag != Some(&BLOB_TYPE_TAG)
 }
 
 #[cfg(test)]
@@ -378,45 +413,95 @@ mod tests {
         assert!(Message::decode(&bytes).is_none());
     }
 
+    fn decode_hex(hex: &str) -> Vec<u8> {
+        (0..hex.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).expect("valid hex"))
+            .collect()
+    }
+
     /// The other half of the hardware ground truth: what a CDJ-3000 sends
     /// when asked for the beat grid of a track it has no analysis for. The
-    /// header promises five arguments, four arrive, and the player then
-    /// says nothing more — so the strict decoder must refuse it (it cannot
-    /// know more bytes aren't coming) and the lenient one must accept it.
+    /// tag blob declares number, number, number, blob, number; the blob's
+    /// length is zero and the blob itself is left out. Read as a short
+    /// message, this used to cost a five-second wait for an argument that
+    /// never comes.
     #[test]
-    fn a_players_short_no_data_response_decodes_only_leniently() {
-        let reply = "11872349ae11000000031046020f05140000000506060603061100002204110000003211000000001100000000";
-        let bytes: Vec<u8> = (0..reply.len())
-            .step_by(2)
-            .map(|i| u8::from_str_radix(&reply[i..i + 2], 16).expect("valid hex"))
-            .collect();
+    fn a_cdj_3000s_empty_beat_grid_decodes_with_its_empty_blob_in_place() {
+        let bytes = decode_hex(
+            "11872349ae11000000031046020f05140000000506060603061100002204110000003211000000001100000000",
+        );
 
-        assert!(Message::decode(&bytes).is_none());
+        let (message, consumed) = Message::decode(&bytes).expect("a complete message");
 
-        let (message, consumed) = Message::decode_lenient(&bytes).expect("should decode leniently");
         assert_eq!(consumed, bytes.len());
         assert_eq!(
             message.message_type,
             super::super::queries::BEAT_GRID_RESPONSE
         );
-        // Four of the five: the request echo, a non-zero status code, and
-        // two zeros where a real answer carries a length and its blob.
         assert_eq!(
             message.arguments,
             vec![
                 Field::U32(0x2204),
                 Field::U32(50),
                 Field::U32(0),
+                Field::Blob(Vec::new()),
                 Field::U32(0)
             ]
         );
-        assert!(
-            message
-                .arguments
-                .iter()
-                .all(|argument| argument.as_blob().is_none()),
-            "no blob means no data, which is what the caller reports"
+    }
+
+    /// A CDJ-2000NXS's cue list for a track with no cues, followed by the
+    /// start of its next reply (`usr-ein/prolink` corpus,
+    /// `S13-format-ground-truth`): nine arguments declared, both blobs left
+    /// out. The next message must stay untouched in the buffer.
+    #[test]
+    fn a_cdj_2000nxss_empty_cue_list_leaves_both_blobs_out() {
+        let reply = concat!(
+            "11872349ae11038000131047020f09140000000c060606030606060603000000",
+            "1100002104110000000011000000001100000024",
+            "110000000011000000001100000000",
         );
+        let next_message = "11872349ae1103800014104000";
+        let bytes = decode_hex(&format!("{reply}{next_message}"));
+
+        let (message, consumed) = Message::decode(&bytes).expect("a complete message");
+
+        assert_eq!(consumed, reply.len() / 2);
+        assert_eq!(message.arguments.len(), 9);
+        assert_eq!(message.arguments[3], Field::Blob(Vec::new()));
+        assert_eq!(message.arguments[8], Field::Blob(Vec::new()));
+    }
+
+    #[test]
+    fn an_empty_blob_that_is_sent_is_read_as_sent() {
+        let sent = Message::new(
+            7,
+            0x4702,
+            vec![Field::U32(0), Field::Blob(Vec::new()), Field::U32(9)],
+        );
+
+        let (decoded, consumed) = Message::decode(&sent.encode()).expect("a complete message");
+
+        assert_eq!(decoded, sent);
+        assert_eq!(consumed, sent.encode().len());
+    }
+
+    #[test]
+    fn a_message_short_of_a_number_decodes_only_leniently() {
+        let mut bytes = Vec::new();
+        Field::U32(MAGIC).encode_field(&mut bytes);
+        Field::U32(3).encode_field(&mut bytes);
+        Field::U16(0x4602).encode_field(&mut bytes);
+        Field::U8(3).encode_field(&mut bytes);
+        Field::Blob(vec![0x06, 0x06, 0x06]).encode_field(&mut bytes);
+        Field::U32(0x2204).encode_field(&mut bytes);
+        Field::U32(50).encode_field(&mut bytes);
+
+        assert!(Message::decode(&bytes).is_none());
+        let (message, consumed) = Message::decode_lenient(&bytes).expect("decodes leniently");
+        assert_eq!(consumed, bytes.len());
+        assert_eq!(message.arguments, vec![Field::U32(0x2204), Field::U32(50)]);
     }
 
     /// The exact bytes a CDJ-3000 accepted as a connection's setup message

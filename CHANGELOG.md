@@ -13,6 +13,11 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
 
 ## [Unreleased]
 
+### Fixed
+
+- A player's empty answer — no cues, or no beat grid for an unanalysed track — no longer
+  holds up the track's metadata for five seconds.
+
 ## [1.5.1] - 2026-10-22
 
 Decktector now tells you when a new version is out, and the decks get a few booth
