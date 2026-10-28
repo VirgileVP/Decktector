@@ -13,6 +13,12 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
 
 ## [Unreleased]
 
+### Added
+
+- **Cues over the dbserver fallback** — a track read over the dbserver route, rather
+  than straight off the player's media, now shows its hot cues, memory cues and loops.
+  Their colours and comments still come from the media route only.
+
 ### Fixed
 
 - A player's empty answer — no cues, or no beat grid for an unanalysed track — no longer

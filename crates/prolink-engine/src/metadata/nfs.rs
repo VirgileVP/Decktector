@@ -1,11 +1,10 @@
 //! Adapts the NFS route (`prolink::nfs`) into the same `TrackInfo`-shaped
 //! pieces [`super::normalize`] produces from dbserver — fetches
 //! `export.pdb`, looks up the loaded track, fetches its `.EXT` analysis
-//! file, and assembles metadata, beat grid, HD color waveform and cues (the
-//! two fields the dbserver route leaves stubbed, made possible here by
-//! `rekordcrate`'s clean `anlz` API — see this crate's Cargo.toml comment
-//! and `prolink::nfs::pdb`'s doc comment for why `pdb`-module parsing is
-//! hand-rolled instead).
+//! file, and assembles metadata, beat grid, HD color waveform, and cues
+//! with their colours and comments — which the dbserver route cannot give
+//! (see `prolink::nfs::pdb`'s doc comment for why `pdb`-module parsing is
+//! hand-rolled rather than `rekordcrate`'s).
 
 use std::io::Cursor;
 use std::net::Ipv4Addr;
@@ -22,7 +21,7 @@ use decktector_core::structure::{self, StructureInput};
 use decktector_core::waveform::{build_preview_from_detail, PREVIEW_SEGMENT_COUNT};
 use prolink::nfs::pdb::{self, Pdb, Track};
 use prolink::nfs::procedures::FileAttributes;
-use prolink::nfs::{parse_anlz_cues, parse_export_library, AnlzCue, NfsClient};
+use prolink::nfs::{parse_anlz_cues, parse_export_library, NfsClient};
 use prolink::status::MediaSlot;
 use rekordcrate::anlz::{Content, ContentKind, Cue, CueType, ExtendedCue, Header, Section};
 
@@ -31,6 +30,7 @@ use rekordcrate::anlz::{Content, ContentKind, Cue, CueType, ExtendedCue, Header,
 const HEADER_LEN: usize = 12;
 
 use super::colors;
+use super::cues::{default_color, hot_cue_button_letter, track_cues};
 use super::normalize::normalize_tempo;
 
 const EXPORT_PDB_PATH: &str = "PIONEER/rekordbox/export.pdb";
@@ -210,12 +210,7 @@ pub fn build_track_info(
     let (beat_grid, waveform, mut cues) = analysis;
     if cues.is_empty() {
         if let Some(db_cues) = pdb.cues.get(&track.id) {
-            cues = db_cues.iter().map(map_anlz_cue).collect();
-            cues.sort_by(|a, b| {
-                a.offset_ms
-                    .partial_cmp(&b.offset_ms)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
+            cues = track_cues(db_cues);
         }
     }
     let duration_ms = f64::from(track.duration_sec) * 1000.0;
@@ -375,7 +370,7 @@ pub fn parse_analysis(ext_bytes: &[u8], dat_bytes: &[u8]) -> Analysis {
     }
 
     let mut cues = if !custom_cues.is_empty() {
-        custom_cues.iter().map(map_anlz_cue).collect::<Vec<_>>()
+        track_cues(&custom_cues)
     } else {
         extended_cues.or(basic_cues).unwrap_or_default()
     };
@@ -447,72 +442,6 @@ fn cue_kind(hot_cue: u32, cue_type: &CueType) -> CueKind {
     }
 }
 
-fn default_color(kind: CueKind) -> &'static str {
-    match kind {
-        CueKind::Memory => colors::DEFAULT_MEMORY_COLOR,
-        CueKind::Hotcue => colors::DEFAULT_HOTCUE_COLOR,
-        CueKind::Loop | CueKind::Hotloop => colors::DEFAULT_LOOP_COLOR,
-    }
-}
-
-/// `1` -> `"A"`, `8` -> `"H"` — the letters real hardware labels hot-cue
-/// pads with; anything outside that range (shouldn't happen for an actual
-/// hot cue) falls back to the raw number rather than guessing at a letter.
-fn hot_cue_button_letter(hot_cue: u32) -> String {
-    match u8::try_from(hot_cue) {
-        Ok(number @ 1..=8) => char::from(b'A' + number - 1).to_string(),
-        _ => hot_cue.to_string(),
-    }
-}
-
-fn map_anlz_cue(cue: &AnlzCue) -> TrackCue {
-    let kind = match (cue.hot_cue.is_some(), cue.is_loop) {
-        (true, true) => CueKind::Hotloop,
-        (true, false) => CueKind::Hotcue,
-        (false, true) => CueKind::Loop,
-        (false, false) => CueKind::Memory,
-    };
-
-    let button = cue.hot_cue.map(|num| hot_cue_button_letter(u32::from(num)));
-
-    let color = if let Some((r, g, b)) = cue.color_rgb {
-        format!("#{r:02x}{g:02x}{b:02x}")
-    } else if let Some(code) = cue.color_code {
-        if cue.hot_cue.is_some() {
-            colors::hot_cue_color_hex(code)
-                .unwrap_or_else(|| default_color(kind))
-                .to_string()
-        } else {
-            match code {
-                1 => Some("#ff2d92"), // Pink
-                2 => Some("#ff453a"), // Red
-                3 => Some("#ff9500"), // Orange
-                4 => Some("#ffd60a"), // Yellow
-                5 => Some("#00c853"), // Green
-                6 => Some("#00d4ff"), // Aqua
-                7 => Some("#0a84ff"), // Blue
-                8 => Some("#9d5cff"), // Purple
-                _ => None,
-            }
-            .unwrap_or_else(|| default_color(kind))
-            .to_string()
-        }
-    } else {
-        default_color(kind).to_string()
-    };
-
-    TrackCue {
-        kind,
-        offset_ms: f64::from(cue.time_ms),
-        length_ms: cue
-            .loop_time_ms
-            .map(|loop_time| f64::from(loop_time.saturating_sub(cue.time_ms))),
-        button,
-        label: cue.comment.clone(),
-        color,
-    }
-}
-
 fn map_extended_cue(cue: &ExtendedCue) -> TrackCue {
     let kind = cue_kind(cue.hot_cue, &cue.cue_type);
     let is_loop = cue.cue_type == CueType::Loop;
@@ -560,6 +489,7 @@ async fn fetch_artwork(client: &mut NfsClient, pdb: &Pdb, track: &Track) -> Opti
 #[cfg(test)]
 mod tests {
     use super::*;
+    use prolink::nfs::AnlzCue;
 
     fn database_file(size: u32, modified_seconds: u32) -> DatabaseFile {
         DatabaseFile {
@@ -639,63 +569,11 @@ mod tests {
     }
 
     #[test]
-    fn hot_cue_numbers_one_through_eight_map_to_letters() {
-        assert_eq!(hot_cue_button_letter(1), "A");
-        assert_eq!(hot_cue_button_letter(8), "H");
-    }
-
-    #[test]
-    fn an_out_of_range_hot_cue_number_falls_back_to_the_digit() {
-        assert_eq!(hot_cue_button_letter(0), "0");
-        assert_eq!(hot_cue_button_letter(99), "99");
-    }
-
-    #[test]
     fn cue_kind_combines_hot_cue_and_loop_flags() {
         assert_eq!(cue_kind(0, &CueType::Point), CueKind::Memory);
         assert_eq!(cue_kind(1, &CueType::Point), CueKind::Hotcue);
         assert_eq!(cue_kind(0, &CueType::Loop), CueKind::Loop);
         assert_eq!(cue_kind(1, &CueType::Loop), CueKind::Hotloop);
-    }
-
-    #[test]
-    fn maps_anlz_hot_cue_with_rgb() {
-        let anlz_cue = AnlzCue {
-            hot_cue: Some(1),
-            is_loop: false,
-            time_ms: 12345,
-            loop_time_ms: None,
-            comment: Some("Drop 1".to_string()),
-            color_code: Some(0x16),
-            color_rgb: Some((255, 0, 128)),
-        };
-        let track_cue = map_anlz_cue(&anlz_cue);
-        assert_eq!(track_cue.kind, CueKind::Hotcue);
-        assert_eq!(track_cue.offset_ms, 12345.0);
-        assert_eq!(track_cue.length_ms, None);
-        assert_eq!(track_cue.button, Some("A".to_string()));
-        assert_eq!(track_cue.label, Some("Drop 1".to_string()));
-        assert_eq!(track_cue.color, "#ff0080");
-    }
-
-    #[test]
-    fn maps_anlz_memory_loop_cue() {
-        let anlz_cue = AnlzCue {
-            hot_cue: None,
-            is_loop: true,
-            time_ms: 5000,
-            loop_time_ms: Some(9000),
-            comment: None,
-            color_code: Some(5), // Green in memory cue palette
-            color_rgb: None,
-        };
-        let track_cue = map_anlz_cue(&anlz_cue);
-        assert_eq!(track_cue.kind, CueKind::Loop);
-        assert_eq!(track_cue.offset_ms, 5000.0);
-        assert_eq!(track_cue.length_ms, Some(4000.0));
-        assert_eq!(track_cue.button, None);
-        assert_eq!(track_cue.label, None);
-        assert_eq!(track_cue.color, "#00c853");
     }
 
     #[test]

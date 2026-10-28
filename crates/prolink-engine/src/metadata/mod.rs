@@ -9,12 +9,14 @@
 //!   codebase (see `prolink::nfs::pdb`'s doc comment).
 //! - [`normalize`] (dbserver): a TCP query to the player's own database
 //!   service (`prolink::dbserver`) — needs a virtual player number in 1-4,
-//!   fully protocol-documented and fake-server-tested, but its cue-list
-//!   wire format is unimplemented (see `prolink::dbserver::cues`) and it
-//!   has no artwork route wired up (see `fetcher`'s doc comment on why).
+//!   fully protocol-documented and fake-server-tested, but it reads only
+//!   the basic cue list, without colors or comments (see
+//!   `prolink::dbserver::cues`), and has no artwork route wired up (see
+//!   `fetcher`'s doc comment on why).
 
 mod analysis_wait;
 mod colors;
+mod cues;
 mod fetcher;
 pub mod nfs;
 mod normalize;

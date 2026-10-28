@@ -14,7 +14,7 @@ use std::net::Ipv4Addr;
 use std::time::Duration;
 
 use prolink::dbserver::message::{Field, Message};
-use prolink::dbserver::{beatgrid, queries, waveform, Connection};
+use prolink::dbserver::{beatgrid, cues, queries, waveform, Connection};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::timeout;
@@ -333,6 +333,86 @@ async fn fetches_and_parses_a_waveform_blob() {
             Field::U32(0x0054_5845), // "EXT", byte-reversed, NUL-padded
         ]
     );
+}
+
+fn decode_hex(hex: &str) -> Vec<u8> {
+    (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).expect("valid hex"))
+        .collect()
+}
+
+/// What two CDJ-2000NXSs answered real decks' cue list requests with
+/// (`usr-ein/prolink` capture corpus), byte for byte: a track with hot cues
+/// A-C (`S06-load-and-play`), then a track with none, whose reply leaves
+/// both empty blobs out (`S13-format-ground-truth`).
+const CUE_LIST_WITH_THREE_HOT_CUES: &str = concat!(
+    "11872349ae110380036f1047020f09140000000c06060603060606060300000011000021",
+    "041100000000110000006c140000006c0001010000000000000000002800000000000000",
+    "000000000000000000000000000000000001020000000000000000007125000000000000",
+    "000000000000000000000000000000000001030000000000000000005b34000000000000",
+    "000000000000000000000000000000001100000024110000000311000000001100000018",
+    "14000000180f010000ffffffff9ef90000ffffffff0b5d0100ffffffff",
+);
+const CUE_LIST_WITHOUT_CUES: &str = concat!(
+    "11872349ae11038000131047020f09140000000c060606030606060603000000",
+    "1100002104110000000011000000001100000024",
+    "110000000011000000001100000000",
+);
+
+#[tokio::test]
+async fn reads_a_cdj_2000nxss_cue_lists_without_waiting_on_an_empty_one() {
+    let (listener, port) = start_listener().await;
+
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.expect("accept");
+        greet(&mut stream).await;
+        let mut buffer = Vec::new();
+        read_message(&mut stream, &mut buffer).await; // SETUP_REQ
+        send(&mut stream, 0, queries::SETUP_REQ, vec![]).await;
+
+        let mut requests = Vec::new();
+        for reply in [CUE_LIST_WITH_THREE_HOT_CUES, CUE_LIST_WITHOUT_CUES] {
+            requests.push(read_message(&mut stream, &mut buffer).await);
+            stream
+                .write_all(&decode_hex(reply))
+                .await
+                .expect("write to the client");
+        }
+        requests
+    });
+
+    let mut connection = Connection::connect(LOOPBACK, LOOPBACK, port, OUR_DEVICE_NUMBER)
+        .await
+        .expect("should connect");
+    let with_cues = connection
+        .fetch_cues_basic(TARGET_DEVICE_NUMBER, SLOT, TRACK_TYPE, TRACK_ID)
+        .await
+        .expect("should fetch");
+    // Far under the client's five-second quiet timeout: the empty reply is
+    // complete as sent, not a message still waiting for two arguments.
+    let without_cues = timeout(
+        Duration::from_secs(1),
+        connection.fetch_cues_basic(TARGET_DEVICE_NUMBER, SLOT, TRACK_TYPE, TRACK_ID),
+    )
+    .await
+    .expect("an empty cue list should not wait for the read timeout")
+    .expect("should fetch");
+
+    let hot_cues: Vec<_> = cues::parse_cue_points(&with_cues)
+        .iter()
+        .map(|cue| (cue.hot_cue, cue.time_ms))
+        .collect();
+    assert_eq!(
+        hot_cues,
+        vec![(Some(1), 271), (Some(2), 63_902), (Some(3), 89_355)]
+    );
+    assert!(cues::parse_cue_points(&without_cues).is_empty());
+
+    let requests = server.await.expect("server task should finish cleanly");
+    assert!(requests
+        .iter()
+        .all(|request| request.message_type == queries::CUE_LIST_REQ));
 }
 
 /// The `b5cbf4f`-class regression, at the transport level: a server that

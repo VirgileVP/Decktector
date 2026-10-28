@@ -27,11 +27,11 @@ use std::net::Ipv4Addr;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
 use std::time::{Duration, Instant};
 
-use decktector_core::model::{BeatGridBeat, DeckId, TrackInfo, WaveformData};
+use decktector_core::model::{BeatGridBeat, DeckId, TrackCue, TrackInfo, WaveformData};
 use decktector_core::structure::{self, StructureInput};
 use decktector_core::EngineHandle;
 use prolink::dbserver::client::TrackMenuItem;
-use prolink::dbserver::{beatgrid, waveform as db_waveform, Connection};
+use prolink::dbserver::{beatgrid, cues as db_cues, waveform as db_waveform, Connection};
 use prolink::presence::Presence;
 use prolink::status::{MediaSlot, TRACK_TYPE_REKORDBOX};
 use tokio::sync::Mutex as AsyncMutex;
@@ -41,6 +41,7 @@ use tokio::time::timeout;
 use super::analysis_wait::{
     player_may_still_be_analysing, AnalysisWait, ANALYSIS_RETRY_INTERVAL, MAXIMUM_ANALYSIS_WAIT,
 };
+use super::cues::track_cues;
 use super::nfs::{self, TrackDatabase};
 use super::normalize;
 
@@ -658,13 +659,16 @@ impl DbserverTrack {
     }
 }
 
-/// A track's beat grid and waveform as read from the dbserver. Each is
-/// `None` until the player has one to give — an empty answer counts as
-/// none, since that is what a player still analysing a track sends.
+/// A track's beat grid, waveform and cues as read from the dbserver. The
+/// beat grid and waveform are each `None` until the player has one to give
+/// — an empty answer counts as none, since that is what a player still
+/// analysing a track sends. No cues is an ordinary answer, so it does not
+/// keep the analysis incomplete.
 #[derive(Debug, Default)]
 struct DbserverAnalysis {
     beat_grid: Option<Vec<BeatGridBeat>>,
     waveform: Option<WaveformData>,
+    cues: Vec<TrackCue>,
 }
 
 impl DbserverAnalysis {
@@ -676,6 +680,15 @@ impl DbserverAnalysis {
             waveform: waveform_blob.and_then(|blob| {
                 normalize::waveform_data(&db_waveform::parse_color_waveform_detail(blob))
             }),
+            cues: Vec::new(),
+        }
+    }
+
+    /// The same analysis, with the cues a basic cue list reply describes.
+    fn with_cue_points(self, cue_point_blobs: &[Vec<u8>]) -> Self {
+        Self {
+            cues: track_cues(&db_cues::parse_cue_points(cue_point_blobs)),
+            ..self
         }
     }
 
@@ -695,11 +708,15 @@ impl DbserverAnalysis {
             self.waveform = fresh.waveform;
             took_any = true;
         }
+        if self.cues.is_empty() && !fresh.cues.is_empty() {
+            self.cues = fresh.cues;
+            took_any = true;
+        }
         took_any
     }
 }
 
-/// Requests `track`'s beat grid and waveform on an open dbserver
+/// Requests `track`'s beat grid, waveform and cues on an open dbserver
 /// connection, each bounded by [`ASSET_TIMEOUT`]. A failed or timed-out
 /// request reads as "not available", like an empty answer.
 async fn fetch_dbserver_analysis(
@@ -736,7 +753,16 @@ async fn fetch_dbserver_analysis(
     .ok()
     .and_then(Result::ok)
     .flatten();
+    let cue_point_blobs = timeout(
+        ASSET_TIMEOUT,
+        connection.fetch_cues_basic(source_device, slot, track_type, track_id),
+    )
+    .await
+    .ok()
+    .and_then(Result::ok)
+    .unwrap_or_default();
     DbserverAnalysis::from_blobs(beat_grid_blob.as_deref(), waveform_blob.as_deref())
+        .with_cue_points(&cue_point_blobs)
 }
 
 fn assemble_dbserver_track_info(
@@ -748,7 +774,7 @@ fn assemble_dbserver_track_info(
     let beat_grid = analysis.beat_grid.clone();
     let waveform = analysis.waveform.clone();
     let duration_ms = normalize::duration_ms(items);
-    let cues = Vec::new(); // Cue-list wire format not yet confirmed — see prolink::dbserver::cues.
+    let cues = analysis.cues.clone();
 
     // Borrowed here, before the same values move into the TrackInfo literal
     // below — mirrors decktector_core::sim::tracks::build_sim_track's
@@ -882,6 +908,47 @@ mod tests {
 
         assert!(!held.absorb(DbserverAnalysis::default()));
         assert!(held.beat_grid.is_some());
+    }
+
+    /// Hot cue B at 63.9 s, as a basic cue list reply carries it: one
+    /// 36-byte record, then its time and "no loop".
+    fn one_hot_cue_blobs() -> Vec<Vec<u8>> {
+        let mut record = vec![0u8; db_cues::CUE_RECORD_LEN];
+        record[1] = 0x01;
+        record[2] = 2;
+        let times = [63_902u32.to_le_bytes(), u32::MAX.to_le_bytes()].concat();
+        vec![record, times]
+    }
+
+    /// The dbserver fallback used to hand every track over with no cues at
+    /// all, whatever the player held.
+    #[test]
+    fn a_dbserver_track_carries_the_cues_its_player_listed() {
+        let analysis = DbserverAnalysis::default().with_cue_points(&one_hot_cue_blobs());
+
+        let track = assemble_dbserver_track_info(1, &[], None, &analysis);
+
+        assert_eq!(track.cues.len(), 1);
+        assert_eq!(track.cues[0].button.as_deref(), Some("B"));
+        assert_eq!(track.cues[0].offset_ms, 63_902.0);
+    }
+
+    #[test]
+    fn a_track_without_cues_is_still_complete() {
+        let analysis =
+            DbserverAnalysis::from_blobs(Some(&beat_grid_blob()), Some(&waveform_blob()))
+                .with_cue_points(&[Vec::new(), Vec::new()]);
+        assert!(analysis.is_complete());
+        assert!(analysis.cues.is_empty());
+    }
+
+    #[test]
+    fn absorbing_takes_cues_a_later_answer_found() {
+        let mut held = DbserverAnalysis::from_blobs(Some(&beat_grid_blob()), None);
+        let fresh = DbserverAnalysis::default().with_cue_points(&one_hot_cue_blobs());
+
+        assert!(held.absorb(fresh));
+        assert_eq!(held.cues.len(), 1);
     }
 
     fn fetcher() -> Arc<MetadataFetcher> {

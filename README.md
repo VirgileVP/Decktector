@@ -36,9 +36,10 @@ Primary targets: **XDJ-XZ** and **XDJ-1000MK2** (works with 2 to 4 CDJ-2000-era 
 > with title, artist, BPM, HD waveform, beat grid and artwork within a second of
 > connecting.
 >
-> **Known gap**: the dbserver fallback still reads no cues — see
-> [Porting status](#porting-status). See [Architecture](#architecture) for how
-> the Rust core, Tauri shell and React UI fit together.
+> **Known gap**: the dbserver fallback reads cues without their colours or
+> comments — see [Porting status](#porting-status). See
+> [Architecture](#architecture) for how the Rust core, Tauri shell and React UI
+> fit together.
 
 ## Requirements
 
@@ -320,7 +321,7 @@ touching the protocol.
 | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | 1     | App shell, domain model, simulation engine                                                                                                                                        | done                                                       |
 | 2     | UDP layer: announce, discovery, status, beat, precise position                                                                                                                    | done                                                       |
-| 3     | Metadata over dbserver: title/artist/album/genre/key/label/comment/bpm, beat grid, HD waveform                                                                                    | done (cues and artwork not implemented — see below)        |
+| 3     | Metadata over dbserver: title/artist/album/genre/key/label/comment/bpm, beat grid, HD waveform, cues                                                                              | done (no cue colours or comments, no artwork — see below)  |
 | 4     | Metadata over NFS: `export.pdb` or `exportLibrary.db` + `.EXT`/`.DAT` analysis files, cues included, needs no virtual player number — the primary route, dbserver is the fallback | done — validated against a CDJ-3000's own media, see below |
 
 Phase 2 listens for real player traffic passively rather than running the full
@@ -335,14 +336,17 @@ sees discovery and beats and no status at all (see
 address and MAC of the adapter facing the booth, which is why picking the right
 one matters on a multi-homed laptop.
 
-Phase 3's two gaps stay open — dbserver's cue-list wire format
-(`crates/prolink/src/dbserver/cues.rs`) is variable-length and still unconfirmed
-(a wrong offset would desync every cue after it, not just misread one field), and
-dbserver has no artwork route wired up. Artwork is moot for a deck reading real
-media, since phase 4 gets it through NFS, which is part of why dbserver was
-demoted to the fallback route.
+Phase 3 reads the **basic** cue list (`crates/prolink/src/dbserver/cues.rs`):
+hot cues, memory cues and loops, pinned on replies two CDJ-2000NXSs gave real
+decks in [`usr-ein/prolink`](https://github.com/usr-ein/prolink)'s capture
+corpus. Two gaps stay open. The **extended** cue list, which adds colours and
+comments, is not decoded: no real reply to it has been captured, and its entries
+vary in length, so a wrong offset would desync every cue after it. And dbserver
+has no artwork route wired up. Both are moot for a deck reading real media, since
+phase 4 gets them through NFS, which is part of why dbserver was demoted to the
+fallback route.
 
-**Cues come from the NFS route only.** `rekordcrate` 0.3 can't read them on
+**Cue colours and comments come from the NFS route only.** `rekordcrate` 0.3 can't read cues on
 current hardware: a CDJ-3000's `.EXT` cue list (`PCO2`) is one of the sections it
 rejects outright (real players write cue type `1`, which its enum doesn't allow),
 and the older `.DAT` list (`PCOB`) comes back empty even for a track whose raw
@@ -350,8 +354,7 @@ bytes plainly hold three hot cues. Both formats are therefore hand-rolled in
 `crates/prolink/src/nfs/cues.rs` — hot cues A–H, memory cues, loops, comments and
 colours — pinned by tests on bytes extracted from real `.EXT` files. The `.EXT`
 list is tried first, then the `.DAT` one; on a Rekordbox 7 stick, cues stored in
-`exportLibrary.db` fill in when neither analysis file holds any. A track read over
-the dbserver fallback still arrives with no cues rather than with wrong ones.
+`exportLibrary.db` fill in when neither analysis file holds any.
 
 **Phase 4 carries real, explicit confidence differences worth reading before
 trusting it at a gig:**
@@ -426,6 +429,9 @@ trusting it at a gig:**
   `rekordcrate`'s source as a layout reference — see
   [Porting status](#porting-status) for the confidence caveat that comes with
   that.
+- [usr-ein/prolink](https://github.com/usr-ein/prolink) — its capture corpus of
+  two CDJ-2000NXSs holds the cue list replies the dbserver cue parser is pinned
+  on.
 
 ## License
 

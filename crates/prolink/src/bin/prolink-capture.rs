@@ -1277,7 +1277,12 @@ async fn run_phase_d(
         let cues_basic = connection
             .fetch_cues_basic(device_number, slot_byte, entry.track_type, track_id)
             .await;
-        queries.push(record_blob_result(&dir, "cues-basic", track_id, cues_basic));
+        queries.push(record_blobs_result(
+            &dir,
+            "cues-basic",
+            track_id,
+            cues_basic,
+        ));
 
         queries.push(
             run_artwork_query(
@@ -1382,6 +1387,42 @@ fn record_blob_result(
             bytes: 0,
             error: Some(fetch_error.to_string()),
         },
+    }
+}
+
+/// [`record_blob_result`] for a reply that splits its answer over several
+/// blobs: each is written to its own `{name}-{track_id}-{index}.bin`, so
+/// the files keep the order the reply gave them, empty ones included.
+fn record_blobs_result(
+    dir: &std::path::Path,
+    name: &'static str,
+    track_id: u32,
+    result: std::io::Result<Vec<Vec<u8>>>,
+) -> QueryReport {
+    let blobs = match result {
+        Ok(blobs) => blobs,
+        Err(fetch_error) => {
+            return QueryReport {
+                query: name,
+                fetched: false,
+                bytes: 0,
+                error: Some(fetch_error.to_string()),
+            }
+        }
+    };
+    let error = blobs
+        .iter()
+        .enumerate()
+        .find_map(|(index, bytes)| {
+            let path = dir.join(format!("{name}-{track_id}-{index}.bin"));
+            write_raw_file(&path, bytes).err()
+        })
+        .map(|write_error| write_error.to_string());
+    QueryReport {
+        query: name,
+        fetched: !blobs.is_empty() && error.is_none(),
+        bytes: blobs.iter().map(Vec::len).sum(),
+        error,
     }
 }
 

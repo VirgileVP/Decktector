@@ -612,7 +612,8 @@ async fn serve_dbserver_connection(mut stream: TcpStream) {
                     &mut stream,
                     7,
                     queries::CUE_LIST_RESPONSE,
-                    vec![Field::Blob(vec![0u8; 16])],
+                    // Records, then times: the two blobs a real reply carries.
+                    vec![Field::Blob(vec![0u8; 36]), Field::Blob(vec![0u8; 8])],
                 )
                 .await
             }
@@ -694,8 +695,16 @@ async fn phase_d_pulls_metadata_and_blobs_for_a_player_with_a_loaded_track() {
     .expect("valid json");
     assert_eq!(report["connected"], true, "report: {report}");
 
-    for name in ["beatgrid", "cues-ext", "cues-basic", "artwork"] {
-        let path = db_dir.join(format!("{name}-{DBSERVER_TRACK_ID}.bin"));
+    // The basic cue list's two blobs are kept apart, in reply order.
+    let blob_files = [
+        format!("beatgrid-{DBSERVER_TRACK_ID}.bin"),
+        format!("cues-ext-{DBSERVER_TRACK_ID}.bin"),
+        format!("cues-basic-{DBSERVER_TRACK_ID}-0.bin"),
+        format!("cues-basic-{DBSERVER_TRACK_ID}-1.bin"),
+        format!("artwork-{DBSERVER_TRACK_ID}.bin"),
+    ];
+    for file_name in blob_files {
+        let path = db_dir.join(file_name);
         let bytes =
             std::fs::read(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
         assert!(!bytes.is_empty(), "{} should be non-empty", path.display());

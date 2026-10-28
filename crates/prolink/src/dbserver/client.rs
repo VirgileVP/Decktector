@@ -295,13 +295,23 @@ impl Connection {
         query: u16,
         args: Vec<Field>,
     ) -> std::io::Result<Option<Vec<u8>>> {
+        let blobs = self.fetch_blobs(query, args).await?;
+        Ok(blobs.into_iter().find(|blob| !blob.is_empty()))
+    }
+
+    /// Every blob of a reply, in argument order, empty ones included — for
+    /// the replies that split one answer over several blobs, where which
+    /// blob is which is told by position alone.
+    async fn fetch_blobs(&mut self, query: u16, args: Vec<Field>) -> std::io::Result<Vec<Vec<u8>>> {
         let response = self.simple_request(query, args).await?;
         Ok(response
             .arguments
-            .iter()
-            .find_map(Field::as_blob)
-            .filter(|blob| !blob.is_empty())
-            .map(<[u8]>::to_vec))
+            .into_iter()
+            .filter_map(|argument| match argument {
+                Field::Blob(bytes) => Some(bytes),
+                _ => None,
+            })
+            .collect())
     }
 
     pub async fn fetch_beat_grid(
@@ -321,9 +331,10 @@ impl Connection {
         .await
     }
 
-    /// Tries the extended cue list first (color, comment, hot loops); the
-    /// caller falls back to [`Self::fetch_cues_basic`] only if this comes
-    /// back empty/unavailable.
+    /// The extended cue list (colors and comments), NXS2-generation players
+    /// and later. Its reply is not decoded yet — no real one has been
+    /// captured — so only the capture tool asks for it; see
+    /// [`super::cues`].
     pub async fn fetch_cues_extended(
         &mut self,
         target_device_number: u8,
@@ -341,14 +352,18 @@ impl Connection {
         .await
     }
 
+    /// The basic cue list: memory points, hot cues and loops, without
+    /// colors or comments. Its reply carries two blobs — the cue records,
+    /// then their times — which [`super::cues::parse_cue_points`] reads
+    /// together.
     pub async fn fetch_cues_basic(
         &mut self,
         target_device_number: u8,
         slot: u8,
         track_type: u8,
         track_id: u32,
-    ) -> std::io::Result<Option<Vec<u8>>> {
-        self.fetch_blob(
+    ) -> std::io::Result<Vec<Vec<u8>>> {
+        self.fetch_blobs(
             queries::CUE_LIST_REQ,
             vec![
                 Field::U32(rmst_argument(target_device_number, slot, track_type)),
