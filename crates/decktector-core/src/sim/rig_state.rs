@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::command::TempoRange;
-use crate::model::{DeckId, DeckState, PlayState, TrackInfo};
+use crate::model::{ActiveLoop, DeckId, DeckState, LoopRange, PlayState, TrackInfo};
 
 /// One entry of the sorted library the control page can load from.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -42,6 +42,18 @@ pub struct SimLoop {
     pub start_ms: f64,
     pub end_ms: f64,
     pub active: bool,
+}
+
+impl SimLoop {
+    /// The loop as the rest of the app sees it, only while it is running.
+    fn as_active_loop(self) -> Option<ActiveLoop> {
+        self.active.then_some(ActiveLoop {
+            range: Some(LoopRange {
+                start_ms: self.start_ms,
+                end_ms: self.end_ms,
+            }),
+        })
+    }
 }
 
 /// Everything about one deck, including what [`DeckState`] has no room for.
@@ -91,6 +103,7 @@ impl SimDeckView {
             track_id: self.track_id,
             playhead_ms: self.track_index.map(|_| self.position_ms),
             reported_at,
+            active_loop: self.loop_state.and_then(SimLoop::as_active_loop),
         }
     }
 }

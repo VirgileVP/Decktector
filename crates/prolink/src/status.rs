@@ -44,6 +44,16 @@ const STATUS_FLAGS_OFFSET: usize = 0x89;
 const BPM_OFFSET: usize = 0x92;
 const BEAT_COUNTER_OFFSET: usize = 0xa0;
 const BEAT_IN_BAR_OFFSET: usize = 0xa6;
+/// Loop bounds, sent only by a CDJ-3000 (whose packets are 0x200 bytes) and
+/// non-zero only while it is playing a loop.
+const LOOP_START_OFFSET: usize = 0x1b6;
+const LOOP_END_OFFSET: usize = 0x1be;
+/// A packet must reach past the loop end field to carry loop bounds.
+const LOOP_FIELDS_END: usize = LOOP_END_OFFSET + 4;
+/// Length of a CDJ-3000 status packet.
+const CDJ3000_PACKET_LEN: usize = 0x200;
+/// Loop positions are sent in units of 65.536 ms (`value * 65536 / 1000`).
+const LOOP_POSITION_UNIT_MS: f64 = 65_536.0 / 1_000.0;
 
 const FLAG_MASTER: u8 = 0x20;
 const FLAG_SYNCED: u8 = 0x10;
@@ -166,6 +176,14 @@ impl RawPlayState {
     }
 }
 
+/// Where a loop a player is playing starts and ends, in ms from the start of
+/// the track.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LoopBounds {
+    pub start_ms: f64,
+    pub end_ms: f64,
+}
+
 /// One player's self-reported state, as reconstructed from its most recent
 /// status packet.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -204,6 +222,10 @@ pub struct DeviceStatus {
     pub beat_in_bar: Option<u8>,
     /// Rekordbox track id; `None` when no track is loaded.
     pub track_id: Option<u32>,
+    /// The loop being played; `None` when the player isn't looping, or is
+    /// older than a CDJ-3000 and doesn't report loop bounds at all (it still
+    /// says it is looping through [`Self::play_state`]).
+    pub loop_bounds: Option<LoopBounds>,
 }
 
 /// [`DeviceStatus::track_type`] of a track analysed by rekordbox and listed
@@ -254,7 +276,35 @@ pub fn parse_status(data: &[u8], source_ip: IpAddr) -> Option<DeviceStatus> {
             .contains(&beat_in_bar_raw)
             .then_some(beat_in_bar_raw),
         track_id: (rekordbox_id != 0).then_some(rekordbox_id),
+        loop_bounds: parse_loop_bounds(data),
     })
+}
+
+/// The loop bounds of a CDJ-3000 packet, `None` for a shorter packet or when
+/// no loop is playing (both fields are then zero).
+fn parse_loop_bounds(data: &[u8]) -> Option<LoopBounds> {
+    if data.len() < LOOP_FIELDS_END {
+        return None;
+    }
+    let end_raw = read_u32(data, LOOP_END_OFFSET);
+    if end_raw == 0 {
+        return None;
+    }
+    Some(LoopBounds {
+        start_ms: f64::from(read_u32(data, LOOP_START_OFFSET)) * LOOP_POSITION_UNIT_MS,
+        end_ms: f64::from(end_raw) * LOOP_POSITION_UNIT_MS,
+    })
+}
+
+/// Grows a packet from [`build_status`] to a CDJ-3000's length and writes
+/// `bounds` into its loop fields, as a CDJ-3000 playing that loop would.
+pub fn write_loop_bounds(packet: &mut Vec<u8>, bounds: LoopBounds) {
+    if packet.len() < CDJ3000_PACKET_LEN {
+        packet.resize(CDJ3000_PACKET_LEN, 0);
+    }
+    let to_raw = |ms: f64| (ms / LOOP_POSITION_UNIT_MS).round() as u32;
+    write_u32(packet, LOOP_START_OFFSET, to_raw(bounds.start_ms));
+    write_u32(packet, LOOP_END_OFFSET, to_raw(bounds.end_ms));
 }
 
 /// Builds a well-formed status packet for the given fields, zero-filling
@@ -397,6 +447,75 @@ mod tests {
 
     fn source() -> IpAddr {
         IpAddr::V4(Ipv4Addr::new(192, 168, 1, 50))
+    }
+
+    fn looping_packet() -> Vec<u8> {
+        build_status(
+            3,
+            RawPlayState::Looping,
+            false,
+            false,
+            true,
+            0.0,
+            Some(124.0),
+            Some(32),
+            Some(1),
+            Some(12),
+        )
+    }
+
+    #[test]
+    fn a_cdj_3000_packet_carries_the_loop_it_is_playing() {
+        let mut bytes = looping_packet();
+        // 1_000 and 1_030 units of 65.536 ms: 65.536 s to 67.502 s.
+        bytes.resize(CDJ3000_PACKET_LEN, 0);
+        write_u32(&mut bytes, LOOP_START_OFFSET, 1_000);
+        write_u32(&mut bytes, LOOP_END_OFFSET, 1_030);
+
+        let bounds = parse_status(&bytes, source())
+            .and_then(|status| status.loop_bounds)
+            .expect("loop bounds");
+
+        assert!((bounds.start_ms - 65_536.0).abs() < 1e-6);
+        assert!((bounds.end_ms - 67_502.08).abs() < 1e-6);
+    }
+
+    #[test]
+    fn written_loop_bounds_read_back_to_the_nearest_unit() {
+        let mut bytes = looping_packet();
+        write_loop_bounds(
+            &mut bytes,
+            LoopBounds {
+                start_ms: 10_000.0,
+                end_ms: 12_000.0,
+            },
+        );
+
+        let bounds = parse_status(&bytes, source())
+            .and_then(|status| status.loop_bounds)
+            .expect("loop bounds");
+
+        assert_eq!(bytes.len(), CDJ3000_PACKET_LEN);
+        assert!((bounds.start_ms - 10_000.0).abs() <= LOOP_POSITION_UNIT_MS / 2.0);
+        assert!((bounds.end_ms - 12_000.0).abs() <= LOOP_POSITION_UNIT_MS / 2.0);
+    }
+
+    #[test]
+    fn a_cdj_3000_packet_outside_a_loop_has_no_loop_bounds() {
+        let mut bytes = looping_packet();
+        bytes.resize(CDJ3000_PACKET_LEN, 0);
+
+        let status = parse_status(&bytes, source()).expect("should parse");
+
+        assert_eq!(status.loop_bounds, None);
+    }
+
+    #[test]
+    fn an_older_players_packet_has_no_loop_bounds_even_while_looping() {
+        let status = parse_status(&looping_packet(), source()).expect("should parse");
+
+        assert_eq!(status.play_state, RawPlayState::Looping);
+        assert_eq!(status.loop_bounds, None);
     }
 
     #[test]

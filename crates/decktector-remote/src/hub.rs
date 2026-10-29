@@ -125,6 +125,7 @@ mod tests {
             track_id: None,
             playhead_ms: None,
             reported_at: 0.0,
+            active_loop: None,
         }
     }
 

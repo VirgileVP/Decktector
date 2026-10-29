@@ -423,6 +423,7 @@ fn wrap_into_loop(position_ms: f64, looped: SimLoop) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::{ActiveLoop, LoopRange};
     use crate::sim::test_support::{hot_cue, memory_cue, track_with_grid};
 
     const BPM: f64 = 120.0;
@@ -745,6 +746,27 @@ mod tests {
 
         deck.start_loop(8);
         assert_eq!(deck.view(false, false).loop_state.unwrap().end_ms, 7_000.0);
+    }
+
+    #[test]
+    fn the_deck_state_shows_a_running_loop_and_drops_it_on_exit() {
+        let mut deck = playing_deck();
+        deck.seek(3_300.0);
+        deck.start_loop(4);
+
+        assert_eq!(
+            deck.view(false, false).to_deck_state(0.0).active_loop,
+            Some(ActiveLoop {
+                range: Some(LoopRange {
+                    start_ms: 3_000.0,
+                    end_ms: 5_000.0
+                })
+            })
+        );
+
+        deck.reloop_exit();
+
+        assert_eq!(deck.view(false, false).to_deck_state(0.0).active_loop, None);
     }
 
     #[test]

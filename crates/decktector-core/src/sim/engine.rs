@@ -165,6 +165,7 @@ impl SimDeck {
             track_id: self.track.as_ref().map(|track| track.track_id),
             playhead_ms: self.track.as_ref().map(|_| self.playhead_ms),
             reported_at: epoch_ms(),
+            active_loop: None,
         }
     }
 }

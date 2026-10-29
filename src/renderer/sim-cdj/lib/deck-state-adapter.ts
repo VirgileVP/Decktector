@@ -19,6 +19,10 @@ export function toDeckState(view: SimDeckView, reportedAt: number): DeckState {
     beatInMeasure: view.beatInMeasure,
     trackId: view.trackId,
     playheadMs: view.trackIndex !== null ? view.positionMs : null,
-    reportedAt
+    reportedAt,
+    activeLoop:
+      view.loopState?.active === true
+        ? { range: { startMs: view.loopState.startMs, endMs: view.loopState.endMs } }
+        : null
   }
 }

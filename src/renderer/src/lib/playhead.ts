@@ -1,4 +1,5 @@
 import type { DeckState } from '../model'
+import { wrapIntoLoop } from './loop-range'
 
 /**
  * How far past its last status a playing deck's position is projected:
@@ -13,13 +14,15 @@ export const MAX_EXTRAPOLATION_MS = 1500
  * Status packets arrive at ~5 Hz; this makes the playhead move at 60 fps.
  * Once status stops arriving the playhead holds after
  * {@link MAX_EXTRAPOLATION_MS} rather than scrolling on for a deck that may
- * have stopped long ago.
+ * have stopped long ago. A deck in a loop whose bounds are known jumps back
+ * to the loop start at its end, as the player does.
  */
 export function estimatePlayheadMs(deck: DeckState | undefined, nowMs: number): number | null {
   if (!deck || deck.playheadMs === null) return null
   if (deck.playState !== 'playing') return deck.playheadMs
   const elapsedMs = Math.min(nowMs - deck.reportedAt, MAX_EXTRAPOLATION_MS)
-  return deck.playheadMs + elapsedMs * (1 + deck.pitch / 100)
+  const projectedMs = deck.playheadMs + elapsedMs * (1 + deck.pitch / 100)
+  return wrapIntoLoop(projectedMs, deck.activeLoop?.range ?? null)
 }
 
 export function formatTimeMs(ms: number): string {

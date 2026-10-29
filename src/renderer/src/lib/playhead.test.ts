@@ -17,6 +17,7 @@ function deck(overrides: Partial<DeckState> = {}): DeckState {
     trackId: null,
     playheadMs: 10_000,
     reportedAt: 1_000,
+    activeLoop: null,
     ...overrides
   }
 }
@@ -25,6 +26,16 @@ describe('estimatePlayheadMs', () => {
   it('projects a playing deck forward with its pitch', () => {
     // 500ms of wall time at +4% pitch.
     expect(estimatePlayheadMs(deck({ pitch: 4 }), 1_500)).toBe(10_520)
+  })
+
+  it('jumps back to the loop start when the projection runs past the loop end', () => {
+    const looping = deck({ activeLoop: { range: { startMs: 9_000, endMs: 10_200 } } })
+    // 500ms past 10_000 overshoots the end by 300ms.
+    expect(estimatePlayheadMs(looping, 1_500)).toBe(9_300)
+  })
+
+  it('projects straight on when the loop bounds are unknown', () => {
+    expect(estimatePlayheadMs(deck({ activeLoop: { range: null } }), 1_500)).toBe(10_500)
   })
 
   it('holds a paused deck where it was reported', () => {

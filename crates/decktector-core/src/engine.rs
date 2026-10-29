@@ -252,6 +252,7 @@ mod tests {
             track_id: None,
             playhead_ms: Some(1_000.0),
             reported_at: 0.0,
+            active_loop: None,
         }
     }
 

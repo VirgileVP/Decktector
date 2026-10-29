@@ -1,11 +1,18 @@
 import { useEffect, useRef } from 'react'
 
-import type { DeckId, TrackInfo, WaveformSegment } from '../model'
+import type { ActiveLoop, DeckId, LoopRange, TrackInfo, WaveformSegment } from '../model'
 import { prepareCanvas } from '../lib/canvas'
 import { canvasFont } from '../lib/canvas-font'
 import { startFrameLoop } from '../lib/frame-loop'
 import { canvasInk, type CanvasInk } from '../lib/ink'
 import { estimatePlayheadMs } from '../lib/playhead'
+import {
+  activeLoopKey,
+  drawLoopBadge,
+  fillLoopSpan,
+  strokeLoopEdges,
+  type LoopSpanStyle
+} from '../lib/waveform-loop'
 import { playheadX } from '../lib/waveform-playhead'
 import { stripCovers, stripRangeFor, stripWidthPx, type StripRange } from '../lib/waveform-strip'
 import { useSettings } from '../state/settings'
@@ -60,7 +67,8 @@ interface PaintedStrip {
  * Scrolling detailed waveform, mirrored around its center line: the
  * playhead stays fixed — in the middle, or on the left when the operator
  * prefers to see more of what is coming — while the waveform moves under it.
- * Cue/loop markers and beat-grid ticks are drawn in the same pass.
+ * Cue/loop markers and beat-grid ticks are drawn in the same pass, and a
+ * loop the deck is playing is tinted and badged over everything else.
  * Drawing happens in a rAF loop that reads the store directly, so the
  * playhead is interpolated at 60 fps between 5 Hz status packets.
  *
@@ -116,6 +124,7 @@ export function WaveformDetail({
       const waveform = track?.waveform
       const deck = useDecktectorStore.getState().decks[deckId]
       const playhead = estimatePlayheadMs(deck, Date.now())
+      const activeLoop = deck?.activeLoop ?? null
       const ink = canvasInk()
       // Read straight from the store: the rAF loop must not depend on a render.
       const mirrored = useSettings.getState().waveformMirrored
@@ -138,7 +147,7 @@ export function WaveformDetail({
       // decks settle on a fixed signature and stop drawing altogether.
       const playheadStep = hasWave ? Math.round(playhead / (msPerPx / dpr)) : 0
       const paletteKey = `${mirrored}|${smoothing}|${saturation}`
-      const signature = `${width}|${height}|${dpr}|${windowSec}|${paletteKey}|${playheadPosition}|${hasWave}|${playheadStep}`
+      const signature = `${width}|${height}|${dpr}|${windowSec}|${paletteKey}|${playheadPosition}|${hasWave}|${playheadStep}|${activeLoopKey(activeLoop)}`
       if (signature === lastSignature) return
       lastSignature = signature
 
@@ -166,6 +175,14 @@ export function WaveformDetail({
 
       // Loop regions first, under everything else
       drawLoopRegions(ctx, track, windowStartMs, windowEndMs, msPerPx, height)
+      const loopSpan = visibleLoopSpan(
+        activeLoop?.range ?? null,
+        windowStartMs,
+        windowEndMs,
+        msPerPx
+      )
+      const loopStyle: LoopSpanStyle = { top: 0, bottom: height, color: ink.activeLoop }
+      if (loopSpan) fillLoopSpan(ctx, loopSpan.x0, loopSpan.x1, loopStyle)
 
       const stripKey = `${msPerPx}|${width}|${height}|${dpr}|${paletteKey}`
       if (
@@ -204,6 +221,7 @@ export function WaveformDetail({
 
       drawBeatTicks(ctx, track, windowStartMs, windowEndMs, msPerPx, height, ink)
       drawCueMarkers(ctx, track, windowStartMs, windowEndMs, msPerPx, height, ink)
+      drawActiveLoopOverlay(ctx, activeLoop, loopSpan, loopStyle, width, ink)
 
       // Fixed playhead
       ctx.save()
@@ -414,6 +432,34 @@ function drawLoopRegions(
     ctx.fillRect(x0, FLAG_STRIP, x1 - x0, height - FLAG_STRIP - TICK_STRIP)
     ctx.globalAlpha = 1
   }
+}
+
+/** Canvas x of a loop's in and out points, or null when it is off screen. */
+function visibleLoopSpan(
+  range: LoopRange | null,
+  windowStartMs: number,
+  windowEndMs: number,
+  msPerPx: number
+): { x0: number; x1: number } | null {
+  if (!range || range.endMs < windowStartMs || range.startMs > windowEndMs) return null
+  return {
+    x0: (range.startMs - windowStartMs) / msPerPx,
+    x1: (range.endMs - windowStartMs) / msPerPx
+  }
+}
+
+/** The edges of the loop being played, when visible, and its LOOP badge. */
+function drawActiveLoopOverlay(
+  ctx: CanvasRenderingContext2D,
+  activeLoop: ActiveLoop | null,
+  span: { x0: number; x1: number } | null,
+  style: LoopSpanStyle,
+  width: number,
+  ink: CanvasInk
+): void {
+  if (!activeLoop) return
+  if (span) strokeLoopEdges(ctx, span.x0, span.x1, style)
+  drawLoopBadge(ctx, width, ink.activeLoop, ink.flagText)
 }
 
 function drawCueMarkers(

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { SimDeckView } from '@renderer/model/SimDeckView'
 
-import { driftMs, planPlayback, playbackRate, positionAt, wrapIntoLoop } from './follow-math'
+import { driftMs, planPlayback, playbackRate, positionAt } from './follow-math'
 
 const LOOP = { startMs: 1000, endMs: 3000 }
 
@@ -35,18 +35,6 @@ describe('playbackRate', () => {
     expect(playbackRate(0)).toBe(1)
     expect(playbackRate(8)).toBeCloseTo(1.08)
     expect(playbackRate(-100)).toBe(0)
-  })
-})
-
-describe('wrapIntoLoop', () => {
-  it('leaves positions before the loop end alone', () => {
-    expect(wrapIntoLoop(2500, LOOP)).toBe(2500)
-    expect(wrapIntoLoop(9000, null)).toBe(9000)
-  })
-
-  it('folds positions past the end back into the loop', () => {
-    expect(wrapIntoLoop(3500, LOOP)).toBe(1500)
-    expect(wrapIntoLoop(7500, LOOP)).toBe(1500)
   })
 })
 

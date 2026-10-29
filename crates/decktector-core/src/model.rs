@@ -75,6 +75,28 @@ pub struct DeckState {
     pub playhead_ms: Option<f64>,
     /// Epoch ms at which this state was computed (interpolation anchor).
     pub reported_at: f64,
+    /// The loop the deck is playing, null when it isn't looping.
+    #[serde(default)]
+    pub active_loop: Option<ActiveLoop>,
+}
+
+/// A loop a deck is playing right now.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "ActiveLoop.ts")]
+pub struct ActiveLoop {
+    /// Where the loop sits in the track; null when the player only says it
+    /// is looping (only a CDJ-3000 reports the loop's bounds).
+    pub range: Option<LoopRange>,
+}
+
+/// A stretch of a track, in ms from its start.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "LoopRange.ts")]
+pub struct LoopRange {
+    pub start_ms: f64,
+    pub end_ms: f64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]

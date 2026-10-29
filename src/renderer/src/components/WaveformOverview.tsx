@@ -5,6 +5,7 @@ import { prepareCanvas } from '../lib/canvas'
 import { startFrameLoop } from '../lib/frame-loop'
 import { canvasInk, type CanvasInk } from '../lib/ink'
 import { estimatePlayheadMs } from '../lib/playhead'
+import { activeLoopKey, fillLoopSpan, strokeLoopEdges } from '../lib/waveform-loop'
 import { useSettings } from '../state/settings'
 import { useDecktectorStore } from '../state/store'
 
@@ -72,6 +73,7 @@ export function WaveformOverview({
       const hasWave = track !== null && preview !== null && preview.length > 0
       const deck = useDecktectorStore.getState().decks[deckId]
       const playhead = hasWave ? estimatePlayheadMs(deck, Date.now()) : null
+      const loopRange = deck?.activeLoop?.range ?? null
       // A playhead is only ever set when `hasWave` held, i.e. with a track in
       // hand; the fallback duration just keeps the arithmetic total.
       const durationMs = track?.durationMs ?? 1
@@ -82,7 +84,7 @@ export function WaveformOverview({
       const playedDevice = Math.round(playedX * dpr)
 
       const layerKey = `${width}|${height}|${dpr}|${mirrored}|${ink.played}|${ink.unplayed}`
-      const signature = `${layerKey}|${hasWave}|${playhead !== null}|${playedDevice}`
+      const signature = `${layerKey}|${hasWave}|${playhead !== null}|${playedDevice}|${activeLoopKey(deck?.activeLoop)}`
       if (signature === lastSignature) return
       lastSignature = signature
 
@@ -133,6 +135,14 @@ export function WaveformOverview({
           )
         }
         ctx.imageSmoothingEnabled = smoothing
+      }
+
+      if (loopRange) {
+        const x0 = (loopRange.startMs / durationMs) * width
+        const x1 = (loopRange.endMs / durationMs) * width
+        const style = { top: 0, bottom: height, color: ink.activeLoop }
+        fillLoopSpan(ctx, x0, x1, style)
+        strokeLoopEdges(ctx, x0, x1, style)
       }
 
       if (playhead !== null) {

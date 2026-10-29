@@ -109,6 +109,7 @@ mod tests {
                 track_id: None,
                 playhead_ms: None,
                 reported_at: 0.0,
+                active_loop: None,
             }),
         ]
     }
@@ -136,6 +137,7 @@ mod tests {
             track_id: Some(7),
             playhead_ms: Some(12_345.0),
             reported_at: 999.0,
+            active_loop: None,
         };
         let event = EngineEvent::DeckState(deck.clone());
 

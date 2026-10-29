@@ -1,7 +1,7 @@
 //! Maps a raw [`DeviceStatus`] onto decktector's domain [`DeckState`].
 
-use decktector_core::model::{DeckState, PlayState};
-use prolink::status::{DeviceStatus, RawPlayState};
+use decktector_core::model::{ActiveLoop, DeckState, LoopRange, PlayState};
+use prolink::status::{DeviceStatus, LoopBounds, RawPlayState};
 
 /// Builds the deck state a status packet implies, anchored at `now_ms`.
 /// `playhead_ms` comes from [`crate::position::PositionTracker`] rather than
@@ -22,6 +22,20 @@ pub fn to_deck_state(status: &DeviceStatus, playhead_ms: Option<f64>, now_ms: f6
         track_id: status.track_id,
         playhead_ms,
         reported_at: now_ms,
+        active_loop: active_loop(status),
+    }
+}
+
+/// The loop a player is in. A CDJ-3000 sends the loop's bounds whenever it
+/// is in one, paused or not; older players only say they are playing a loop,
+/// through their play state, and never where it is.
+fn active_loop(status: &DeviceStatus) -> Option<ActiveLoop> {
+    match status.loop_bounds {
+        Some(LoopBounds { start_ms, end_ms }) => Some(ActiveLoop {
+            range: Some(LoopRange { start_ms, end_ms }),
+        }),
+        None if status.play_state == RawPlayState::Looping => Some(ActiveLoop { range: None }),
+        None => None,
     }
 }
 
@@ -65,7 +79,59 @@ mod tests {
             beat_count: None,
             beat_in_bar: None,
             track_id: None,
+            loop_bounds: None,
         })
+    }
+
+    #[test]
+    fn a_deck_outside_a_loop_has_no_active_loop() {
+        let deck = to_deck_state(
+            &status(|mut status| {
+                status.play_state = RawPlayState::Playing;
+                status
+            }),
+            None,
+            1_000.0,
+        );
+        assert_eq!(deck.active_loop, None);
+    }
+
+    #[test]
+    fn an_older_player_looping_has_a_loop_without_bounds() {
+        let deck = to_deck_state(
+            &status(|mut status| {
+                status.play_state = RawPlayState::Looping;
+                status
+            }),
+            None,
+            1_000.0,
+        );
+        assert_eq!(deck.active_loop, Some(ActiveLoop { range: None }));
+    }
+
+    #[test]
+    fn a_cdj_3000_in_a_loop_reports_its_bounds_even_while_paused() {
+        let deck = to_deck_state(
+            &status(|mut status| {
+                status.play_state = RawPlayState::PausedAway;
+                status.loop_bounds = Some(LoopBounds {
+                    start_ms: 4_000.0,
+                    end_ms: 6_000.0,
+                });
+                status
+            }),
+            None,
+            1_000.0,
+        );
+        assert_eq!(
+            deck.active_loop,
+            Some(ActiveLoop {
+                range: Some(LoopRange {
+                    start_ms: 4_000.0,
+                    end_ms: 6_000.0
+                })
+            })
+        );
     }
 
     #[test]

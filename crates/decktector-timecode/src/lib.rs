@@ -546,6 +546,7 @@ mod tests {
             track_id: None,
             playhead_ms: Some(playhead_ms),
             reported_at,
+            active_loop: None,
         }
     }
 

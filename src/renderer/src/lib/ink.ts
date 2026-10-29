@@ -19,6 +19,8 @@ export interface CanvasInk {
   overlayText: string
   /** Letter inside a hot cue flag, on top of the cue color. */
   flagText: string
+  /** The loop a deck is playing right now, and its LOOP badge. */
+  activeLoop: string
 }
 
 const INK_VARS: Record<keyof CanvasInk, string> = {
@@ -29,7 +31,8 @@ const INK_VARS: Record<keyof CanvasInk, string> = {
   gridDownbeat: '--grid-downbeat',
   gridBeat: '--grid-beat',
   overlayText: '--overlay-text',
-  flagText: '--flag-text'
+  flagText: '--flag-text',
+  activeLoop: '--loop-active'
 }
 
 let cache: { theme: string; ink: CanvasInk } | null = null

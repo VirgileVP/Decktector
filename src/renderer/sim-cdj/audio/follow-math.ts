@@ -1,4 +1,6 @@
+import { wrapIntoLoop } from '@renderer/lib/loop-range'
 import { MAX_EXTRAPOLATION_MS } from '@renderer/lib/playhead'
+import type { LoopRange } from '@renderer/model/LoopRange'
 import type { SimDeckView } from '@renderer/model/SimDeckView'
 
 import { MS_PER_SECOND } from './audio-constants'
@@ -6,10 +8,7 @@ import { MS_PER_SECOND } from './audio-constants'
 const PERCENT = 100
 
 /** A loop to repeat, in track milliseconds. */
-export interface AudioLoop {
-  startMs: number
-  endMs: number
-}
+export type AudioLoop = LoopRange
 
 /** What a deck's audio should be doing right now. */
 export type PlaybackTarget =
@@ -27,13 +26,6 @@ export interface PlaybackAnchor {
 /** Playback rate for a pitch in percent. Pitch follows tempo: there is no key lock. */
 export function playbackRate(effectivePitch: number): number {
   return 1 + effectivePitch / PERCENT
-}
-
-/** Folds a position past the end of a loop back into it. */
-export function wrapIntoLoop(positionMs: number, loop: AudioLoop | null): number {
-  if (loop === null || positionMs < loop.endMs) return positionMs
-  const length = loop.endMs - loop.startMs
-  return loop.startMs + ((positionMs - loop.startMs) % length)
 }
 
 /** Position of an anchored playback at an audio clock time. */

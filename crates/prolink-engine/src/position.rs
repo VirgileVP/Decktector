@@ -97,6 +97,7 @@ mod tests {
             beat_count,
             beat_in_bar: Some(1),
             track_id: Some(1),
+            loop_bounds: None,
         }
     }
 

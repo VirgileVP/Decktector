@@ -7,6 +7,7 @@
  * can import the whole model from a single path.
  */
 
+export type { ActiveLoop } from './ActiveLoop'
 export type { BeatGridBeat } from './BeatGridBeat'
 export type { CueKind } from './CueKind'
 export type { DeckState } from './DeckState'
@@ -16,6 +17,7 @@ export type { DeviceKind } from './DeviceKind'
 export type { DiscoveredDevice } from './DiscoveredDevice'
 export type { EngineSnapshot } from './EngineSnapshot'
 export type { FrameRate } from './FrameRate'
+export type { LoopRange } from './LoopRange'
 export type { NetworkInterfaceInfo } from './NetworkInterfaceInfo'
 export type { NetworkState } from './NetworkState'
 export type { PlayState } from './PlayState'
