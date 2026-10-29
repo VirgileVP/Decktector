@@ -23,4 +23,9 @@ useTls: boolean,
 /**
  * Maximum number of concurrent client devices allowed to connect.
  */
-maxClients: number, };
+maxClients: number, 
+/**
+ * Whether every route but `/health` demands the access token. Off, the
+ * server hands no token out and anyone who reaches the port gets in.
+ */
+requireToken: boolean, };

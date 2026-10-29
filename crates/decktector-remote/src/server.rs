@@ -5,7 +5,9 @@
 //! applied — the same shape `TimecodeService` uses for its own generator.
 //! The token gate is a guard against casual access on a shared venue
 //! network, not hardened auth: anyone who can sniff the LAN or read the QR
-//! code gets in, same as anyone standing at the booth.
+//! code gets in, same as anyone standing at the booth. It can be turned off
+//! ([`RemoteConfig::require_token`]) on a private booth network, where a
+//! plain bookmarkable URL is worth more than the gate.
 
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -42,6 +44,12 @@ fn default_max_clients() -> u32 {
     DEFAULT_MAX_CLIENTS
 }
 
+/// The token gate is on unless the user explicitly turns it off — a config
+/// saved by a build that predates the option keeps its gate.
+fn default_require_token() -> bool {
+    true
+}
+
 /// How many status updates a lagging subscriber may miss before it has to
 /// re-hydrate from [`RemoteService::status`].
 const STATUS_BUFFER: usize = 16;
@@ -70,6 +78,10 @@ pub struct RemoteConfig {
     /// Maximum number of concurrent client devices allowed to connect.
     #[serde(default = "default_max_clients")]
     pub max_clients: u32,
+    /// Whether every route but `/health` demands the access token. Off, the
+    /// server hands no token out and anyone who reaches the port gets in.
+    #[serde(default = "default_require_token")]
+    pub require_token: bool,
 }
 
 /// What the settings panel renders, and what remote browsers are told.
@@ -80,7 +92,8 @@ pub struct RemoteStatus {
     pub listening: bool,
     pub port: u16,
     /// Access token the client must present, regenerated every time the
-    /// server starts. `None` while the server is off.
+    /// server starts. `None` while the server is off, or when the token
+    /// gate is turned off.
     pub token: Option<String>,
     /// Number of browsers currently connected, for the settings panel.
     pub client_count: u32,
@@ -90,6 +103,25 @@ pub struct RemoteStatus {
     pub use_tls: bool,
     /// Maximum number of concurrent client devices allowed.
     pub max_clients: u32,
+    /// Whether the active listener demands the access token.
+    pub require_token: bool,
+}
+
+impl RemoteStatus {
+    /// The status of a listener that is not running — turned off, or failed
+    /// to start with `error`.
+    fn stopped(config: &RemoteConfig, port: u16, error: Option<String>) -> Self {
+        Self {
+            listening: false,
+            port,
+            token: None,
+            client_count: 0,
+            error,
+            use_tls: config.use_tls,
+            max_clients: config.max_clients,
+            require_token: config.require_token,
+        }
+    }
 }
 
 /// State a request needs to validate its token and reach the running hub.
@@ -103,23 +135,17 @@ struct Inner {
 
 impl Inner {
     fn initial() -> Self {
-        let status = RemoteStatus {
-            listening: false,
+        let config = RemoteConfig {
+            enabled: false,
             port: DEFAULT_REMOTE_PORT,
-            token: None,
-            client_count: 0,
-            error: None,
+            interface: String::new(),
             use_tls: false,
             max_clients: DEFAULT_MAX_CLIENTS,
+            require_token: default_require_token(),
         };
+        let status = RemoteStatus::stopped(&config, DEFAULT_REMOTE_PORT, None);
         Self {
-            config: RemoteConfig {
-                enabled: false,
-                port: DEFAULT_REMOTE_PORT,
-                interface: String::new(),
-                use_tls: false,
-                max_clients: DEFAULT_MAX_CLIENTS,
-            },
+            config,
             token: None,
             client_count: 0,
             listener: None,
@@ -164,25 +190,17 @@ impl RemoteService {
         self.stop_listener();
 
         if !config.enabled {
-            self.publish_status(
-                RemoteStatus {
-                    listening: false,
-                    port: config.port,
-                    token: None,
-                    client_count: 0,
-                    error: None,
-                    use_tls: config.use_tls,
-                    max_clients: config.max_clients,
-                },
-                config,
-            );
+            self.publish_status(RemoteStatus::stopped(&config, config.port, None), config);
             return Ok(());
         }
 
-        let token = generate_token();
+        let token = config.require_token.then(generate_token);
         {
+            // The gate reads `config.require_token` on every request, so it
+            // must be in place before the listener can accept one.
             let mut inner = self.lock();
-            inner.token = Some(token.clone());
+            inner.config = config.clone();
+            inner.token = token.clone();
             inner.client_count = 0;
         }
 
@@ -200,15 +218,7 @@ impl RemoteService {
                 tracing::warn!(%error, port = config.port, "failed to bind the remote server's port");
                 self.lock().token = None;
                 self.publish_status(
-                    RemoteStatus {
-                        listening: false,
-                        port: config.port,
-                        token: None,
-                        client_count: 0,
-                        error: Some(error.to_string()),
-                        use_tls: config.use_tls,
-                        max_clients: config.max_clients,
-                    },
+                    RemoteStatus::stopped(&config, config.port, Some(error.to_string())),
                     config,
                 );
                 return Ok(());
@@ -235,15 +245,11 @@ impl RemoteService {
                         tracing::error!(%error, "failed to generate self-signed TLS certificate");
                         self.lock().token = None;
                         self.publish_status(
-                            RemoteStatus {
-                                listening: false,
-                                port: bound_port,
-                                token: None,
-                                client_count: 0,
-                                error: Some(format!("TLS setup failed: {error}")),
-                                use_tls: config.use_tls,
-                                max_clients: config.max_clients,
-                            },
+                            RemoteStatus::stopped(
+                                &config,
+                                bound_port,
+                                Some(format!("TLS setup failed: {error}")),
+                            ),
                             config,
                         );
                         return Ok(());
@@ -255,15 +261,11 @@ impl RemoteService {
                     tracing::error!(%error, "failed to build rustls config");
                     self.lock().token = None;
                     self.publish_status(
-                        RemoteStatus {
-                            listening: false,
-                            port: bound_port,
-                            token: None,
-                            client_count: 0,
-                            error: Some(format!("TLS setup failed: {error}")),
-                            use_tls: config.use_tls,
-                            max_clients: config.max_clients,
-                        },
+                        RemoteStatus::stopped(
+                            &config,
+                            bound_port,
+                            Some(format!("TLS setup failed: {error}")),
+                        ),
                         config,
                     );
                     return Ok(());
@@ -275,15 +277,11 @@ impl RemoteService {
                     tracing::error!(%error, "failed to create TLS server from tcp listener");
                     self.lock().token = None;
                     self.publish_status(
-                        RemoteStatus {
-                            listening: false,
-                            port: bound_port,
-                            token: None,
-                            client_count: 0,
-                            error: Some(format!("TLS server initialization failed: {error}")),
-                            use_tls: config.use_tls,
-                            max_clients: config.max_clients,
-                        },
+                        RemoteStatus::stopped(
+                            &config,
+                            bound_port,
+                            Some(format!("TLS server initialization failed: {error}")),
+                        ),
                         config,
                     );
                     return Ok(());
@@ -301,15 +299,11 @@ impl RemoteService {
                     tracing::error!(%error, "failed to create server from tcp listener");
                     self.lock().token = None;
                     self.publish_status(
-                        RemoteStatus {
-                            listening: false,
-                            port: bound_port,
-                            token: None,
-                            client_count: 0,
-                            error: Some(format!("Server initialization failed: {error}")),
-                            use_tls: config.use_tls,
-                            max_clients: config.max_clients,
-                        },
+                        RemoteStatus::stopped(
+                            &config,
+                            bound_port,
+                            Some(format!("Server initialization failed: {error}")),
+                        ),
                         config,
                     );
                     return Ok(());
@@ -327,11 +321,12 @@ impl RemoteService {
             RemoteStatus {
                 listening: true,
                 port: bound_port,
-                token: Some(token),
+                token,
                 client_count: 0,
                 error: None,
                 use_tls: config.use_tls,
                 max_clients: config.max_clients,
+                require_token: config.require_token,
             },
             config,
         );
@@ -360,9 +355,10 @@ impl RemoteService {
 
     /// Rotates the access token immediately and disconnects all currently
     /// connected clients, forcing re-authentication with the new token.
+    /// Does nothing while the token gate is off: there is no link to rotate.
     pub fn regenerate_token(&self) {
         let mut inner = self.lock();
-        if !inner.last_status.listening {
+        if !inner.last_status.listening || !inner.config.require_token {
             return;
         }
         let token = generate_token();
@@ -387,8 +383,13 @@ impl RemoteService {
         inner.client_count >= limit
     }
 
-    fn token_matches(&self, provided: Option<&str>) -> bool {
+    /// Whether a request presenting `provided` may pass the gate —
+    /// always, when the token gate is turned off.
+    fn is_authorized(&self, provided: Option<&str>) -> bool {
         let inner = self.lock();
+        if !inner.config.require_token {
+            return true;
+        }
         match (&inner.token, provided) {
             (Some(expected), Some(given)) => expected == given,
             _ => false,
@@ -609,7 +610,9 @@ fn token_cookie_header(token: &str, use_tls: bool) -> Option<axum::http::HeaderV
 
 /// Gates the asset routes behind the same token every other remote route
 /// requires, so there is one gate for the whole surface rather than assets
-/// being an unauthenticated side door into the app.
+/// being an unauthenticated side door into the app. With the gate turned
+/// off every request passes, and no cookie is set since no token is handed
+/// out.
 async fn require_token(
     State(service): State<Arc<RemoteService>>,
     Query(query): Query<TokenQuery>,
@@ -617,16 +620,19 @@ async fn require_token(
     next: Next,
 ) -> Response {
     let token = resolve_token(&query, request.headers());
-    if !service.token_matches(token.as_deref()) {
+    if !service.is_authorized(token.as_deref()) {
         return (
             axum::http::StatusCode::UNAUTHORIZED,
             "invalid or missing token",
         )
             .into_response();
     }
-    let use_tls = service.lock().config.use_tls;
+    let (use_tls, require_token) = {
+        let inner = service.lock();
+        (inner.config.use_tls, inner.config.require_token)
+    };
     let mut response = next.run(request).await;
-    if let Some(token) = query.token.as_deref() {
+    if let Some(token) = query.token.as_deref().filter(|_| require_token) {
         if let Some(value) = token_cookie_header(token, use_tls) {
             response.headers_mut().insert(header::SET_COOKIE, value);
         }
@@ -641,7 +647,7 @@ async fn ws_handler(
     upgrade: WebSocketUpgrade,
 ) -> Response {
     let token = resolve_token(&query, &headers);
-    if !service.token_matches(token.as_deref()) {
+    if !service.is_authorized(token.as_deref()) {
         return (
             axum::http::StatusCode::UNAUTHORIZED,
             "invalid or missing token",
@@ -764,6 +770,7 @@ mod tests {
                 interface: String::new(),
                 use_tls: false,
                 max_clients: DEFAULT_MAX_CLIENTS,
+                require_token: true,
             })
             .await
             .expect("bind succeeds");
@@ -773,8 +780,43 @@ mod tests {
         let rotated_token = service.status().token.expect("service still has a token");
 
         assert_ne!(initial_token, rotated_token);
-        assert!(service.token_matches(Some(&rotated_token)));
-        assert!(!service.token_matches(Some(&initial_token)));
+        assert!(service.is_authorized(Some(&rotated_token)));
+        assert!(!service.is_authorized(Some(&initial_token)));
+    }
+
+    #[tokio::test]
+    async fn with_the_token_gate_off_rotation_hands_out_no_token() {
+        let engine: Arc<dyn Engine> = Arc::new(SimEngine::new(2));
+        let service = RemoteService::new(engine, AssetSource::DevServer(1420));
+        service
+            .clone()
+            .set_config(RemoteConfig {
+                enabled: true,
+                port: 0,
+                interface: String::new(),
+                use_tls: false,
+                max_clients: DEFAULT_MAX_CLIENTS,
+                require_token: false,
+            })
+            .await
+            .expect("bind succeeds");
+
+        service.regenerate_token();
+
+        assert!(service.status().token.is_none());
+        assert!(service.is_authorized(None));
+    }
+
+    /// A settings blob saved before the option existed has no
+    /// `requireToken` key; it must come back with the gate on, not open.
+    #[test]
+    fn a_config_saved_before_the_option_existed_keeps_the_token_gate() {
+        let config: RemoteConfig = serde_json::from_str(
+            r#"{"enabled":true,"port":7420,"interface":"","useTls":false,"maxClients":4}"#,
+        )
+        .expect("legacy config deserializes");
+
+        assert!(config.require_token);
     }
 
     /// A browser has no way to repeat a page's own query string onto the
@@ -806,6 +848,7 @@ mod tests {
                 interface: String::new(),
                 use_tls: false,
                 max_clients: DEFAULT_MAX_CLIENTS,
+                require_token: true,
             })
             .await
             .expect("bind succeeds");
@@ -869,6 +912,7 @@ mod tests {
                 interface: String::new(),
                 use_tls: true,
                 max_clients: DEFAULT_MAX_CLIENTS,
+                require_token: true,
             })
             .await
             .expect("bind succeeds");

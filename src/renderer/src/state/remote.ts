@@ -12,7 +12,8 @@ const IDLE_STATUS: RemoteStatus = {
   clientCount: 0,
   error: null,
   useTls: false,
-  maxClients: REMOTE_DEFAULT_MAX_CLIENTS
+  maxClients: REMOTE_DEFAULT_MAX_CLIENTS,
+  requireToken: true
 }
 
 export const useRemoteStore = create<RemoteStatus>(() => IDLE_STATUS)

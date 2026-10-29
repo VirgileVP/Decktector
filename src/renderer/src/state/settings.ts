@@ -237,6 +237,10 @@ export interface Settings {
   remoteUseTls: boolean
   /** Maximum number of concurrent client devices allowed to connect. */
   remoteMaxClients: number
+  /** Whether the remote view demands the access token carried in its link.
+   *  Off, anyone who reaches the port gets in — meant for a private booth
+   *  network, where a plain bookmarkable URL is worth more than the gate. */
+  remoteRequireToken: boolean
   /** Name of the network adapter Pro DJ Link presence binds to — picked from
    *  `list_network_interfaces`, not typed in. Empty means automatic: the
    *  adapter on the first player's subnet. */
@@ -306,6 +310,7 @@ export const DEFAULT_SETTINGS: Settings = {
   remoteInterface: NO_NETWORK_INTERFACE,
   remoteUseTls: false,
   remoteMaxClients: REMOTE_DEFAULT_MAX_CLIENTS,
+  remoteRequireToken: true,
   prolinkInterface: NO_NETWORK_INTERFACE,
   ...FULL_DECK_VIEW,
   deckCueListWidth: 168,
@@ -384,6 +389,7 @@ function pickSettings(state: Settings): Settings {
     remoteInterface,
     remoteUseTls,
     remoteMaxClients,
+    remoteRequireToken,
     prolinkInterface,
     showDeckNumber,
     showDeckTrackInfo,
@@ -430,6 +436,7 @@ function pickSettings(state: Settings): Settings {
     remoteInterface,
     remoteUseTls,
     remoteMaxClients,
+    remoteRequireToken,
     prolinkInterface,
     showDeckNumber,
     showDeckTrackInfo,

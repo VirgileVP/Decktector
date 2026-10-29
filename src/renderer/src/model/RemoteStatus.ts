@@ -6,7 +6,8 @@
 export type RemoteStatus = { listening: boolean, port: number, 
 /**
  * Access token the client must present, regenerated every time the
- * server starts. `None` while the server is off.
+ * server starts. `None` while the server is off, or when the token
+ * gate is turned off.
  */
 token: string | null, 
 /**
@@ -24,4 +25,8 @@ useTls: boolean,
 /**
  * Maximum number of concurrent client devices allowed.
  */
-maxClients: number, };
+maxClients: number, 
+/**
+ * Whether the active listener demands the access token.
+ */
+requireToken: boolean, };

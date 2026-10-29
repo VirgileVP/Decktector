@@ -18,6 +18,10 @@ use tokio_tungstenite::tungstenite::Message;
 const TEST_DECK_COUNT: u8 = 2;
 
 async fn start_test_service() -> (Arc<RemoteService>, u16) {
+    start_test_service_with_token_gate(true).await
+}
+
+async fn start_test_service_with_token_gate(require_token: bool) -> (Arc<RemoteService>, u16) {
     let engine: Arc<dyn Engine> = Arc::new(SimEngine::new(TEST_DECK_COUNT));
     let service = RemoteService::new(engine, AssetSource::DevServer(1420));
 
@@ -29,6 +33,7 @@ async fn start_test_service() -> (Arc<RemoteService>, u16) {
             interface: String::new(),
             use_tls: false,
             max_clients: 4,
+            require_token,
         })
         .await
         .expect("set_config does not fail on a successful bind");
@@ -112,6 +117,40 @@ async fn connecting_with_the_wrong_token_is_rejected() {
     );
 }
 
+#[tokio::test]
+async fn with_the_token_gate_off_no_token_is_handed_out_and_a_bare_socket_connects() {
+    let (service, port) = start_test_service_with_token_gate(false).await;
+
+    let status = service.status();
+    assert!(!status.require_token);
+    assert!(
+        status.token.is_none(),
+        "no token should be handed out while the gate is off"
+    );
+
+    let url = format!("ws://127.0.0.1:{port}/ws");
+    let (mut socket, _response) = tokio::time::timeout(
+        Duration::from_secs(5),
+        tokio_tungstenite::connect_async(url),
+    )
+    .await
+    .expect("connection attempt did not hang")
+    .expect("the server accepts a socket without a token while the gate is off");
+    let _ = socket.close(None).await;
+}
+
+#[tokio::test]
+async fn with_the_token_gate_off_track_endpoints_skip_the_gate() {
+    let (_service, port) = start_test_service_with_token_gate(false).await;
+
+    let status = get_status_line(port, "/track/999999/artwork").await;
+
+    assert!(
+        status.contains("404"),
+        "expected the handler's 404 rather than the gate's 401, got: {status}"
+    );
+}
+
 /// A minimal HTTP/1.1 GET over a raw TCP connection, just enough to read a
 /// status line back — no need to pull in a full HTTP client crate for two
 /// assertions.
@@ -192,6 +231,7 @@ async fn max_clients_limit_is_enforced() {
             interface: String::new(),
             use_tls: false,
             max_clients: 1,
+            require_token: true,
         })
         .await
         .expect("service binds");
@@ -279,6 +319,7 @@ async fn tls_server_starts_and_reports_listening() {
             interface: String::new(),
             use_tls: true,
             max_clients: 4,
+            require_token: true,
         })
         .await
         .expect("TLS service binds successfully");

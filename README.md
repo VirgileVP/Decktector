@@ -256,6 +256,10 @@ guard against someone on the same network stumbling onto the feed, not hardened
 authentication: **a venue network is not a trusted network**, and nothing sensitive
 should be exposed through this beyond what is already on screen.
 
+**Require access token** (on by default) can be turned off for a private booth
+network: the link becomes a plain address that stays the same across restarts, and
+anyone who can reach the port sees the feed.
+
 The same settings tab narrows who can reach it:
 
 - **Encrypt traffic (HTTPS / WSS)** serves the page and its WebSocket over TLS, with

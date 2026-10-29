@@ -126,10 +126,9 @@ export function SettingsDialog({
   )
   const remoteHost = selectedInterface?.ip ?? networkInterfaces[0]?.ip ?? 'localhost'
   const scheme = remoteStatus.useTls ? 'https' : 'http'
-  const remoteUrl =
-    remoteStatus.listening && remoteStatus.token
-      ? `${scheme}://${remoteHost}:${remoteStatus.port}/?token=${remoteStatus.token}`
-      : null
+  const remoteUrl = remoteStatus.listening
+    ? `${scheme}://${remoteHost}:${remoteStatus.port}/${remoteStatus.token ? `?token=${remoteStatus.token}` : ''}`
+    : null
 
   const handleRegenerateToken = (): void => {
     if (!isTauri()) return
@@ -446,6 +445,18 @@ export function SettingsDialog({
                 checked={settings.remoteUseTls}
                 onChange={update('remoteUseTls')}
               />
+              <ToggleRow
+                label="Require access token"
+                hint="Puts a random token in the link and QR code, renewed on every start. Off, the link is a plain address anyone on the network can open."
+                checked={settings.remoteRequireToken}
+                onChange={update('remoteRequireToken')}
+              />
+              {!settings.remoteRequireToken && (
+                <p className="setting-hint setting-warning">
+                  ⚠️ Without a token, any device that can reach this port sees the remote view. Use
+                  it only on a private booth network.
+                </p>
+              )}
               <SliderRow
                 label="Max connected devices"
                 hint="Limits simultaneous viewers to avoid overloading the network on open festival Wi-Fi"
@@ -506,16 +517,18 @@ export function SettingsDialog({
                     {remoteStatus.clientCount} / {settings.remoteMaxClients}{' '}
                     {remoteStatus.clientCount === 1 ? 'browser' : 'browsers'} connected
                   </p>
-                  <div style={{ marginTop: '8px' }}>
-                    <button
-                      type="button"
-                      className="setting-btn"
-                      onClick={handleRegenerateToken}
-                      title="Generates a new token and disconnects all currently active browsers"
-                    >
-                      ↻ Rotate link & disconnect devices
-                    </button>
-                  </div>
+                  {remoteStatus.requireToken && (
+                    <div style={{ marginTop: '8px' }}>
+                      <button
+                        type="button"
+                        className="setting-btn"
+                        onClick={handleRegenerateToken}
+                        title="Generates a new token and disconnects all currently active browsers"
+                      >
+                        ↻ Rotate link & disconnect devices
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
             </section>
