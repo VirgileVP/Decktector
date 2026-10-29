@@ -6,6 +6,11 @@ authors.workspace = true
 license.workspace = true
 description = "Pro DJ Link protocol client: virtual CDJ, device discovery, player status and metadata"
 
+[features]
+# Exposes `prolink::test_support` (synthetic `export.pdb` builder) to other
+# crates' tests. Off by default so it never ships in a normal build.
+test-support = []
+
 [dependencies]
 anyhow = { workspace = true }
 # Wall-clock stamps for `capture::append_note` — a session's notes are read
@@ -64,3 +69,6 @@ windows-sys = { version = "0.61", features = [
 # cycle even for dev-only edges.
 binrw = "0.14"
 rekordcrate = { workspace = true }
+# Lets prolink's own integration tests (`tests/support`) reach
+# `prolink::test_support`, which is behind the feature above.
+prolink = { path = ".", features = ["test-support"] }

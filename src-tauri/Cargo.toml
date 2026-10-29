@@ -21,6 +21,9 @@ anyhow = { workspace = true }
 chrono = { workspace = true }
 decktector-core = { workspace = true }
 decktector-remote = { workspace = true }
+# Serves the CDJ page that drives the manual simulation (`npm run dev:sim`);
+# only started in that mode.
+decktector-sim-control = { workspace = true }
 decktector-timecode = { workspace = true }
 keepawake = "0.6"
 prolink = { workspace = true }

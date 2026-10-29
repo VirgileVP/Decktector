@@ -1,0 +1,51 @@
+.mixer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hw-gap);
+  align-self: stretch;
+  padding: 10px;
+  border-radius: var(--hw-radius);
+  background: linear-gradient(180deg, var(--hw-metal), var(--hw-body));
+  border: 1px solid var(--hw-body-edge);
+}
+
+.mixer-channels {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  min-height: 260px;
+}
+
+.mixer-channel {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.onair-lamp {
+  align-self: center;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--bg-inset);
+  border: 1px solid var(--hw-body-edge);
+}
+
+.onair-lamp-lit {
+  background: rgb(var(--onair-rgb));
+  border-color: rgb(var(--onair-rgb));
+  box-shadow: 0 0 10px rgb(var(--onair-rgb) / 0.8);
+}
+
+.mixer-master {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mixer-master-slider {
+  width: 100%;
+  accent-color: var(--hw-label);
+}

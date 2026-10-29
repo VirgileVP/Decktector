@@ -1058,6 +1058,7 @@ dependencies = [
  "chrono",
  "decktector-core",
  "decktector-remote",
+ "decktector-sim-control",
  "decktector-timecode",
  "keepawake",
  "prolink",
@@ -1113,6 +1114,27 @@ dependencies = [
  "qrcode",
  "rand 0.9.5",
  "rcgen",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-tungstenite 0.24.0",
+ "tower",
+ "tower-http",
+ "tracing",
+ "ts-rs",
+]
+
+[[package]]
+name = "decktector-sim-control"
+version = "1.5.1"
+dependencies = [
+ "anyhow",
+ "axum",
+ "decktector-core",
+ "decktector-remote",
+ "futures-util",
+ "http-body-util",
  "serde",
  "serde_json",
  "tempfile",
@@ -3527,6 +3549,7 @@ dependencies = [
  "chrono",
  "if-addrs",
  "libc",
+ "prolink",
  "rekordcrate",
  "rusqlite",
  "serde",
@@ -3555,6 +3578,7 @@ dependencies = [
  "rekordcrate",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "tracing",
 ]

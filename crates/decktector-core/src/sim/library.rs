@@ -27,6 +27,9 @@ use super::tracks::{build_sim_track, SIM_TRACKS};
 /// Environment variable naming a fixture file of recorded tracks.
 pub const SIM_TRACKS_ENV: &str = "DECKTECTOR_SIM_TRACKS";
 
+/// First track id handed out; real player track ids are unrelated small ints.
+pub(super) const FIRST_TRACK_ID: u32 = 100;
+
 /// The set of tracks the simulated decks draw from.
 pub struct SimLibrary {
     source: Source,
@@ -110,6 +113,17 @@ impl SimLibrary {
         self.len() == 0
     }
 
+    /// Every distinct track, ids handed out from `first_track_id` upwards.
+    ///
+    /// For a caller that needs the whole library at once rather than one
+    /// wrapping lookup at a time. Generated tracks take the ids; recorded
+    /// ones keep theirs, as [`Self::track`] explains.
+    pub fn materialize(&self, first_track_id: u32) -> Vec<TrackInfo> {
+        (0..self.len())
+            .map(|index| self.track(index, first_track_id + index as u32))
+            .collect()
+    }
+
     /// The track at `index`, wrapping so no caller can index out of range.
     ///
     /// `track_id` is the id the engine hands out for this load. A generated
@@ -190,6 +204,28 @@ mod tests {
 
         assert!(SimLibrary::from_fixture_file(&path).is_err());
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn materializing_a_generated_library_numbers_its_tracks_from_the_first_id() {
+        let tracks = SimLibrary::generated().materialize(500);
+
+        assert_eq!(tracks.len(), SIM_TRACKS.len());
+        assert_eq!(tracks[0].track_id, 500);
+        assert_eq!(tracks[2].track_id, 502);
+    }
+
+    #[test]
+    fn materializing_a_recorded_library_keeps_every_recorded_id() {
+        let library = SimLibrary::from_tracks(vec![track_named("A", 11), track_named("B", 22)]);
+
+        let ids: Vec<u32> = library
+            .materialize(500)
+            .iter()
+            .map(|t| t.track_id)
+            .collect();
+
+        assert_eq!(ids, [11, 22]);
     }
 
     fn library_track_ignoring_engine_id(library: &SimLibrary) -> TrackInfo {

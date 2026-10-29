@@ -37,8 +37,10 @@ use super::cues::{default_color, hot_cue_button_letter, track_cues};
 use super::normalize::normalize_tempo;
 use super::phrases;
 
-const EXPORT_PDB_PATH: &str = "PIONEER/rekordbox/export.pdb";
-const EXPORT_LIBRARY_CANDIDATE_PATHS: &[&str] = &[
+pub(crate) const EXPORT_PDB_PATH: &str = "PIONEER/rekordbox/export.pdb";
+/// Where a Rekordbox 7 export keeps its SQLCipher library, in the order
+/// [`fetch_database`] (and the local-disk loader) tries them.
+pub(crate) const EXPORT_LIBRARY_CANDIDATE_PATHS: &[&str] = &[
     "PIONEER/rekordbox/exportLibrary.db",
     "PIONEER/DeviceLibraryPlus/exportLibrary.db",
     ".PIONEER/rekordbox/exportLibrary.db",
@@ -497,12 +499,20 @@ fn map_basic_cue(cue: &Cue) -> TrackCue {
 async fn fetch_artwork(client: &mut NfsClient, pdb: &Pdb, track: &Track) -> Option<String> {
     let path = pdb.artwork_paths.get(&track.artwork_id)?;
     let bytes = client.read_file(path).await.ok()?;
+    artwork_data_url(&bytes)
+}
+
+/// Wraps artwork bytes as a ready-to-use `data:` URL, `None` for an empty
+/// file. Shared by the NFS route and the local-disk loader so both hand the
+/// UI the same shape.
+///
+/// Rekordbox artwork is conventionally JPEG; no format marker is available
+/// to confirm this per-file.
+pub(crate) fn artwork_data_url(bytes: &[u8]) -> Option<String> {
     if bytes.is_empty() {
         return None;
     }
-    // Rekordbox artwork is conventionally JPEG; no format marker is
-    // available to confirm this per-file.
-    Some(format!("data:image/jpeg;base64,{}", BASE64.encode(&bytes)))
+    Some(format!("data:image/jpeg;base64,{}", BASE64.encode(bytes)))
 }
 
 #[cfg(test)]

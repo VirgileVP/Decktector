@@ -19,6 +19,8 @@ pub mod nfs;
 pub mod pcap;
 pub mod presence;
 pub mod status;
+#[cfg(feature = "test-support")]
+pub mod test_support;
 
 use socket2::{Domain, Socket, Type};
 use std::net::{Ipv4Addr, SocketAddr};

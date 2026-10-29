@@ -28,3 +28,7 @@ tracing = { workspace = true }
 [dev-dependencies]
 # Paused clock for the analysis-retry schedule tests.
 tokio = { workspace = true, features = ["test-util"] }
+# Synthetic `export.pdb` for the local-export loader tests.
+prolink = { workspace = true, features = ["test-support"] }
+# Scratch directories laid out like a rekordbox USB export.
+tempfile = "3"

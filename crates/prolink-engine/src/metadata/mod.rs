@@ -18,6 +18,7 @@ mod analysis_wait;
 mod colors;
 mod cues;
 mod fetcher;
+pub mod local;
 pub mod nfs;
 mod normalize;
 mod phrases;

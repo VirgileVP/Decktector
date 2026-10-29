@@ -97,11 +97,8 @@ npm install
 # Run against real players on the network
 npm run dev
 
-# Run with two simulated decks (no hardware needed)
+# Four simulated CDJs you drive by hand from a browser page (no hardware needed)
 npm run dev:sim
-
-# Four simulated decks
-npm run dev:sim4
 ```
 
 ```sh
@@ -111,6 +108,31 @@ npm test             # renderer tests (Vitest)
 npm run lint         # renderer lint (ESLint)
 npm run typecheck    # renderer types
 ```
+
+### Driving the simulated decks by hand
+
+`npm run dev:sim` starts the app with four simulated CDJs and opens a control
+page in your default browser (`http://127.0.0.1:1430/sim-cdj.html`, development
+builds only). It looks like a row of CDJ-3000s with a mixer in the middle: load,
+play/pause, cue, pitch fader with tempo range, jog wheel (top to scratch, edge
+to nudge), hot cues A-H, 4/8-beat loops, sync and master, and a channel fader
+per deck that puts it on air. The app reflects everything the page does.
+
+The decks play tracks analysed by rekordbox. Copy a rekordbox USB export (the
+whole drive: the `PIONEER/` tree with `rekordbox/export.pdb` or
+`exportLibrary.db`, `USBANLZ/` and the artwork, plus the `Contents/` folder
+holding the audio files) into `sim-library/` at the repository root — it is
+gitignored, since it holds your library's metadata and music.
+Point `DECKTECTOR_SIM_EXPORT` at another folder (relative to the repository
+root, or absolute) to use that instead. With no usable export the decks fall
+back to the generated tracks, and the page says so.
+
+The page plays sound when the audio files are there: each deck's track is
+decoded in the browser and follows the deck's position, tempo, loops and
+scratching. Pitch follows tempo, as on a CDJ with Master Tempo off (no key
+lock). Browsers block audio until you interact with the page, so click it once.
+Tracks whose audio file was not copied stay silent and the page marks them; if
+no track has audio the app logs a warning.
 
 ### Simulating from a recording
 
@@ -302,6 +324,7 @@ crates/
 │       └── sim/            #   Scripted simulation (npm run dev:sim)
 ├── decktector-net/         # Network interface discovery
 ├── decktector-remote/      # Remote view: HTTP/WebSocket server, token, TLS, QR code
+├── decktector-sim-control/ # Control server for the hand-driven simulated CDJs (dev only)
 ├── decktector-timecode/    # Timecode output: Art-Net TC, MTC, LTC
 └── sim-audio/              # Simulator fixtures built from audio files
 src-tauri/                  # App shell: windows, commands, engine → event bridge

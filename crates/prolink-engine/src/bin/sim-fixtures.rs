@@ -28,8 +28,9 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use decktector_core::model::TrackInfo;
-use prolink::nfs::pdb::{self, Pdb, Track};
-use prolink_engine::metadata::nfs::{build_track_info, ext_variant_path, parse_analysis, Analysis};
+use prolink::nfs::pdb::{self, Pdb};
+use prolink_engine::metadata::local::{is_usable, read_analysis};
+use prolink_engine::metadata::nfs::{build_track_info, parse_analysis};
 
 /// A track's HD waveform is 150 columns per second — around 40,000 of them
 /// for a six-minute track, and roughly 2 MB of JSON each. Keeping every
@@ -147,40 +148,6 @@ fn collect_tracks(pdb: &Pdb, player_root: &Path, tracks: &mut BTreeMap<String, T
             info,
         );
     }
-}
-
-/// Whether a track can drive a simulated deck convincingly. A capture
-/// contains more than music — jingles and one-shot samples turn up with no
-/// tempo and no beat grid, and a deck loading one would play seven seconds
-/// of it and report no beat at all.
-fn is_usable(analysis: &Analysis, track: &Track) -> bool {
-    analysis.waveform.is_some()
-        && analysis
-            .beat_grid
-            .as_ref()
-            .is_some_and(|beats| !beats.is_empty())
-        && track.tempo_centibpm > 0
-}
-
-/// Reads a track's `.DAT` and `.EXT` out of the recovered tree, `None` if
-/// the `.DAT` is missing. An absent `.EXT` reads as empty, exactly as the
-/// live route treats a failed fetch.
-fn read_analysis(player_root: &Path, track: &Track) -> Option<(Vec<u8>, Vec<u8>)> {
-    let dat_path = local_path(player_root, &track.analyze_path);
-    let ext_path = local_path(player_root, &ext_variant_path(&track.analyze_path));
-    let dat_bytes = std::fs::read(dat_path).ok()?;
-    Some((dat_bytes, std::fs::read(ext_path).unwrap_or_default()))
-}
-
-/// Maps a path as the player expressed it onto the recovered tree, which
-/// mirrors those same paths under the player's own directory.
-fn local_path(player_root: &Path, device_path: &str) -> PathBuf {
-    device_path
-        .split('/')
-        .filter(|segment| !segment.is_empty())
-        .fold(player_root.to_path_buf(), |path, segment| {
-            path.join(segment)
-        })
 }
 
 fn find_files(dir: &Path, predicate: impl Fn(&Path) -> bool + Copy) -> Vec<PathBuf> {

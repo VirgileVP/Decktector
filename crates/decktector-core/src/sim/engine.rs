@@ -2,17 +2,26 @@
 //! decks that play, drift in pitch, chain generated tracks, and occasionally
 //! behave like a DJ — including keeping only one or two decks playing at
 //! once, as a real set would.
+//!
+//! That is [`SimMode::Auto`]. [`SimMode::Manual`] ([`SimEngine::manual`])
+//! plays nothing by itself: four decks that do exactly what a
+//! [`SimControl`] tells them, run by [`super::manual`].
 
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
+use tokio::sync::{mpsc, watch, Mutex as AsyncMutex};
 use tokio::task::JoinHandle;
 use tokio::time::{interval, Duration, Instant, MissedTickBehavior};
 
-use super::library::SimLibrary;
+use super::beat::BEATS_PER_BAR;
+use super::clock::epoch_ms;
+use super::control::SimControl;
+use super::library::{SimLibrary, FIRST_TRACK_ID};
+use super::manual::{self, ManualSession};
+use super::rig::{SimRig, DECK_COUNT};
 use crate::engine::{Engine, EngineHandle};
 use crate::model::{DeckId, DeckState, DeviceInfo, NetworkState, PlayState, TrackInfo};
 
@@ -22,7 +31,7 @@ const TRACK_SWAP_MARGIN: Duration = Duration::from_secs(8);
 const TRACK_LOAD_DELAY: Duration = Duration::from_millis(1500);
 const CUE_TO_PLAY_DELAY: Duration = Duration::from_millis(2500);
 /// Delay before the simulated network reports itself connected.
-const CONNECT_DELAY: Duration = Duration::from_millis(800);
+pub(super) const CONNECT_DELAY: Duration = Duration::from_millis(800);
 /// Decks join the mix one after another rather than all at once.
 const DECK_START_STAGGER: Duration = Duration::from_secs(5);
 
@@ -53,11 +62,8 @@ const START_RETRY_DELAY: Duration = Duration::from_secs(3);
 const PITCH_DRIFT_PERIOD_SEC: f64 = 30.0;
 /// Amplitude of the pitch drift, in percent.
 const PITCH_DRIFT_PERCENT: f64 = 3.0;
-const BEATS_PER_BAR: u8 = 4;
 /// Pro DJ Link networks top out at 6 players.
 const MAX_DECKS: u8 = 6;
-/// First track id handed out; real player track ids are unrelated small ints.
-const FIRST_TRACK_ID: u32 = 100;
 
 /// Something a deck will do once its deadline passes.
 ///
@@ -163,10 +169,21 @@ impl SimDeck {
     }
 }
 
+/// Who plays the simulated decks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SimMode {
+    /// The engine scripts a DJ: random pauses, scratches, track changes.
+    Auto,
+    /// Nothing happens unless a [`SimControl`] says so.
+    Manual,
+}
+
 pub struct SimEngine {
     handle: Arc<EngineHandle>,
     deck_count: u8,
     library: Arc<SimLibrary>,
+    /// Present in manual mode only: the rig and its command queue.
+    manual: Option<Arc<AsyncMutex<ManualSession>>>,
     task: Mutex<Option<JoinHandle<()>>>,
 }
 
@@ -185,7 +202,43 @@ impl SimEngine {
             handle: Arc::new(EngineHandle::new()),
             deck_count: deck_count.clamp(1, MAX_DECKS),
             library: Arc::new(library),
+            manual: None,
             task: Mutex::new(None),
+        }
+    }
+
+    /// Four decks played from outside, by the returned [`SimControl`].
+    ///
+    /// The library is sorted by title and its first four tracks are loaded;
+    /// `fallback_warning` is passed on to the control page when the library
+    /// the user asked for could not be used. Commands sent before
+    /// [`Engine::start`] wait in the queue.
+    pub fn manual(library: SimLibrary, fallback_warning: Option<String>) -> (Self, SimControl) {
+        let rig = SimRig::from_library(&library, fallback_warning);
+        let (command_sender, commands) = mpsc::unbounded_channel();
+        let (state, state_receiver) = watch::channel(rig.view(epoch_ms()));
+        let control = SimControl::new(command_sender, state_receiver, rig.library());
+        let session = ManualSession {
+            rig,
+            commands,
+            state,
+        };
+
+        let engine = Self {
+            handle: Arc::new(EngineHandle::new()),
+            deck_count: DECK_COUNT,
+            library: Arc::new(library),
+            manual: Some(Arc::new(AsyncMutex::new(session))),
+            task: Mutex::new(None),
+        };
+        (engine, control)
+    }
+
+    pub fn mode(&self) -> SimMode {
+        if self.manual.is_some() {
+            SimMode::Manual
+        } else {
+            SimMode::Auto
         }
     }
 
@@ -202,11 +255,15 @@ impl Engine for SimEngine {
         self.handle.set_network_state(NetworkState::Searching);
 
         let handle = Arc::clone(&self.handle);
-        let library = Arc::clone(&self.library);
-        let deck_count = self.deck_count;
-        *self.task_slot() = Some(tokio::spawn(async move {
-            run(deck_count, library, handle).await
-        }));
+        let task = match &self.manual {
+            Some(session) => tokio::spawn(manual::run(Arc::clone(session), handle)),
+            None => {
+                let library = Arc::clone(&self.library);
+                let deck_count = self.deck_count;
+                tokio::spawn(async move { run(deck_count, library, handle).await })
+            }
+        };
+        *self.task_slot() = Some(task);
 
         Ok(())
     }
@@ -266,6 +323,15 @@ impl Engine for SimEngine {
     }
 }
 
+/// Announces a simulated player on the network.
+pub(super) fn announce_deck(handle: &EngineHandle, deck_id: DeckId) {
+    handle.device_connected(DeviceInfo {
+        deck_id,
+        name: format!("SIM-XDJ deck {deck_id}"),
+        ip: format!("192.168.1.{}", 10 + u16::from(deck_id)),
+    });
+}
+
 /// Drives every simulated deck. The task owns the decks outright, so no deck
 /// state is shared across threads — only the reports leaving through the
 /// handle are.
@@ -285,11 +351,7 @@ async fn run(deck_count: u8, library: Arc<SimLibrary>, handle: Arc<EngineHandle>
     tokio::time::sleep(CONNECT_DELAY).await;
     handle.set_network_state(NetworkState::Connected);
     for deck in &decks {
-        handle.device_connected(DeviceInfo {
-            deck_id: deck.deck_id,
-            name: format!("SIM-XDJ deck {}", deck.deck_id),
-            ip: format!("192.168.1.{}", 10 + u16::from(deck.deck_id)),
-        });
+        announce_deck(&handle, deck.deck_id);
         handle.update_deck_track(deck.deck_id, deck.track.clone());
     }
     // Deck 1 starts rolling immediately, the others join the mix staggered.
@@ -488,13 +550,6 @@ fn jump_to_random_cue(deck: &mut SimDeck, rng: &mut SmallRng) {
     if !targets.is_empty() {
         deck.playhead_ms = targets[rng.random_range(0..targets.len())];
     }
-}
-
-fn epoch_ms() -> f64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|since| since.as_millis() as f64)
-        .unwrap_or_default()
 }
 
 #[cfg(test)]

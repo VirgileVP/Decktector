@@ -40,3 +40,6 @@ capture/
 # Simulator track fixtures built from a capture (`sim-fixtures`): same real
 # library metadata as the capture they come from, and rebuildable from it.
 crates/decktector-core/fixtures/
+# A rekordbox USB export the manual simulation plays (`npm run dev:sim`): a real
+# DJ's library, never committed.
+/sim-library/

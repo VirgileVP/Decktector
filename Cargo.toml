@@ -4,6 +4,7 @@ members = [
     "crates/decktector-core",
     "crates/decktector-net",
     "crates/decktector-remote",
+    "crates/decktector-sim-control",
     "crates/decktector-timecode",
     "crates/prolink",
     "crates/prolink-engine",
@@ -21,6 +22,7 @@ license = "GPL-3.0-or-later"
 decktector-core = { path = "crates/decktector-core" }
 decktector-net = { path = "crates/decktector-net" }
 decktector-remote = { path = "crates/decktector-remote" }
+decktector-sim-control = { path = "crates/decktector-sim-control" }
 decktector-timecode = { path = "crates/decktector-timecode" }
 prolink = { path = "crates/prolink" }
 prolink-engine = { path = "crates/prolink-engine" }

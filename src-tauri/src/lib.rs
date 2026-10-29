@@ -10,6 +10,7 @@ mod events;
 mod lineup_file;
 mod project_links;
 mod remote;
+mod sim;
 mod timecode;
 mod track_log;
 mod window_prefs;
@@ -17,7 +18,6 @@ mod window_prefs;
 use std::sync::Arc;
 
 use decktector_core::model::EngineSnapshot;
-use decktector_core::sim::SimEngine;
 use decktector_core::Engine;
 use decktector_remote::RemoteService;
 use decktector_timecode::TimecodeService;
@@ -26,9 +26,6 @@ use prolink_engine::{supervise, InterfacePreference, ProlinkEngine, TASK_RESTART
 use tauri::{Manager, State, Window};
 
 use window_prefs::{SleepBlocker, WindowPrefs};
-
-/// Default number of simulated decks when none is requested.
-const DEFAULT_SIM_DECKS: u8 = 2;
 
 /// Label of the window declared in `tauri.conf.json`. Every other window is
 /// a detachable panel the renderer opens on its own.
@@ -65,25 +62,26 @@ fn set_window_prefs(
 }
 
 /// Picks the engine backing this run: the real Pro DJ Link backend by
-/// default, or the scripted simulation when `DECKTECTOR_SIM=1` — set by
-/// `npm run dev:sim`/`dev:sim4`, or by hand when developing the UI without
-/// hardware nearby. `device_watcher` is shared with the real engine rather
-/// than each owning its own — both just want the same "who's on the
-/// network" read (see `prolink_engine::ProlinkEngine`'s doc comment).
-/// `interface_preference` is likewise shared with the settings command that
-/// sets it; the simulation has no network and ignores it.
+/// default, or the simulation when `DECKTECTOR_SIM=1` — set by
+/// `npm run dev:sim`/`dev:sim:recorded`, or by hand when developing the UI
+/// without hardware nearby (see `sim` for its two modes). `device_watcher`
+/// is shared with the real engine rather than each owning its own — both
+/// just want the same "who's on the network" read (see
+/// `prolink_engine::ProlinkEngine`'s doc comment). `interface_preference` is
+/// likewise shared with the settings command that sets it; the simulation
+/// has no network and ignores it.
 fn create_engine(
     device_watcher: Arc<DeviceWatcher>,
     interface_preference: Arc<InterfacePreference>,
-) -> Arc<dyn Engine> {
-    if std::env::var("DECKTECTOR_SIM").as_deref() == Ok("1") {
-        let deck_count = std::env::var("DECKTECTOR_SIM_DECKS")
-            .ok()
-            .and_then(|value| value.parse().ok())
-            .unwrap_or(DEFAULT_SIM_DECKS);
-        return Arc::new(SimEngine::new(deck_count));
+) -> (Arc<dyn Engine>, Option<sim::ManualControl>) {
+    if sim::is_requested() {
+        let sim::SimSetup { engine, manual } = sim::create();
+        return (engine, manual);
     }
-    Arc::new(ProlinkEngine::new(device_watcher, interface_preference))
+    (
+        Arc::new(ProlinkEngine::new(device_watcher, interface_preference)),
+        None,
+    )
 }
 
 pub fn run() {
@@ -96,7 +94,7 @@ pub fn run() {
 
     let device_watcher = DeviceWatcher::new();
     let interface_preference = InterfacePreference::new();
-    let engine = create_engine(
+    let (engine, sim_control) = create_engine(
         Arc::clone(&device_watcher),
         Arc::clone(&interface_preference),
     );
@@ -146,6 +144,9 @@ pub fn run() {
             remote::forward_to_renderer(app.handle().clone(), Arc::clone(&remote));
             devices::forward_to_renderer(app.handle().clone(), Arc::clone(&device_watcher));
             track_log::attach(app.handle().clone(), Arc::clone(&engine));
+            if let Some(manual) = sim_control {
+                sim::serve_control_page(app.handle().clone(), manual);
+            }
 
             let engine = Arc::clone(&engine);
             tauri::async_runtime::spawn(async move {

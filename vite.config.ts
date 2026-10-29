@@ -29,7 +29,10 @@ export default defineConfig({
     // redirects unbundled asset requests here (see `AssetSource::DevServer`
     // on the Rust side) — a phone on the LAN needs this reachable too, not
     // just the machine running `npm run dev`.
-    host: true
+    host: true,
+    // The sim control page is served through the Rust proxy on another port; its
+    // HMR socket must still reach this dev server, not the proxy.
+    hmr: { clientPort: DEV_PORT }
   },
   // Vite hides these from the client by default; Tauri's own vars are safe.
   envPrefix: ['VITE_', 'TAURI_'],
@@ -39,7 +42,11 @@ export default defineConfig({
     // Scan from the repository root rather than `root` above (`src/renderer`), so the
     // Node scripts' own tests run alongside the renderer's.
     dir: __dirname,
-    include: ['src/renderer/src/**/*.test.ts', 'scripts/**/*.test.mjs'],
+    include: [
+      'src/renderer/src/**/*.test.ts',
+      'src/renderer/sim-cdj/**/*.test.ts',
+      'scripts/**/*.test.mjs'
+    ],
     // No tests exist yet in a fresh checkout; that is not a failure.
     passWithNoTests: true
   }

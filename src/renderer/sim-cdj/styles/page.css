@@ -1,0 +1,100 @@
+/* Page shell: the rig layout and the banners. Hardware tokens live here so the
+   other sheets share them. */
+
+:root {
+  --hw-body: #17181c;
+  --hw-body-edge: #2b2d34;
+  --hw-metal: #25272e;
+  --hw-metal-light: #353842;
+  --hw-label: #9aa0ad;
+  --hw-lit: #3fd0ff;
+  --hw-screen: #050607;
+  --hw-radius: 10px;
+  --hw-gap: 8px;
+  font-family:
+    'Geist Variable',
+    'Segoe UI',
+    -apple-system,
+    BlinkMacSystemFont,
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+  font-size: 12px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+.sim-page {
+  container: rig / inline-size;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.banners {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.banner {
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.banner-fallback {
+  background: var(--warn);
+  color: var(--flag-text);
+}
+
+.banner-disconnected {
+  background: rgb(var(--onair-rgb) / 0.18);
+  border: 1px solid rgb(var(--onair-rgb) / 0.6);
+}
+
+/* The page is a size container so the layout reacts to its own width, not the
+   screen's. Below the narrow breakpoint (1200px, see the @container rule) the
+   CDJs wrap into a 2x2 grid with the mixer underneath. */
+.rig {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 150px minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--hw-gap);
+  align-items: start;
+}
+
+@container rig (max-width: 1200px) {
+  .rig {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .rig > .mixer {
+    grid-row: 3;
+    grid-column: 1 / -1;
+  }
+}
+
+.banner-sound {
+  background: var(--bg-inset);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+}
