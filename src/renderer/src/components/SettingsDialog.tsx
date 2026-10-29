@@ -251,6 +251,12 @@ export function SettingsDialog({
                   checked={settings.dimIdleDecks}
                   onChange={update('dimIdleDecks')}
                 />
+                <ToggleRow
+                  label="Enlarge decks that are on air"
+                  hint="In the stacked view, gives the live decks more of the height than the idle ones"
+                  checked={settings.enlargeOnAirDeck}
+                  onChange={update('enlargeOnAirDeck')}
+                />
                 <OnAirSourceSetting value={settings.onAirSource} onChange={update('onAirSource')} />
               </section>
 

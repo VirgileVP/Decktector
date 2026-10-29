@@ -24,7 +24,7 @@ import { connectLineupBroadcast } from './state/lineup-broadcast'
 import { connectPanelWindowRegistry } from './state/panel-windows'
 import { connectRemoteToEngine } from './state/remote'
 import { connectSettingsBroadcast } from './state/settings-broadcast'
-import { useDeckViewToggles } from './state/settings'
+import { useDeckViewToggles, useSettings } from './state/settings'
 import { connectSettingsToApp } from './state/settings-sync'
 import { connectStoreToEngine, useDecktectorStore } from './state/store'
 import { connectTimecodeToEngine } from './state/timecode'
@@ -91,6 +91,7 @@ function App(): React.JSX.Element {
     setWelcomeOpen(false)
   }
   const deckViewToggles = useDeckViewToggles()
+  const enlargeOnAirDeck = useSettings((s) => s.enlargeOnAirDeck)
 
   useAppShortcuts({
     toggleFullscreen,
@@ -189,7 +190,9 @@ function App(): React.JSX.Element {
 
       <UpdateNotice />
 
-      <main className={`deck-grid view-${effectiveView}`}>
+      <main
+        className={`deck-grid view-${effectiveView}${enlargeOnAirDeck ? ' enlarge-on-air' : ''}`}
+      >
         {visibleDeckIds.length === 0 ? (
           <div className="empty-state">
             <p>Waiting for Pro DJ Link devices…</p>

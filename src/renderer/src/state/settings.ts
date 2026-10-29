@@ -193,6 +193,9 @@ export interface Settings {
   waveformPlayheadPosition: WaveformPlayheadPosition
   /** Fade decks that are not on air so the live ones read at a glance. */
   dimIdleDecks: boolean
+  /** Give the decks that are on air more of the height in the stacked view,
+   *  so the live track is the biggest thing on screen. */
+  enlargeOnAirDeck: boolean
   /** Which signal decides a deck is live — the mixer's on-air flag or
    *  playback — see `lib/deck-activity.ts`. */
   onAirSource: OnAirSource
@@ -284,6 +287,7 @@ export const DEFAULT_SETTINGS: Settings = {
   waveformSmoothing: true,
   waveformPlayheadPosition: DEFAULT_WAVEFORM_PLAYHEAD_POSITION,
   dimIdleDecks: true,
+  enlargeOnAirDeck: false,
   onAirSource: DEFAULT_ON_AIR_SOURCE,
   uiScale: 1,
   lineupView: 'full',
@@ -361,6 +365,7 @@ function pickSettings(state: Settings): Settings {
     waveformSmoothing,
     waveformPlayheadPosition,
     dimIdleDecks,
+    enlargeOnAirDeck,
     onAirSource,
     uiScale,
     lineupView,
@@ -406,6 +411,7 @@ function pickSettings(state: Settings): Settings {
     waveformSmoothing,
     waveformPlayheadPosition,
     dimIdleDecks,
+    enlargeOnAirDeck,
     onAirSource,
     uiScale,
     lineupView,

@@ -22,6 +22,9 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
 - **Cues over the dbserver fallback** — a track read over the dbserver route, rather
   than straight off the player's media, now shows its hot cues, memory cues and loops.
   Their colours and comments still come from the media route only.
+- **Bigger on-air decks** — a new _Enlarge decks that are on air_ setting (Interface tab,
+  off by default) gives the live decks twice the height of the idle ones in the stacked
+  view, so the track playing out is the biggest thing on screen.
 
 ### Fixed
 

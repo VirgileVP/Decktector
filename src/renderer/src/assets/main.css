@@ -1368,6 +1368,15 @@ input[type='checkbox']:focus-visible {
   grid-template-columns: repeat(3, 1fr);
 }
 
+/* Optional: in the stacked view, on-air decks take this many shares of the
+   height for every one an idle deck gets. Tiled views keep equal cells. */
+.deck-grid.view-stack.enlarge-on-air {
+  --onair-deck-grow: 2;
+}
+.deck-grid.view-stack.enlarge-on-air > .deck-onair {
+  flex-grow: var(--onair-deck-grow);
+}
+
 /* Tiled cells hide secondary info; the side rails keep whatever width the
    user dragged them to (see .panel-resize-handle) rather than a fixed one. */
 :is(.view-quad, .view-grid) .deck-props {
@@ -1405,10 +1414,15 @@ input[type='checkbox']:focus-visible {
   padding: 8px 10px;
   min-height: 0;
   flex: 1;
+  /* Slow and eased both ways, so a deck growing or shrinking as it goes on
+     or off air (see .enlarge-on-air) glides rather than jumps. */
+  --onair-deck-resize-duration: 0.45s;
+  --onair-deck-resize-easing: cubic-bezier(0.65, 0, 0.35, 1);
   transition:
     background 0.2s ease,
     border-color 0.2s ease,
-    box-shadow 0.2s ease;
+    box-shadow 0.2s ease,
+    flex-grow var(--onair-deck-resize-duration) var(--onair-deck-resize-easing);
 }
 
 /* The full deck lays its bar and body out in a column, with the beat
