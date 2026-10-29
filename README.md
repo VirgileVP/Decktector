@@ -21,7 +21,7 @@ Around the decks:
 - **[Remote view](#remote-view)** — a read-only copy of the screen in any browser on
   the local network
 - **[Detachable panels](#detachable-panels)** — decks, clock, timecode or lineup in
-  their own OS windows
+  their own windows, from the desktop app or the remote view
 
 Primary targets: **XDJ-XZ** and **XDJ-1000MK2** (works with 2 to 4 CDJ-2000-era players).
 
@@ -307,8 +307,12 @@ copies them back). The Time window picks among clock, timecode and lineup the
 same way. Open panel windows are remembered across restarts, in their last
 position and with what they show.
 
-This is desktop-only. The [remote view](#remote-view)'s `?deck=N` focus mode is
-unrelated and unaffected.
+The [remote view](#remote-view) has the same pop-out buttons. There, each panel
+opens in a plain browser popup that carries the remote link's access token: the
+browser's own frame moves and resizes it, and only the zoom and display controls
+remain — a browser cannot make a window transparent, keep it on top, or reopen
+it after a restart. The remote view's `?deck=N` focus mode is unrelated and
+unaffected.
 
 ## Architecture
 

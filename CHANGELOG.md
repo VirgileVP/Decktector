@@ -15,6 +15,9 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
 
 ### Added
 
+- **Detachable panels in the remote view** — the pop-out buttons now work in the
+  browser too: a deck, the clock, the timecode or the header block opens in its own
+  browser window, with the zoom and display controls of a desktop panel window.
 - **Rekordbox phrases** — a track rekordbox has run its phrase analysis on now shows
   those phrases as its structure, under rekordbox's own names (_Intro_, _Verse 2_,
   _Up 3_, _Chorus_…), instead of a structure guessed from the waveform. Tracks without

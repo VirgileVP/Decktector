@@ -64,8 +64,23 @@ interface PanelChromeProps {
   children: React.ReactNode
 }
 
+/**
+ * Desktop OS window, or a browser popup opened from the remote view. A popup
+ * keeps the browser's own frame, so the resize edges, always-on-top and
+ * transparency — all window-manager features — only exist in the former.
+ */
+const IS_TAURI = isTauri()
+
 function startResize(direction: ResizeDirection): void {
   void getCurrentWindow().startResizeDragging(direction)
+}
+
+function closeWindow(): void {
+  if (IS_TAURI) {
+    void getCurrentWindow().close()
+  } else {
+    window.close()
+  }
 }
 
 export function PanelChrome({
@@ -89,10 +104,19 @@ export function PanelChrome({
   // bar. Window focus covers touch (a tap focuses the window) and keyboard,
   // and only fires on an actual interaction, so a keyed window sitting idle
   // during a live set still composites with zero incidental chrome.
-  const [windowFocused, setWindowFocused] = useState(true)
+  const [windowFocused, setWindowFocused] = useState(() => IS_TAURI || document.hasFocus())
 
   useEffect(() => {
-    if (!isTauri()) return
+    if (!IS_TAURI) {
+      const handleFocus = (): void => setWindowFocused(true)
+      const handleBlur = (): void => setWindowFocused(false)
+      window.addEventListener('focus', handleFocus)
+      window.addEventListener('blur', handleBlur)
+      return () => {
+        window.removeEventListener('focus', handleFocus)
+        window.removeEventListener('blur', handleBlur)
+      }
+    }
     const currentWindow = getCurrentWindow()
     let unlistenFocus: (() => void) | null = null
     void currentWindow.isFocused().then(setWindowFocused)
@@ -106,13 +130,16 @@ export function PanelChrome({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        void getCurrentWindow().close()
-      }
+      if (event.key === 'Escape') closeWindow()
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
+
+  // Tauri titles the window at creation; a browser popup takes the tab title.
+  useEffect(() => {
+    if (!IS_TAURI) document.title = title
+  }, [title])
 
   // Settings live in the main window; a panel window only goes fullscreen.
   useAppShortcuts({ toggleFullscreen })
@@ -147,7 +174,7 @@ export function PanelChrome({
 
   // Reports on mount and whenever the panel's own state changes.
   useEffect(() => {
-    if (!isTauri()) return
+    if (!IS_TAURI) return
     reportCurrentState()
   }, [params, options, display])
 
@@ -156,7 +183,7 @@ export function PanelChrome({
   // reliable place to do this, since the webview can be torn down before its
   // cleanup functions run.
   useEffect(() => {
-    if (!isTauri()) return
+    if (!IS_TAURI) return
 
     const currentWindow = getCurrentWindow()
     let debounceTimer: ReturnType<typeof setTimeout> | undefined
@@ -221,35 +248,39 @@ export function PanelChrome({
         <div
           className="panel-chrome-drag"
           data-tauri-drag-region
-          onDoubleClick={() => void getCurrentWindow().toggleMaximize()}
+          onDoubleClick={IS_TAURI ? () => void getCurrentWindow().toggleMaximize() : undefined}
         >
           <span className="panel-chrome-title">{title}</span>
         </div>
         <div className="panel-chrome-controls">
-          <button
-            type="button"
-            className={`panel-chrome-toggle${options.alwaysOnTop ? ' active' : ''}`}
-            title="Always on top"
-            aria-label="Always on top"
-            aria-pressed={options.alwaysOnTop}
-            onClick={toggleAlwaysOnTop}
-          >
-            <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
-              <path d="M6 1v5.2M3 6.2h6L7.6 8.6H4.4L6 6.2ZM6 8.6V11" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            className={`panel-chrome-toggle${options.transparent ? ' active' : ''}`}
-            title="Transparent background"
-            aria-label="Transparent background"
-            aria-pressed={options.transparent}
-            onClick={toggleTransparent}
-          >
-            <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
-              <path d="M1.5 1.5h4v4h-4zM6.5 6.5h4v4h-4z" />
-            </svg>
-          </button>
+          {IS_TAURI && (
+            <>
+              <button
+                type="button"
+                className={`panel-chrome-toggle${options.alwaysOnTop ? ' active' : ''}`}
+                title="Always on top"
+                aria-label="Always on top"
+                aria-pressed={options.alwaysOnTop}
+                onClick={toggleAlwaysOnTop}
+              >
+                <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
+                  <path d="M6 1v5.2M3 6.2h6L7.6 8.6H4.4L6 6.2ZM6 8.6V11" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className={`panel-chrome-toggle${options.transparent ? ' active' : ''}`}
+                title="Transparent background"
+                aria-label="Transparent background"
+                aria-pressed={options.transparent}
+                onClick={toggleTransparent}
+              >
+                <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
+                  <path d="M1.5 1.5h4v4h-4zM6.5 6.5h4v4h-4z" />
+                </svg>
+              </button>
+            </>
+          )}
           <button
             type="button"
             className="panel-chrome-zoom"
@@ -274,7 +305,7 @@ export function PanelChrome({
             className="panel-chrome-close"
             title="Close"
             aria-label="Close"
-            onClick={() => void getCurrentWindow().close()}
+            onClick={closeWindow}
           >
             <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true">
               <path d="M1 1l8 8M9 1l-8 8" />
@@ -283,13 +314,14 @@ export function PanelChrome({
         </div>
       </div>
       <div className="panel-chrome-content">{children}</div>
-      {RESIZE_ZONES.map(({ direction, className }) => (
-        <div
-          key={direction}
-          className={`panel-resize-edge ${className}`}
-          onMouseDown={() => startResize(direction)}
-        />
-      ))}
+      {IS_TAURI &&
+        RESIZE_ZONES.map(({ direction, className }) => (
+          <div
+            key={direction}
+            className={`panel-resize-edge ${className}`}
+            onMouseDown={() => startResize(direction)}
+          />
+        ))}
     </div>
   )
 }

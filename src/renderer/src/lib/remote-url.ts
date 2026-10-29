@@ -5,7 +5,7 @@
  */
 
 /** Query string key the remote server's URL carries the access token under. */
-const TOKEN_PARAM = 'token'
+export const TOKEN_PARAM = 'token'
 
 /** Query string key for focusing a single deck full-screen. */
 const DECK_PARAM = 'deck'

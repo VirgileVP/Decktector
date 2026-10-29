@@ -1,8 +1,9 @@
 import { isTauri } from '@tauri-apps/api/core'
 
 import type { DeckId } from '../model'
+import { openBrowserPanelWindow } from '../panels/open-browser-panel-window'
 import { openPanelWindow } from '../panels/open-panel-window'
-import { isPanelWindow, type PanelId } from '../panels/params'
+import { isPanelWindow, type PanelId, type PanelParams } from '../panels/params'
 
 interface PopOutButtonProps {
   panelId: PanelId
@@ -11,21 +12,31 @@ interface PopOutButtonProps {
   title: string
 }
 
+/** Opens the panel through whichever window API the page has. */
+async function openPanel(params: PanelParams): Promise<void> {
+  if (isTauri()) {
+    await openPanelWindow(params)
+  } else {
+    openBrowserPanelWindow(params)
+  }
+}
+
 /**
- * Opens `panelId` (and, for a deck, `deckId`) in its own window. Renders
- * nothing in the remote browser view (no window API to call) or inside a
- * panel window itself (no popping a pop-out out of a pop-out).
+ * Opens `panelId` (and, for a deck, `deckId`) in its own window — an OS
+ * window in the desktop app, a browser popup in the remote view. Renders
+ * nothing inside a panel window itself (no popping a pop-out out of a
+ * pop-out).
  */
 export function PopOutButton({
   panelId,
   deckId,
   title
 }: PopOutButtonProps): React.JSX.Element | null {
-  if (!isTauri() || isPanelWindow(window.location)) return null
+  if (isPanelWindow(window.location)) return null
 
   const handleClick = (): void => {
     // `instance` is a placeholder — `openPanelWindow` picks the real one.
-    void openPanelWindow({ panelId, deckId, instance: 0 }).catch((error) =>
+    openPanel({ panelId, deckId, instance: 0 }).catch((error: unknown) =>
       console.error(`Failed to open the "${panelId}" panel window:`, error)
     )
   }
