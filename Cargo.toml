@@ -55,6 +55,11 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"
 tracing = "0.1"
 ts-rs = "10"
 
+[profile.dev]
+# Full MSVC debug info (.pdb) dominates `target/` size; line tables are enough
+# for backtraces and keep the debug directory several times smaller.
+debug = "line-tables-only"
+
 [profile.release]
 # A visualizer running next to a live set: prefer a small, fast binary and
 # accept the longer build.
