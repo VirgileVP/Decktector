@@ -84,8 +84,12 @@ jobs:
             bundle: target/release/bundle/dmg/*.dmg
           - platform: windows-latest
             bundle: target/release/bundle/nsis/*-setup.exe
-          - platform: ubuntu-latest
+          # Oldest supported runner: the AppImage bundles libs linked against the
+          # build host's glibc, so building on a new Ubuntu breaks older distros.
+          # `max-glibc` is that runner's glibc, checked after the build.
+          - platform: ubuntu-22.04
             bundle: target/release/bundle/appimage/*.AppImage
+            max-glibc: '2.35'
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -101,7 +105,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Install Linux system dependencies
-        if: matrix.platform == 'ubuntu-latest'
+        if: startsWith(matrix.platform, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
@@ -111,6 +115,23 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # Refuses to publish an AppImage that would not start on the oldest
+      # distribution it targets, as happened in issue #3.
+      - name: Check the AppImage's glibc requirement
+        if: matrix.max-glibc
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          appimages=(${{ matrix.bundle }})
+          if [[ ${#appimages[@]} -eq 0 ]]; then
+            echo "::error::no AppImage matched ${{ matrix.bundle }}"
+            exit 1
+          fi
+          for appimage in "${appimages[@]}"; do
+            node scripts/appimage-glibc-check.mjs "$appimage" "${{ matrix.max-glibc }}"
+          done
 
       # Release assets rather than `actions/upload-artifact`: on a private
       # repository Actions artifacts share a 500 MB quota that three
