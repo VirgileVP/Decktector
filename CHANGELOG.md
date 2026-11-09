@@ -31,6 +31,9 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
 
 ### Fixed
 
+- The Linux AppImage starts on any distribution with glibc 2.35 or newer — Ubuntu
+  22.04, Linux Mint 21, Debian 12 and later — instead of quitting with a
+  `GLIBC_2.43' not found` error.
 - A player's empty answer — no cues, or no beat grid for an unanalysed track — no longer
   holds up the track's metadata for five seconds.
 
