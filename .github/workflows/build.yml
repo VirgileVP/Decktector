@@ -102,7 +102,8 @@ jobs:
       # The container starts from a bare Ubuntu, run as root without sudo. On top
       # of the app's own needs (webview, GTK, ALSA, OpenSSL for SQLCipher) it gets
       # what the hosted runner would have provided: git, so the checkout is a real
-      # repository, curl for rustup, and a C toolchain with CMake for aws-lc-sys.
+      # repository, curl for rustup, a C toolchain with CMake for aws-lc-sys, and
+      # xdg-utils, whose `xdg-open` Tauri copies into the AppImage.
       - name: Install the build container's system dependencies
         if: matrix.container
         env:
@@ -110,7 +111,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y \
-            build-essential ca-certificates cmake curl file git pkg-config \
+            build-essential ca-certificates cmake curl file git pkg-config xdg-utils \
             libssl-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
             patchelf libasound2-dev
 
