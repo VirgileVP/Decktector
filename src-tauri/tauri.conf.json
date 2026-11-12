@@ -38,6 +38,9 @@
     "resources": {
       "../dist": "web"
     },
+    "macOS": {
+      "signingIdentity": "-"
+    },
     "windows": {
       "webviewInstallMode": {
         "type": "offlineInstaller"

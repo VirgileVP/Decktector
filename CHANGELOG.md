@@ -31,6 +31,9 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
 
 ### Fixed
 
+- macOS no longer reports a downloaded Decktector as _damaged_: the app is now signed,
+  so the first launch can be allowed from System Settings → Privacy & Security →
+  _Open Anyway_. It is still not notarized by Apple, so that one-time step remains.
 - The Linux AppImage starts on any distribution with glibc 2.35 or newer — Ubuntu
   22.04, Linux Mint 21, Debian 12 and later — instead of quitting with a
   `GLIBC_2.43' not found` error.

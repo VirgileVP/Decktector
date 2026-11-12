@@ -237,6 +237,25 @@ they render through the system WebKit and bundle what they need. The `.deb`, by
 contrast, resolves its dependencies through `apt` at install time, so prefer the
 `.AppImage` for offline machines.
 
+### Opening the app on macOS
+
+The macOS build is ad-hoc signed (`bundle.macOS.signingIdentity` is `"-"`) but not
+notarized by Apple, so Gatekeeper blocks the first launch of a downloaded copy with
+_"Apple could not verify Decktector is free of malware"_. Either:
+
+- open **System Settings → Privacy & Security**, scroll to the message about
+  Decktector and click **Open Anyway**, then confirm — since macOS 15, right-click →
+  Open no longer offers this; or
+- clear the quarantine flag from a terminal:
+
+  ```sh
+  xattr -cr /Applications/Decktector.app
+  ```
+
+Either has to be done again after installing each new version. Releases up to
+1.5.1 were not signed at all, which macOS reports as _"Decktector is damaged and
+can't be opened"_; only the `xattr` command gets past that one.
+
 ## Remote view
 
 A second screen — a phone by the lighting desk, a laptop out front — can watch the
