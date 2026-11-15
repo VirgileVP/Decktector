@@ -1,12 +1,13 @@
 //! Art-Net TimeCode (`OpTimeCode`, 0x9700) packet encoding.
 //!
 //! <https://art-net.org.uk/how-it-works/time-code/> — a fixed 19-byte UDP
-//! packet. Always sent as a limited broadcast: the socket is bound to the
-//! chosen network interface's own address, which is what actually steers
-//! the packet onto the right subnet — the destination address only needs to
-//! mean "everyone on this wire".
+//! packet, broadcast to the chosen network interface's own subnet (e.g.
+//! `2.255.255.255`), the directed broadcast the Art-Net spec asks for. The
+//! limited broadcast `255.255.255.255` is not steered by the socket's bound
+//! address on every OS, so it could reach the wrong network — see
+//! `decktector_net::Ipv4Subnet::broadcast`.
 
-use std::net::Ipv4Addr;
+use std::net::SocketAddrV4;
 
 use tokio::net::UdpSocket;
 
@@ -34,24 +35,52 @@ fn build_packet(timecode: TimeCode, frame_rate: FrameRate) -> [u8; 19] {
     packet
 }
 
-/// Sends one Art-Net TimeCode frame as a limited broadcast on `port`.
+/// Sends one Art-Net TimeCode frame to `destination` — the subnet broadcast
+/// address in practice, though a unicast node address works the same.
 ///
 /// UDP is fire-and-forget: a failed send means one dropped frame on the
 /// wire, not a broken session, so the caller only needs to log it.
 pub(crate) async fn send(
     socket: &UdpSocket,
-    port: u16,
+    destination: SocketAddrV4,
     timecode: TimeCode,
     frame_rate: FrameRate,
 ) -> anyhow::Result<()> {
     let packet = build_packet(timecode, frame_rate);
-    socket.send_to(&packet, (Ipv4Addr::BROADCAST, port)).await?;
+    socket.send_to(&packet, destination).await?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
+    use std::net::Ipv4Addr;
+
     use super::*;
+
+    #[tokio::test]
+    async fn send_delivers_the_packet_to_the_given_destination() {
+        let receiver = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).await.unwrap();
+        let sender = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).await.unwrap();
+        let destination =
+            SocketAddrV4::new(Ipv4Addr::LOCALHOST, receiver.local_addr().unwrap().port());
+        let timecode = TimeCode {
+            hours: 1,
+            minutes: 2,
+            seconds: 3,
+            frames: 4,
+        };
+
+        send(&sender, destination, timecode, FrameRate::Ebu25)
+            .await
+            .unwrap();
+
+        let mut received = [0u8; 64];
+        let (length, _) = receiver.recv_from(&mut received).await.unwrap();
+        assert_eq!(
+            &received[..length],
+            &build_packet(timecode, FrameRate::Ebu25)
+        );
+    }
 
     #[test]
     fn packet_carries_the_art_net_header_and_timecode_fields() {

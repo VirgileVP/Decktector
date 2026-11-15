@@ -61,12 +61,12 @@ pub(crate) fn connect(port_name: &str) -> anyhow::Result<MidiOutputConnection> {
 /// over an already-connected output port.
 ///
 /// Like [`crate::artnet::send`], a failure here means one dropped MIDI
-/// message, not a broken session — logged and swallowed rather than
-/// propagated into the tick loop.
-pub(crate) fn send(connection: &mut MidiOutputConnection, bytes: &[u8]) {
-    if let Err(error) = connection.send(bytes) {
-        tracing::warn!(%error, "failed to send an MTC message");
-    }
+/// message, not a broken session: the tick loop logs it and reports the
+/// clock stopped, but keeps the connection.
+pub(crate) fn send(connection: &mut MidiOutputConnection, bytes: &[u8]) -> anyhow::Result<()> {
+    connection
+        .send(bytes)
+        .map_err(|error| anyhow::anyhow!("failed to send an MTC message: {error}"))
 }
 
 /// One tick's worth of quarter-frame work: the MIDI message to send, the

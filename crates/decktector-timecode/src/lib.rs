@@ -19,6 +19,7 @@ pub mod mtc;
 /// the lookup itself now lives in `decktector-net`, shared with the remote service.
 pub use decktector_net as network;
 
+use std::net::{Ipv4Addr, SocketAddrV4};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -104,9 +105,15 @@ pub struct TimecodeConfig {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "TimecodeStatus.ts")]
 pub struct TimecodeStatus {
-    /// `false` when the protocol is off, no source deck is picked, or the
-    /// source deck has no playhead yet.
+    /// `false` when the protocol is off, no source deck is picked, the
+    /// source deck has no playhead yet, or the output could not be opened
+    /// or written to — the clock only runs while timecode actually goes out.
     pub running: bool,
+    /// `true` while the source deck is not advancing (paused, cued, or its
+    /// status stopped arriving): no timecode streams then. LTC falls silent,
+    /// and Art-Net and MTC send the held position once, then again only
+    /// when it moves. Only meaningful while `running` is `true`.
+    pub paused: bool,
     pub source_deck_id: Option<DeckId>,
     pub hours: u8,
     pub minutes: u8,
@@ -124,8 +131,14 @@ struct TimeCode {
 
 impl TimeCode {
     fn from_elapsed_ms(elapsed_ms: f64, frame_rate: FrameRate) -> Self {
+        let total_frames = ((elapsed_ms.max(0.0) / 1000.0) * frame_rate.fps() as f64) as u64;
+        Self::from_frame_count(total_frames, frame_rate)
+    }
+
+    /// The timecode `total_frames` frames after `00:00:00:00`, wrapping at
+    /// 24 hours like a real timecode clock.
+    fn from_frame_count(total_frames: u64, frame_rate: FrameRate) -> Self {
         let fps = frame_rate.fps();
-        let total_frames = ((elapsed_ms.max(0.0) / 1000.0) * fps as f64) as u64;
         let frames = (total_frames % fps) as u8;
         let total_seconds = total_frames / fps;
         let seconds = (total_seconds % 60) as u8;
@@ -139,6 +152,27 @@ impl TimeCode {
             frames,
         }
     }
+
+    /// How many frames after `00:00:00:00` this timecode lies — the exact
+    /// inverse of [`Self::from_frame_count`]. Stepping or comparing frames
+    /// goes through this integer count, never through milliseconds: a frame
+    /// period is not a whole number of milliseconds, and the round trip
+    /// lands just short of a frame boundary often enough to repeat a frame.
+    fn frame_count(self, frame_rate: FrameRate) -> u64 {
+        let total_seconds =
+            u64::from(self.hours) * 3600 + u64::from(self.minutes) * 60 + u64::from(self.seconds);
+        total_seconds * frame_rate.fps() + u64::from(self.frames)
+    }
+}
+
+/// What the source deck says the timecode is at this tick.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct SourceReading {
+    deck_id: DeckId,
+    timecode: TimeCode,
+    /// Whether that timecode is moving forward in real time — see
+    /// [`Playhead::is_advancing`].
+    is_advancing: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -218,6 +252,9 @@ impl TimecodeService {
                     if changed.is_err() {
                         break; // The service was dropped.
                     }
+                    // A new deck, protocol or destination has not been told
+                    // where a paused deck stands yet.
+                    output.held = None;
                     ticker = tokio::time::interval(tick_period(&state_rx.borrow().config));
                     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
                 }
@@ -230,43 +267,56 @@ impl TimecodeService {
 
     async fn tick(&self, output: &mut OutputState, state_rx: &watch::Receiver<GeneratorState>) {
         let state = state_rx.borrow().clone();
+        let frame_rate = state.config.frame_rate;
 
         let new_status = match self.resolve(&state) {
-            Some((timecode, deck_id)) => match &state.config.protocol {
+            Some(reading) => match &state.config.protocol {
                 TimecodeProtocol::ArtNet {
                     interface_name,
                     port,
                 } => {
                     output.mtc_session = None; // Not running MTC this tick.
                     output.ltc_stream = None; // Not running LTC this tick — stop any audio actually playing.
-                    match bound_socket(&mut output.art_net_socket, interface_name).await {
-                        Ok(socket) => {
-                            if let Err(error) =
-                                artnet::send(socket, *port, timecode, state.config.frame_rate).await
-                            {
-                                tracing::warn!(%error, interface_name, port, "failed to send an Art-Net TC frame");
-                            }
-                        }
-                        Err(error) => {
-                            tracing::warn!(%error, interface_name, "failed to bind the timecode socket to the chosen network interface");
-                        }
+                    if output.has_located(reading) {
+                        None
+                    } else {
+                        let is_sent = self
+                            .tick_art_net(
+                                output,
+                                interface_name,
+                                *port,
+                                reading.timecode,
+                                frame_rate,
+                            )
+                            .await;
+                        Some(output.record_send(reading, is_sent))
                     }
-                    Some(running_status(timecode, deck_id))
                 }
                 TimecodeProtocol::Mtc { port_name } => {
                     output.ltc_stream = None; // Not running LTC this tick — stop any audio actually playing.
-                    self.tick_mtc(
-                        output,
-                        port_name,
-                        timecode,
-                        deck_id,
-                        state.config.frame_rate,
-                    )
+                    if reading.is_advancing {
+                        output.held = None;
+                        self.tick_mtc(output, port_name, reading, frame_rate)
+                    } else if output.has_located(reading) {
+                        None
+                    } else {
+                        let is_sent =
+                            self.locate_mtc(output, port_name, reading.timecode, frame_rate);
+                        Some(output.record_send(reading, is_sent))
+                    }
                 }
                 TimecodeProtocol::Ltc { device_name } => {
                     output.mtc_session = None; // Not running MTC this tick.
-                    self.tick_ltc(output, device_name, timecode, state.config.frame_rate);
-                    Some(running_status(timecode, deck_id))
+
+                    // No locate here: a paused deck's LTC is silence, which
+                    // the audio thread produces from the jam-sync target.
+                    let is_sent = self.tick_ltc(output, device_name, reading, frame_rate);
+                    Some(output_status(
+                        reading.timecode,
+                        reading.deck_id,
+                        is_sent,
+                        !reading.is_advancing,
+                    ))
                 }
                 TimecodeProtocol::Off => {
                     unreachable!("resolve() returns None when the protocol is off")
@@ -275,11 +325,8 @@ impl TimecodeService {
             None => {
                 output.mtc_session = None;
                 output.ltc_stream = None;
-                Some(TimecodeStatus {
-                    running: false,
-                    source_deck_id: state.source_deck_id,
-                    ..TimecodeStatus::default()
-                })
+                output.held = None;
+                Some(stopped_status(state.source_deck_id))
             }
         };
 
@@ -293,10 +340,40 @@ impl TimecodeService {
         }
     }
 
+    /// Sends this tick's Art-Net TC frame, (re)binding the socket first when
+    /// needed. Returns whether the frame actually went out; a failure is
+    /// logged here, since UDP has no session for the caller to tear down.
+    async fn tick_art_net(
+        &self,
+        output: &mut OutputState,
+        interface_name: &str,
+        port: u16,
+        timecode: TimeCode,
+        frame_rate: FrameRate,
+    ) -> bool {
+        let art_net = match art_net_output(&mut output.art_net, interface_name).await {
+            Ok(art_net) => art_net,
+            Err(error) => {
+                tracing::warn!(%error, interface_name, "failed to bind the timecode socket to the chosen network interface");
+                return false;
+            }
+        };
+        let destination = SocketAddrV4::new(art_net.broadcast, port);
+        match artnet::send(&art_net.socket, destination, timecode, frame_rate).await {
+            Ok(()) => true,
+            Err(error) => {
+                tracing::warn!(%error, interface_name, %destination, "failed to send an Art-Net TC frame");
+                false
+            }
+        }
+    }
+
     /// Sends this tick's quarter-frame message and, once every 8 ticks (one
     /// full cycle, 2 frames), the value the caller should broadcast as the
     /// new [`TimecodeStatus`] — `None` on the 7 ticks in between, since the
-    /// status only actually advances at the start of each cycle.
+    /// status only actually advances at the start of each cycle. That status
+    /// is stopped rather than running when the cycle's first message could
+    /// not be sent.
     ///
     /// A Full Timecode SysEx is sent whenever output (re)starts or the
     /// source deck / frame rate changes, detected by comparing against the
@@ -306,12 +383,11 @@ impl TimecodeService {
         &self,
         output: &mut OutputState,
         port_name: &str,
-        timecode: TimeCode,
-        deck_id: DeckId,
+        reading: SourceReading,
         frame_rate: FrameRate,
     ) -> Option<TimecodeStatus> {
         let session = MtcSession {
-            deck_id,
+            deck_id: reading.deck_id,
             frame_rate,
         };
         let is_restart = output.mtc_session != Some(session);
@@ -320,50 +396,83 @@ impl TimecodeService {
             output.mtc_cycle = mtc::QuarterFrameCycle::new();
         }
 
-        let quarter_frame = output.mtc_cycle.tick(timecode, frame_rate);
+        let quarter_frame = output.mtc_cycle.tick(reading.timecode, frame_rate);
 
-        match connected_midi(&mut output.mtc_connection, port_name) {
-            Ok(connection) => {
-                if is_restart {
-                    let sysex = mtc::full_timecode_sysex(quarter_frame.timecode, frame_rate);
-                    mtc::send(connection, &sysex);
-                }
-                mtc::send(connection, &quarter_frame.bytes);
+        let sent = connected_midi(&mut output.mtc_connection, port_name).and_then(|connection| {
+            if is_restart {
+                let sysex = mtc::full_timecode_sysex(quarter_frame.timecode, frame_rate);
+                mtc::send(connection, &sysex)?;
             }
-            Err(error) => {
-                tracing::warn!(%error, port_name, "failed to connect to the chosen MIDI output port");
-            }
+            mtc::send(connection, &quarter_frame.bytes)
+        });
+        if let Err(error) = &sent {
+            tracing::warn!(%error, port_name, "failed to send MTC to the chosen MIDI output port");
         }
 
         quarter_frame
             .is_new_cycle
-            .then(|| running_status(quarter_frame.timecode, deck_id))
+            .then(|| output_status(quarter_frame.timecode, reading.deck_id, sent.is_ok(), false))
+    }
+
+    /// Tells MTC receivers where a deck that isn't advancing stands, with a
+    /// Full Timecode SysEx — the standard locate message; quarter frames
+    /// would say the transport is rolling. Returns whether it went out.
+    ///
+    /// Ends the quarter-frame session, so the stream restarts with its own
+    /// Full Timecode once the deck plays again.
+    fn locate_mtc(
+        &self,
+        output: &mut OutputState,
+        port_name: &str,
+        timecode: TimeCode,
+        frame_rate: FrameRate,
+    ) -> bool {
+        output.mtc_session = None;
+        let sysex = mtc::full_timecode_sysex(timecode, frame_rate);
+        let sent = connected_midi(&mut output.mtc_connection, port_name)
+            .and_then(|connection| mtc::send(connection, &sysex));
+        if let Err(error) = &sent {
+            tracing::warn!(%error, port_name, "failed to send the held MTC position to the chosen MIDI output port");
+        }
+        sent.is_ok()
     }
 
     /// Keeps the LTC audio stream alive and jam-synced. Unlike Art-Net and
     /// MTC there is no message to send here: the tick loop only lazily
     /// (re)starts the stream on a device mismatch (mirroring
-    /// [`bound_socket`]/[`connected_midi`]) and hands it the deck's current
+    /// [`art_net_output`]/[`connected_midi`]) and hands it the deck's current
     /// timecode so its free-running audio thread can re-latch if it has
     /// drifted — see the [`ltc`] module doc for the full picture.
+    ///
+    /// Returns whether LTC is actually reaching the device: `false` when the
+    /// stream could not start, or its device went away since.
     fn tick_ltc(
         &self,
         output: &mut OutputState,
         device_name: &str,
-        timecode: TimeCode,
+        reading: SourceReading,
         frame_rate: FrameRate,
-    ) {
-        match ltc_stream(&mut output.ltc_stream, device_name, timecode, frame_rate) {
-            Ok(stream) => stream.resync(timecode, frame_rate),
+    ) -> bool {
+        let target = ltc::LtcTarget {
+            timecode: reading.timecode,
+            frame_rate,
+            is_advancing: reading.is_advancing,
+        };
+        match ltc_stream(&mut output.ltc_stream, device_name, target) {
+            Ok(stream) => {
+                stream.resync(target);
+                !stream.is_device_lost()
+            }
             Err(error) => {
                 tracing::warn!(%error, device_name, "failed to start the LTC output stream");
+                false
             }
         }
     }
 
     /// The timecode for this instant, if the config and source deck allow
     /// producing one at all.
-    fn resolve(&self, state: &GeneratorState) -> Option<(TimeCode, DeckId)> {
+    fn resolve(&self, state: &GeneratorState) -> Option<SourceReading> {
         if matches!(state.config.protocol, TimecodeProtocol::Off) {
             return None;
         }
@@ -371,48 +480,62 @@ impl TimecodeService {
         // Runs on every tick (up to ~120 a second for MTC): read the source
         // deck alone, not a whole snapshot that clones every track's waveform.
         let deck = self.engine.handle().deck_state(deck_id)?;
-        let elapsed_ms = extrapolate_playhead_ms(&deck, epoch_ms())?;
-        Some((
-            TimeCode::from_elapsed_ms(elapsed_ms, state.config.frame_rate),
+        let playhead = extrapolate_playhead(&deck, epoch_ms())?;
+        Some(SourceReading {
             deck_id,
-        ))
+            timecode: TimeCode::from_elapsed_ms(playhead.position_ms, state.config.frame_rate),
+            is_advancing: playhead.is_advancing,
+        })
     }
 }
 
-/// The cached socket if it is already bound to `interface_name`, otherwise a
-/// freshly bound replacement.
+/// Where Art-Net TC goes out: a socket bound to the chosen interface, and
+/// that interface's subnet broadcast address.
+struct ArtNetOutput {
+    interface_name: String,
+    socket: UdpSocket,
+    broadcast: Ipv4Addr,
+}
+
+impl ArtNetOutput {
+    async fn bind(interface_name: &str) -> anyhow::Result<Self> {
+        let subnet = network::resolve_ipv4_subnet(interface_name)?;
+        let socket = UdpSocket::bind((subnet.ip, 0)).await?;
+        socket.set_broadcast(true)?;
+        Ok(Self {
+            interface_name: interface_name.to_string(),
+            socket,
+            // The subnet's own broadcast address, as the Art-Net spec asks:
+            // binding the socket alone doesn't stop 255.255.255.255 leaving
+            // through another adapter (see `Ipv4Subnet::broadcast`). A subnet
+            // too small to have one is a point-to-point link, where the
+            // limited broadcast has only one way out anyway.
+            broadcast: subnet.broadcast().unwrap_or(Ipv4Addr::BROADCAST),
+        })
+    }
+}
+
+/// The cached Art-Net output if it is already bound to `interface_name`,
+/// otherwise a freshly bound replacement.
 ///
 /// Rebinding on every mismatch (not just on the first call) is what lets a
 /// mid-session interface switch in the settings panel take effect on the
-/// very next tick, and what recovers if the adapter's address changed under
-/// DHCP.
-async fn bound_socket<'a>(
-    cached: &'a mut Option<(String, UdpSocket)>,
+/// very next tick.
+async fn art_net_output<'a>(
+    cached: &'a mut Option<ArtNetOutput>,
     interface_name: &str,
-) -> anyhow::Result<&'a UdpSocket> {
-    let is_current = matches!(cached, Some((bound_name, _)) if bound_name == interface_name);
+) -> anyhow::Result<&'a ArtNetOutput> {
+    let is_current = matches!(cached, Some(output) if output.interface_name == interface_name);
     if !is_current {
-        *cached = Some((
-            interface_name.to_string(),
-            bind_socket(interface_name).await?,
-        ));
+        *cached = Some(ArtNetOutput::bind(interface_name).await?);
     }
-    Ok(&cached.as_ref().expect("just bound above").1)
-}
-
-async fn bind_socket(interface_name: &str) -> anyhow::Result<UdpSocket> {
-    let ip = network::resolve_ipv4(interface_name)?;
-    let socket = UdpSocket::bind((ip, 0)).await?;
-    // Art-Net is conventionally broadcast on the node's subnet; unicast
-    // targets still work fine with this flag set.
-    socket.set_broadcast(true)?;
-    Ok(socket)
+    Ok(cached.as_ref().expect("just bound above"))
 }
 
 /// The cached MIDI connection if it is already open on `port_name`,
 /// otherwise a freshly opened replacement.
 ///
-/// Mirrors [`bound_socket`]: rebuilding on every mismatch is what lets a
+/// Mirrors [`art_net_output`]: rebuilding on every mismatch is what lets a
 /// mid-session port switch in the settings panel take effect on the very
 /// next tick.
 fn connected_midi<'a>(
@@ -429,23 +552,19 @@ fn connected_midi<'a>(
 /// The cached LTC stream if it is already bound to `device_name`, otherwise
 /// a freshly started replacement.
 ///
-/// Mirrors [`bound_socket`] and [`connected_midi`]: rebuilding on every
+/// Mirrors [`art_net_output`] and [`connected_midi`]: rebuilding on every
 /// mismatch is what lets a mid-session device switch in the settings panel
-/// take effect on the very next tick. Unlike those two, no wrapper tuple is
-/// needed here — [`ltc::LtcStream`] already remembers its own device name.
+/// take effect on the very next tick. Like [`ArtNetOutput`], and unlike the
+/// MIDI connection, no wrapper tuple is needed here — [`ltc::LtcStream`]
+/// already remembers its own device name.
 fn ltc_stream<'a>(
     cached: &'a mut Option<ltc::LtcStream>,
     device_name: &str,
-    initial_timecode: TimeCode,
-    frame_rate: FrameRate,
+    initial_target: ltc::LtcTarget,
 ) -> anyhow::Result<&'a ltc::LtcStream> {
     let is_current = matches!(cached, Some(stream) if stream.device_name() == device_name);
     if !is_current {
-        *cached = Some(ltc::LtcStream::start(
-            device_name,
-            initial_timecode,
-            frame_rate,
-        )?);
+        *cached = Some(ltc::LtcStream::start(device_name, initial_target)?);
     }
     Ok(cached.as_ref().expect("just started above"))
 }
@@ -468,9 +587,21 @@ fn tick_period(config: &TimecodeConfig) -> Duration {
     }
 }
 
-fn running_status(timecode: TimeCode, deck_id: DeckId) -> TimecodeStatus {
+/// The status for a tick that produced `timecode` from `deck_id`: running
+/// only if that timecode actually went out, paused while the deck holds
+/// still.
+fn output_status(
+    timecode: TimeCode,
+    deck_id: DeckId,
+    is_sent: bool,
+    is_paused: bool,
+) -> TimecodeStatus {
+    if !is_sent {
+        return stopped_status(Some(deck_id));
+    }
     TimecodeStatus {
         running: true,
+        paused: is_paused,
         source_deck_id: Some(deck_id),
         hours: timecode.hours,
         minutes: timecode.minutes,
@@ -479,18 +610,61 @@ fn running_status(timecode: TimeCode, deck_id: DeckId) -> TimecodeStatus {
     }
 }
 
+fn stopped_status(source_deck_id: Option<DeckId>) -> TimecodeStatus {
+    TimecodeStatus {
+        running: false,
+        source_deck_id,
+        ..TimecodeStatus::default()
+    }
+}
+
 /// Cross-tick state threaded through [`TimecodeService::tick`]: the
-/// Art-Net socket, MIDI connection and LTC audio stream, each cached and
+/// Art-Net output, MIDI connection and LTC audio stream, each cached and
 /// only rebuilt when what they're bound to changes, plus the MTC
 /// quarter-frame cycle's own progress and which deck/frame-rate session it
 /// was last latched for.
 #[derive(Default)]
 struct OutputState {
-    art_net_socket: Option<(String, UdpSocket)>,
+    art_net: Option<ArtNetOutput>,
     mtc_connection: Option<(String, midir::MidiOutputConnection)>,
     mtc_cycle: mtc::QuarterFrameCycle,
     mtc_session: Option<MtcSession>,
     ltc_stream: Option<ltc::LtcStream>,
+    /// The position last sent for a deck that isn't advancing: Art-Net and
+    /// MTC send it once instead of streaming it, then again only when it
+    /// moves (a jump to the cue point while paused). `None` while the deck
+    /// advances, and after any change to the source or config.
+    held: Option<HeldPosition>,
+}
+
+impl OutputState {
+    /// Whether `reading` is a held position that already went out.
+    fn has_located(&self, reading: SourceReading) -> bool {
+        !reading.is_advancing
+            && matches!(self.held, Some(held) if held.timecode == reading.timecode && held.is_sent)
+    }
+
+    /// Records what this tick sent for `reading` and returns its status.
+    fn record_send(&mut self, reading: SourceReading, is_sent: bool) -> TimecodeStatus {
+        self.held = (!reading.is_advancing).then_some(HeldPosition {
+            timecode: reading.timecode,
+            is_sent,
+        });
+        output_status(
+            reading.timecode,
+            reading.deck_id,
+            is_sent,
+            !reading.is_advancing,
+        )
+    }
+}
+
+/// What went out for a deck holding still — see [`OutputState::held`]. A
+/// failed send is kept too, so the next tick retries it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct HeldPosition {
+    timecode: TimeCode,
+    is_sent: bool,
 }
 
 /// Identifies what an MTC output stream is currently describing — compared
@@ -507,18 +681,36 @@ struct MtcSession {
 /// outage. Mirrors `MAX_EXTRAPOLATION_MS` in the renderer's `lib/playhead.ts`.
 const MAX_EXTRAPOLATION_MS: f64 = 1_500.0;
 
+/// A deck's playhead at one instant, as the generator reads it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Playhead {
+    position_ms: f64,
+    /// Whether the position moves forward in real time: the deck is playing
+    /// and its status is recent enough to project from. `false` while it is
+    /// paused or cued, and once its status stopped arriving and the position
+    /// holds — no timecode streams then (see [`TimecodeStatus::paused`]).
+    is_advancing: bool,
+}
+
 /// Mirrors the renderer's own extrapolation in `lib/playhead.ts`: status
 /// packets land at ~5 Hz, so the position between them is projected forward
 /// from the last anchor using the deck's pitch. Once status stops arriving
 /// the projection holds at [`MAX_EXTRAPOLATION_MS`]: timecode freezes with
 /// the deck instead of running on for a deck that may have stopped long ago.
-fn extrapolate_playhead_ms(deck: &DeckState, now_ms: f64) -> Option<f64> {
+fn extrapolate_playhead(deck: &DeckState, now_ms: f64) -> Option<Playhead> {
     let playhead_ms = deck.playhead_ms?;
     if deck.play_state != PlayState::Playing {
-        return Some(playhead_ms);
+        return Some(Playhead {
+            position_ms: playhead_ms,
+            is_advancing: false,
+        });
     }
-    let elapsed_ms = (now_ms - deck.reported_at).min(MAX_EXTRAPOLATION_MS);
-    Some(playhead_ms + elapsed_ms * (1.0 + deck.pitch / 100.0))
+    let since_status_ms = now_ms - deck.reported_at;
+    let speed = 1.0 + deck.pitch / 100.0;
+    Some(Playhead {
+        position_ms: playhead_ms + since_status_ms.min(MAX_EXTRAPOLATION_MS) * speed,
+        is_advancing: since_status_ms < MAX_EXTRAPOLATION_MS && speed > 0.0,
+    })
 }
 
 fn epoch_ms() -> f64 {
@@ -559,30 +751,126 @@ mod tests {
     }
 
     #[test]
+    fn frame_count_round_trips_every_frame_of_an_hour_at_every_rate() {
+        for frame_rate in [FrameRate::Film24, FrameRate::Ebu25, FrameRate::Smpte30] {
+            for total_frames in 0..frame_rate.fps() * 3600 {
+                let timecode = TimeCode::from_frame_count(total_frames, frame_rate);
+                assert_eq!(
+                    timecode.frame_count(frame_rate),
+                    total_frames,
+                    "{frame_rate:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn frame_count_wraps_at_24_hours() {
+        let day = FrameRate::Ebu25.fps() * 24 * 3600;
+        assert_eq!(
+            TimeCode::from_frame_count(day + 3, FrameRate::Ebu25),
+            TimeCode::from_frame_count(3, FrameRate::Ebu25)
+        );
+    }
+
+    #[test]
     fn paused_deck_reports_its_playhead_without_extrapolation() {
         let deck = deck(10_000.0, PlayState::Paused, 4.0, 0.0);
-        assert_eq!(extrapolate_playhead_ms(&deck, 5_000.0), Some(10_000.0));
+        assert_eq!(
+            extrapolate_playhead(&deck, 5_000.0),
+            Some(Playhead {
+                position_ms: 10_000.0,
+                is_advancing: false
+            })
+        );
     }
 
     #[test]
     fn playing_deck_extrapolates_forward_with_pitch() {
         let deck = deck(10_000.0, PlayState::Playing, 4.0, 1_000.0);
         // 500ms of wall time at +4% pitch.
-        assert_eq!(extrapolate_playhead_ms(&deck, 1_500.0), Some(10_520.0));
+        assert_eq!(
+            extrapolate_playhead(&deck, 1_500.0),
+            Some(Playhead {
+                position_ms: 10_520.0,
+                is_advancing: true
+            })
+        );
     }
 
     #[test]
     fn a_deck_whose_status_stopped_arriving_holds_its_timecode() {
         let deck = deck(10_000.0, PlayState::Playing, 0.0, 1_000.0);
-        let held = extrapolate_playhead_ms(&deck, 1_000.0 + MAX_EXTRAPOLATION_MS);
+        let held = extrapolate_playhead(&deck, 1_000.0 + MAX_EXTRAPOLATION_MS)
+            .expect("the deck has a playhead");
+        assert!(!held.is_advancing);
         // A minute without status: the deck may have stopped long ago.
-        assert_eq!(extrapolate_playhead_ms(&deck, 61_000.0), held);
+        assert_eq!(extrapolate_playhead(&deck, 61_000.0), Some(held));
+    }
+
+    #[test]
+    fn a_deck_pitched_all_the_way_down_does_not_advance() {
+        let deck = deck(10_000.0, PlayState::Playing, -100.0, 1_000.0);
+        let playhead = extrapolate_playhead(&deck, 1_500.0).expect("the deck has a playhead");
+        assert!(!playhead.is_advancing);
     }
 
     #[test]
     fn no_playhead_yet_means_no_timecode() {
         let mut deck = deck(0.0, PlayState::Playing, 0.0, 0.0);
         deck.playhead_ms = None;
-        assert_eq!(extrapolate_playhead_ms(&deck, 1_000.0), None);
+        assert_eq!(extrapolate_playhead(&deck, 1_000.0), None);
+    }
+
+    #[test]
+    fn a_tick_that_could_not_send_reports_the_clock_stopped() {
+        let timecode = TimeCode::from_frame_count(1234, FrameRate::Smpte30);
+        let status = output_status(timecode, 2, false, false);
+        assert!(!status.running);
+        assert_eq!(status.source_deck_id, Some(2));
+        assert_eq!(status, stopped_status(Some(2)));
+        assert!(output_status(timecode, 2, true, false).running);
+    }
+
+    fn reading(total_frames: u64, is_advancing: bool) -> SourceReading {
+        SourceReading {
+            deck_id: 1,
+            timecode: TimeCode::from_frame_count(total_frames, FrameRate::Smpte30),
+            is_advancing,
+        }
+    }
+
+    #[test]
+    fn a_paused_deck_sends_its_position_once_instead_of_streaming_it() {
+        let mut output = OutputState::default();
+        let paused = reading(900, false);
+        assert!(!output.has_located(paused));
+
+        let status = output.record_send(paused, true);
+        assert!(status.running && status.paused);
+        assert!(output.has_located(paused), "the next ticks send nothing");
+
+        // A jump to the cue point while paused is a new position to send.
+        assert!(!output.has_located(reading(300, false)));
+    }
+
+    #[test]
+    fn a_held_position_that_failed_to_go_out_is_sent_again() {
+        let mut output = OutputState::default();
+        let paused = reading(900, false);
+        output.record_send(paused, false);
+        assert!(!output.has_located(paused));
+    }
+
+    #[test]
+    fn a_playing_deck_streams_every_tick() {
+        let mut output = OutputState::default();
+        output.record_send(reading(900, false), true);
+
+        let playing = reading(900, true);
+        assert!(!output.has_located(playing));
+        let status = output.record_send(playing, true);
+        assert!(status.running && !status.paused);
+        assert_eq!(output.held, None);
     }
 }

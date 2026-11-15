@@ -5,7 +5,15 @@
  */
 export type TimecodeStatus = { 
 /**
- * `false` when the protocol is off, no source deck is picked, or the
- * source deck has no playhead yet.
+ * `false` when the protocol is off, no source deck is picked, the
+ * source deck has no playhead yet, or the output could not be opened
+ * or written to — the clock only runs while timecode actually goes out.
  */
-running: boolean, sourceDeckId: number | null, hours: number, minutes: number, seconds: number, frames: number, };
+running: boolean, 
+/**
+ * `true` while the source deck is not advancing (paused, cued, or its
+ * status stopped arriving): no timecode streams then. LTC falls silent,
+ * and Art-Net and MTC send the held position once, then again only
+ * when it moves. Only meaningful while `running` is `true`.
+ */
+paused: boolean, sourceDeckId: number | null, hours: number, minutes: number, seconds: number, frames: number, };

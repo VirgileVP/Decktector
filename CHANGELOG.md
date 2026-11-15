@@ -47,6 +47,22 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
   the CDJ-3000: their position now runs smoothly from one beat to the next instead of
   falling back to the start of the beat a few times per beat. The deck's time display
   runs smoother too.
+- LTC output no longer repeats and skips frames several times a second.
+- LTC output keeps the right speed on a 44.1 kHz or 88.2 kHz sound card. It used to run
+  2% fast at 30 fps and 4.4% fast at 24 fps, close enough to 25 fps to confuse a
+  receiver.
+- Timecode stops when the source deck is paused or cued, instead of streaming the same
+  frame over and over as if the deck were still playing. LTC goes silent. Art-Net and
+  MTC send the paused position once, and again if it moves (a jump to the cue point,
+  say) — MTC as a Full Frame message, the standard way to locate a receiver. The header
+  clock keeps showing the paused position, without its glow, and resumes on play.
+- The timecode clock in the header only runs while timecode actually goes out. It
+  shows dashes when the chosen network interface, MIDI port or audio device can't be
+  used, or the audio device was unplugged.
+- Art-Net timecode is broadcast on the chosen network interface's own subnet (for
+  example `2.255.255.255`), as the Art-Net spec asks, instead of `255.255.255.255`.
+  On a machine with several networks — Wi-Fi plus a lighting network — it goes out on
+  the one picked in settings, rather than wherever the system sends a general broadcast.
 
 ## [1.5.1] - 2026-10-22
 

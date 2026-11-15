@@ -160,6 +160,13 @@ input[type='checkbox']:focus-visible {
   text-shadow: none;
 }
 
+/* Paused: the source deck holds still, so no timecode streams. The held
+   position stays in LED green but loses the glow, which means "live". */
+.timecode-clock-paused {
+  text-shadow: none;
+  opacity: 0.55;
+}
+
 .tc-source-buttons {
   display: flex;
   gap: 3px;

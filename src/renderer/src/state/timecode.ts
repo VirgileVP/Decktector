@@ -6,6 +6,7 @@ import type { DeckId, TimecodeStatus } from '../model'
 
 const IDLE_STATUS: TimecodeStatus = {
   running: false,
+  paused: false,
   sourceDeckId: null,
   hours: 0,
   minutes: 0,

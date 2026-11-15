@@ -10,13 +10,15 @@
 //! The audio side runs on its own dedicated OS thread owning a
 //! [`cpal::Stream`] — `cpal::Stream` is `!Send` on most platforms, so it
 //! cannot live inside [`crate::TimecodeService`]'s async task. That thread
-//! free-runs its own frame counter, computed from elapsed sample count, and
+//! free-runs its own frame counter, one frame per LTC frame of audio, and
 //! never asks the deck for its position directly. Instead the tick loop
 //! (see [`crate::TimecodeService::tick`]'s `Ltc` branch) periodically hands
 //! it the deck's real extrapolated timecode through [`LtcLatch`], the only
-//! thing shared between the two threads; if the free-running counter has
-//! drifted more than ~1 frame from that target, the audio thread jam-syncs
-//! onto it at its next frame boundary.
+//! thing shared between the two threads. While the deck plays, the audio
+//! thread jam-syncs onto that target at its next frame boundary if the
+//! free-running counter has drifted more than [`MAX_DRIFT_FRAMES`] from it;
+//! while the deck is not advancing, it plays silence — see
+//! [`FrameSequencer`].
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
@@ -28,6 +30,9 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 use crate::{FrameRate, TimeCode};
 
+/// Every LTC frame is 80 bits long, whatever the frame rate.
+const BITS_PER_FRAME: usize = 80;
+
 /// The fixed 16-bit pattern that closes every LTC frame (bits 64-79, bit 64
 /// sent first). This exact pattern never occurs elsewhere in valid
 /// biphase-encoded LTC, which is what lets a receiver find frame
@@ -36,6 +41,18 @@ const SYNC_WORD_BITS: [bool; 16] = [
     false, false, true, true, true, true, true, true, true, true, true, true, true, true, false,
     true,
 ];
+
+/// How far the free-running frame counter may stray from the deck's real
+/// position before the audio thread jam-syncs onto it. One frame absorbs the
+/// target's own rounding to whole frames without letting a real drift
+/// through.
+const MAX_DRIFT_FRAMES: u64 = 1;
+
+/// A `1` bit flips mid-bit, so a bit needs at least two samples to carry it.
+const MIN_SAMPLES_PER_BIT: f64 = 2.0;
+
+/// What the device plays while the deck holds still: no LTC at all.
+const SILENCE: f32 = 0.0;
 
 /// Every audio output device this machine could send LTC to.
 pub fn list_output_devices() -> anyhow::Result<Vec<String>> {
@@ -47,7 +64,7 @@ pub fn list_output_devices() -> anyhow::Result<Vec<String>> {
 
 /// Sets `width` bits starting at `start`, least-significant bit first — the
 /// bit order every BCD field and binary field in the LTC frame uses.
-fn set_bits(bits: &mut [bool; 80], start: usize, width: usize, value: u8) {
+fn set_bits(bits: &mut [bool; BITS_PER_FRAME], start: usize, width: usize, value: u8) {
     for i in 0..width {
         bits[start + i] = (value >> i) & 1 != 0;
     }
@@ -72,8 +89,8 @@ fn set_bits(bits: &mut [bool; 80], start: usize, width: usize, value: u8) {
 /// - 43: unused; 44-47: user bits 6; 48-51: hours units (BCD)
 /// - 52-55: user bits 7; 56-57: hours tens; 58-59: unused; 60-63: user bits 8
 /// - 64-79: sync word ([`SYNC_WORD_BITS`])
-fn frame_bits(timecode: TimeCode, _frame_rate: FrameRate) -> [bool; 80] {
-    let mut bits = [false; 80];
+fn frame_bits(timecode: TimeCode, _frame_rate: FrameRate) -> [bool; BITS_PER_FRAME] {
+    let mut bits = [false; BITS_PER_FRAME];
     set_bits(&mut bits, 0, 4, timecode.frames % 10);
     set_bits(&mut bits, 8, 2, timecode.frames / 10);
     set_bits(&mut bits, 16, 4, timecode.seconds % 10);
@@ -86,28 +103,80 @@ fn frame_bits(timecode: TimeCode, _frame_rate: FrameRate) -> [bool; 80] {
     bits
 }
 
-/// How many audio samples one LTC bit occupies at `sample_rate`, for a
-/// frame rate whose LTC frame is always 80 bits.
-fn samples_per_bit(sample_rate: u32, frame_rate: FrameRate) -> usize {
-    (sample_rate as u64 / (frame_rate.fps() * 80)).max(1) as usize
+/// How many audio samples one LTC bit lasts at `sample_rate` — rarely a
+/// whole number, see [`BitClock`].
+fn samples_per_bit(sample_rate: u32, frame_rate: FrameRate) -> f64 {
+    let bits_per_second = (frame_rate.fps() * BITS_PER_FRAME as u64) as f64;
+    (f64::from(sample_rate) / bits_per_second).max(MIN_SAMPLES_PER_BIT)
 }
 
-/// Encodes `bits` as biphase-mark samples, `samples_per_bit` samples per
-/// bit. `level` is the polarity in effect just before this call and is
-/// updated in place to the polarity in effect after the last sample — so
-/// callers can chain successive frames back-to-back with a transition
-/// preserved at every bit boundary, including the seam between calls.
+/// Splits the LTC bit stream into whole audio samples while keeping its
+/// average bit duration exact.
+///
+/// One bit lasts `sample_rate / (fps * 80)` samples: 18.375 at 44.1 kHz and
+/// 30 fps. Rounding that per bit would run the whole signal fast — 2% there,
+/// 4.4% at 24 fps, close enough to the 25 fps bit rate to fool a receiver —
+/// so each bit gets the samples that fall inside its exact time span instead,
+/// and the fraction left over carries into the next bit.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct BitClock {
+    samples_per_bit: f64,
+    /// How far, in samples, the current bit's exact start lies before the
+    /// first sample it is given — always in `0.0..1.0`.
+    lag: f64,
+}
+
+impl BitClock {
+    fn new(sample_rate: u32, frame_rate: FrameRate) -> Self {
+        Self::with_samples_per_bit(samples_per_bit(sample_rate, frame_rate))
+    }
+
+    fn with_samples_per_bit(samples_per_bit: f64) -> Self {
+        Self {
+            samples_per_bit,
+            lag: 0.0,
+        }
+    }
+
+    /// Follows a frame-rate change without breaking the bit stream.
+    fn set_rate(&mut self, sample_rate: u32, frame_rate: FrameRate) {
+        self.samples_per_bit = samples_per_bit(sample_rate, frame_rate);
+    }
+
+    /// The next bit's length in samples, and the index (within it) of the
+    /// first sample of its second half — where a `1` bit flips.
+    fn next_bit(&mut self) -> (usize, usize) {
+        let end = self.samples_per_bit - self.lag;
+        let length = end.ceil();
+        let midpoint = (self.samples_per_bit / 2.0 - self.lag).ceil().max(1.0);
+        self.lag = length - end;
+        (length as usize, midpoint as usize)
+    }
+
+    /// The next whole frame's length in samples, for a frame that carries
+    /// no bits (silence) but must keep the stream's timing.
+    fn next_frame_length(&mut self) -> usize {
+        (0..BITS_PER_FRAME).map(|_| self.next_bit().0).sum()
+    }
+}
+
+/// Encodes `bits` as biphase-mark samples, timed by `bit_clock`. `level` is
+/// the polarity in effect just before this call and is updated in place to
+/// the polarity in effect after the last sample — so callers can chain
+/// successive frames back-to-back with a transition preserved at every bit
+/// boundary, including the seam between calls.
 ///
 /// Biphase-mark rule: there is always a transition at the start of a bit
 /// period; a `1` bit has an additional transition at the bit's midpoint, a
 /// `0` bit has none.
-fn biphase_samples(bits: &[bool], samples_per_bit: usize, level: &mut f32) -> Vec<f32> {
-    let mut samples = Vec::with_capacity(bits.len() * samples_per_bit);
+fn biphase_samples(bits: &[bool], bit_clock: &mut BitClock, level: &mut f32) -> Vec<f32> {
+    let mut samples = Vec::with_capacity(bits.len() * bit_clock.samples_per_bit.ceil() as usize);
     for &bit in bits {
+        let (length, midpoint) = bit_clock.next_bit();
         *level = -*level;
         samples.push(*level);
-        for i in 1..samples_per_bit {
-            if bit && i == samples_per_bit / 2 {
+        for i in 1..length {
+            if bit && i == midpoint {
                 *level = -*level;
             }
             samples.push(*level);
@@ -116,49 +185,101 @@ fn biphase_samples(bits: &[bool], samples_per_bit: usize, level: &mut f32) -> Ve
     samples
 }
 
-/// One LTC frame's worth of biphase-mark-encoded audio samples, starting
-/// from a fresh negative polarity.
-fn frame_samples(bits: &[bool; 80], sample_rate: u32, frame_rate: FrameRate) -> Vec<f32> {
-    let mut level = -1.0_f32;
-    biphase_samples(bits, samples_per_bit(sample_rate, frame_rate), &mut level)
-}
-
-fn timecode_to_ms(timecode: TimeCode, frame_rate: FrameRate) -> f64 {
-    let total_seconds =
-        timecode.hours as f64 * 3600.0 + timecode.minutes as f64 * 60.0 + timecode.seconds as f64;
-    (total_seconds + timecode.frames as f64 / frame_rate.fps() as f64) * 1000.0
-}
-
 fn next_timecode(timecode: TimeCode, frame_rate: FrameRate) -> TimeCode {
-    let frame_ms = 1000.0 / frame_rate.fps() as f64;
-    TimeCode::from_elapsed_ms(timecode_to_ms(timecode, frame_rate) + frame_ms, frame_rate)
+    TimeCode::from_frame_count(timecode.frame_count(frame_rate) + 1, frame_rate)
 }
 
 /// How many whole frames apart `a` and `b` are, regardless of sign.
-fn frames_apart(a: TimeCode, b: TimeCode, frame_rate: FrameRate) -> f64 {
-    let frame_ms = 1000.0 / frame_rate.fps() as f64;
-    (timecode_to_ms(a, frame_rate) - timecode_to_ms(b, frame_rate)).abs() / frame_ms
+fn frames_apart(a: TimeCode, b: TimeCode, frame_rate: FrameRate) -> u64 {
+    a.frame_count(frame_rate)
+        .abs_diff(b.frame_count(frame_rate))
 }
 
-/// Where the LTC audio thread should be, extrapolated from the latch's
-/// anchor to this instant.
-fn timecode_at(latch: &LtcLatch) -> TimeCode {
-    let elapsed_ms = latch.start_instant.elapsed().as_secs_f64() * 1000.0;
-    TimeCode::from_elapsed_ms(
-        timecode_to_ms(latch.start_timecode, latch.frame_rate) + elapsed_ms,
-        latch.frame_rate,
-    )
+/// What the LTC output should be saying, as handed over by the tick loop.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct LtcTarget {
+    pub(crate) timecode: TimeCode,
+    pub(crate) frame_rate: FrameRate,
+    /// Whether the deck's timecode moves forward in real time — see
+    /// [`crate::Playhead::is_advancing`].
+    pub(crate) is_advancing: bool,
 }
 
-/// Jam-sync target shared between the async tick loop and the audio thread.
+/// Jam-sync target shared between the async tick loop and the audio thread:
+/// the tick loop's latest [`LtcTarget`] and the instant it was handed over.
 ///
-/// The tick loop only ever touches this `Mutex`, never the `cpal::Stream`
-/// directly — that is what keeps everything the async side holds `Send`.
+/// The tick loop only ever touches this through a `Mutex`, never the
+/// `cpal::Stream` directly — that is what keeps everything the async side
+/// holds `Send`.
 #[derive(Debug, Clone, Copy)]
 struct LtcLatch {
-    start_timecode: TimeCode,
-    start_instant: Instant,
-    frame_rate: FrameRate,
+    target: LtcTarget,
+    set_at: Instant,
+}
+
+impl LtcLatch {
+    fn new(target: LtcTarget, set_at: Instant) -> Self {
+        Self { target, set_at }
+    }
+
+    /// Where the deck should be at `now`: the target projected forward in
+    /// real time while it advances, the target itself while it doesn't.
+    fn timecode_at(&self, now: Instant) -> TimeCode {
+        let LtcTarget {
+            timecode,
+            frame_rate,
+            is_advancing,
+        } = self.target;
+        if !is_advancing {
+            return timecode;
+        }
+        let elapsed = now.saturating_duration_since(self.set_at);
+        let elapsed_frames = (elapsed.as_secs_f64() * frame_rate.fps() as f64) as u64;
+        TimeCode::from_frame_count(
+            timecode.frame_count(frame_rate) + elapsed_frames,
+            frame_rate,
+        )
+    }
+}
+
+/// Decides which timecode each successive LTC frame carries, if any.
+///
+/// Counts on one frame at a time while the deck plays — an LTC reader
+/// expects every frame in turn — and jam-syncs onto the deck's real position
+/// once the count has strayed more than [`MAX_DRIFT_FRAMES`] from it. While
+/// the deck isn't advancing there is no frame at all: a stopped transport
+/// sends no LTC, which is how a reader knows it stopped.
+#[derive(Debug, Clone, Copy, Default)]
+struct FrameSequencer {
+    /// The frame last sent, `None` after silence (or before the first one).
+    current: Option<TimeCode>,
+}
+
+impl FrameSequencer {
+    /// The timecode of the frame that starts at `now`, `None` for a frame's
+    /// worth of silence.
+    fn next_frame(&mut self, latch: &LtcLatch, now: Instant) -> Option<TimeCode> {
+        if !latch.target.is_advancing {
+            self.current = None;
+            return None;
+        }
+        let target = latch.timecode_at(now);
+        let frame_rate = latch.target.frame_rate;
+        let next = match self.current {
+            // Playing again (or starting): pick up exactly where the deck is.
+            None => target,
+            Some(previous) => {
+                let counted = next_timecode(previous, frame_rate);
+                if frames_apart(counted, target, frame_rate) > MAX_DRIFT_FRAMES {
+                    target
+                } else {
+                    counted
+                }
+            }
+        };
+        self.current = Some(next);
+        self.current
+    }
 }
 
 /// Owns the dedicated OS thread that free-runs LTC audio output to a chosen
@@ -170,6 +291,7 @@ struct LtcLatch {
 pub(crate) struct LtcStream {
     latch: Arc<Mutex<LtcLatch>>,
     stop: Arc<AtomicBool>,
+    device_lost: Arc<AtomicBool>,
     thread: Option<thread::JoinHandle<()>>,
     device_name: String,
 }
@@ -179,26 +301,26 @@ impl LtcStream {
     /// blocking until the stream is confirmed playing (or has failed) so
     /// callers get the same synchronous success/failure signal as
     /// [`crate::mtc::connect`].
-    pub(crate) fn start(
-        device_name: &str,
-        initial_timecode: TimeCode,
-        frame_rate: FrameRate,
-    ) -> anyhow::Result<Self> {
-        let latch = Arc::new(Mutex::new(LtcLatch {
-            start_timecode: initial_timecode,
-            start_instant: Instant::now(),
-            frame_rate,
-        }));
+    pub(crate) fn start(device_name: &str, initial_target: LtcTarget) -> anyhow::Result<Self> {
+        let latch = Arc::new(Mutex::new(LtcLatch::new(initial_target, Instant::now())));
         let stop = Arc::new(AtomicBool::new(false));
+        let device_lost = Arc::new(AtomicBool::new(false));
         let (ready_tx, ready_rx) = mpsc::channel();
 
         let thread_latch = Arc::clone(&latch);
         let thread_stop = Arc::clone(&stop);
+        let thread_device_lost = Arc::clone(&device_lost);
         let owned_device_name = device_name.to_string();
         let thread = thread::Builder::new()
             .name("decktector-ltc".into())
             .spawn(move || {
-                run_audio_thread(&owned_device_name, thread_latch, thread_stop, ready_tx)
+                run_audio_thread(
+                    &owned_device_name,
+                    thread_latch,
+                    thread_stop,
+                    thread_device_lost,
+                    ready_tx,
+                )
             })
             .map_err(|error| anyhow::anyhow!("failed to spawn the LTC audio thread: {error}"))?;
 
@@ -209,6 +331,7 @@ impl LtcStream {
         Ok(Self {
             latch,
             stop,
+            device_lost,
             thread: Some(thread),
             device_name: device_name.to_string(),
         })
@@ -218,19 +341,24 @@ impl LtcStream {
         &self.device_name
     }
 
-    /// Updates the shared jam-sync target. The audio thread re-latches onto
-    /// it once its free-running counter has drifted more than ~1 frame away
-    /// — checked at its own frame boundaries, not on every sample.
+    /// Whether the device went away after the stream started: its audio no
+    /// longer reaches anything, though the thread lives on until dropped.
+    pub(crate) fn is_device_lost(&self) -> bool {
+        self.device_lost.load(Ordering::Relaxed)
+    }
+
+    /// Updates the shared jam-sync target, picked up by the audio thread at
+    /// its next frame boundary — see [`FrameSequencer`].
     ///
-    /// `frame_rate` travels with every call (mirroring how `frame_rate` is
-    /// passed on every Art-Net/MTC tick too) so a frame-rate change while
-    /// LTC is running takes effect without rebuilding the stream.
-    pub(crate) fn resync(&self, timecode: TimeCode, frame_rate: FrameRate) {
-        if let Ok(mut latch) = self.latch.lock() {
-            latch.start_timecode = timecode;
-            latch.start_instant = Instant::now();
-            latch.frame_rate = frame_rate;
-        }
+    /// The frame rate travels with every call (mirroring how it is passed on
+    /// every Art-Net/MTC tick too) so a frame-rate change while LTC is
+    /// running takes effect without rebuilding the stream.
+    pub(crate) fn resync(&self, target: LtcTarget) {
+        *self
+            .latch
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) =
+            LtcLatch::new(target, Instant::now());
     }
 }
 
@@ -250,9 +378,10 @@ fn run_audio_thread(
     device_name: &str,
     latch: Arc<Mutex<LtcLatch>>,
     stop: Arc<AtomicBool>,
+    device_lost: Arc<AtomicBool>,
     ready: mpsc::Sender<anyhow::Result<()>>,
 ) {
-    let stream = match build_stream(device_name, &latch) {
+    let stream = match build_stream(device_name, &latch, device_lost) {
         Ok(stream) => stream,
         Err(error) => {
             let _ = ready.send(Err(error));
@@ -273,7 +402,11 @@ fn run_audio_thread(
 
 /// Finds `device_name` and builds a playing-ready output stream for it, in
 /// whatever sample format the device natively supports.
-fn build_stream(device_name: &str, latch: &Arc<Mutex<LtcLatch>>) -> anyhow::Result<cpal::Stream> {
+fn build_stream(
+    device_name: &str,
+    latch: &Arc<Mutex<LtcLatch>>,
+    device_lost: Arc<AtomicBool>,
+) -> anyhow::Result<cpal::Stream> {
     let host = cpal::default_host();
     let device = host
         .output_devices()?
@@ -291,36 +424,37 @@ fn build_stream(device_name: &str, latch: &Arc<Mutex<LtcLatch>>) -> anyhow::Resu
     let sample_rate = stream_config.sample_rate.0;
     let channels = stream_config.channels as usize;
 
-    let initial = *latch
+    let initial_frame_rate = latch
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let mut frame_rate = initial.frame_rate;
-    let mut timecode = initial.start_timecode;
-    // The very first buffer has no prior polarity to continue from, so it's
-    // the one place a fresh `frame_samples` call (rather than `biphase_samples`
-    // threading `level` in from a previous call) is the right tool.
-    let mut buffer = frame_samples(&frame_bits(timecode, frame_rate), sample_rate, frame_rate);
-    let mut level = *buffer.last().unwrap_or(&-1.0);
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .target
+        .frame_rate;
+    let mut sequencer = FrameSequencer::default();
+    let mut bit_clock = BitClock::new(sample_rate, initial_frame_rate);
+    let mut level = -1.0_f32;
+    // Empty, so the very first sample generates the first frame.
+    let mut buffer: Vec<f32> = Vec::new();
     let mut cursor = 0usize;
-    let latch_for_thread = Arc::clone(latch);
+    let shared_latch = Arc::clone(latch);
 
     // Pulls one sample at a time, generating the next frame's buffer (and
     // jam-syncing against the latch) whenever the current one runs out.
     let generator = move || -> f32 {
         if cursor >= buffer.len() {
-            timecode = next_timecode(timecode, frame_rate);
-            if let Ok(guard) = latch_for_thread.lock() {
-                let target = timecode_at(&guard);
-                if frames_apart(timecode, target, guard.frame_rate) > 1.0 {
-                    timecode = target;
-                }
-                frame_rate = guard.frame_rate;
-            }
-            buffer = biphase_samples(
-                &frame_bits(timecode, frame_rate),
-                samples_per_bit(sample_rate, frame_rate),
-                &mut level,
-            );
+            let latch = *shared_latch
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let frame_rate = latch.target.frame_rate;
+            bit_clock.set_rate(sample_rate, frame_rate);
+            buffer = match sequencer.next_frame(&latch, Instant::now()) {
+                Some(timecode) => biphase_samples(
+                    &frame_bits(timecode, frame_rate),
+                    &mut bit_clock,
+                    &mut level,
+                ),
+                // One frame's length of silence, then the latch is read again.
+                None => vec![SILENCE; bit_clock.next_frame_length()],
+            };
             cursor = 0;
         }
         let sample = buffer[cursor];
@@ -330,13 +464,13 @@ fn build_stream(device_name: &str, latch: &Arc<Mutex<LtcLatch>>) -> anyhow::Resu
 
     match sample_format {
         cpal::SampleFormat::F32 => {
-            build_typed_stream::<f32>(&device, &stream_config, generator, channels)
+            build_typed_stream::<f32>(&device, &stream_config, generator, channels, device_lost)
         }
         cpal::SampleFormat::I16 => {
-            build_typed_stream::<i16>(&device, &stream_config, generator, channels)
+            build_typed_stream::<i16>(&device, &stream_config, generator, channels, device_lost)
         }
         cpal::SampleFormat::U16 => {
-            build_typed_stream::<u16>(&device, &stream_config, generator, channels)
+            build_typed_stream::<u16>(&device, &stream_config, generator, channels, device_lost)
         }
         other => Err(anyhow::anyhow!(
             "unsupported LTC output sample format: {other:?}"
@@ -349,6 +483,7 @@ fn build_typed_stream<T>(
     stream_config: &cpal::StreamConfig,
     mut generator: impl FnMut() -> f32 + Send + 'static,
     channels: usize,
+    device_lost: Arc<AtomicBool>,
 ) -> anyhow::Result<cpal::Stream>
 where
     T: cpal::SizedSample + cpal::FromSample<f32>,
@@ -364,7 +499,14 @@ where
                     }
                 }
             },
-            |error| tracing::warn!(%error, "LTC output stream error"),
+            move |error| {
+                // Backend-specific errors can be transient; only a vanished
+                // device means the stream is gone for good.
+                if matches!(error, cpal::StreamError::DeviceNotAvailable) {
+                    device_lost.store(true, Ordering::Relaxed);
+                }
+                tracing::warn!(%error, "LTC output stream error");
+            },
             None,
         )
         .map_err(anyhow::Error::from)
@@ -373,6 +515,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const EVERY_FRAME_RATE: [FrameRate; 3] =
+        [FrameRate::Film24, FrameRate::Ebu25, FrameRate::Smpte30];
 
     fn sample_timecode() -> TimeCode {
         TimeCode {
@@ -385,6 +530,21 @@ mod tests {
 
     fn bits_to_value(bits: &[bool], start: usize, width: usize) -> u8 {
         (0..width).fold(0u8, |value, i| value | ((bits[start + i] as u8) << i))
+    }
+
+    fn frame_duration(frame_rate: FrameRate) -> Duration {
+        Duration::from_secs_f64(1.0 / frame_rate.fps() as f64)
+    }
+
+    fn latch(timecode: TimeCode, is_advancing: bool, set_at: Instant) -> LtcLatch {
+        LtcLatch::new(
+            LtcTarget {
+                timecode,
+                frame_rate: FrameRate::Smpte30,
+                is_advancing,
+            },
+            set_at,
+        )
     }
 
     #[test]
@@ -430,7 +590,7 @@ mod tests {
     fn biphase_samples_transition_at_every_bit_start_and_mid_one_bit() {
         let bits = [false, true, false];
         let mut level = -1.0_f32;
-        let samples = biphase_samples(&bits, 4, &mut level);
+        let samples = biphase_samples(&bits, &mut BitClock::with_samples_per_bit(4.0), &mut level);
         assert_eq!(
             samples,
             vec![1.0, 1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0]
@@ -444,8 +604,9 @@ mod tests {
     #[test]
     fn biphase_samples_chain_across_calls_with_a_transition_at_the_seam() {
         let mut level = -1.0_f32;
-        let first = biphase_samples(&[true], 2, &mut level);
-        let second = biphase_samples(&[false], 2, &mut level);
+        let mut bit_clock = BitClock::with_samples_per_bit(2.0);
+        let first = biphase_samples(&[true], &mut bit_clock, &mut level);
+        let second = biphase_samples(&[false], &mut bit_clock, &mut level);
         // Whatever level `first` ends on, `second` must start by flipping
         // away from it — a biphase transition is unconditional at every bit
         // boundary, including one that falls across two separate calls.
@@ -453,10 +614,148 @@ mod tests {
     }
 
     #[test]
-    fn frame_samples_produces_one_frames_worth_of_audio() {
+    fn one_frame_of_audio_lasts_exactly_one_frame_at_48_khz() {
         let bits = frame_bits(sample_timecode(), FrameRate::Smpte30);
-        let samples = frame_samples(&bits, 48_000, FrameRate::Smpte30);
+        let mut level = -1.0_f32;
+        let samples = biphase_samples(
+            &bits,
+            &mut BitClock::new(48_000, FrameRate::Smpte30),
+            &mut level,
+        );
         // 48 kHz / (30 fps * 80 bits) = 20 samples/bit.
         assert_eq!(samples.len(), 80 * 20);
+    }
+
+    #[test]
+    fn one_second_of_ltc_lasts_one_second_at_any_sample_rate() {
+        // 44.1 kHz is the case that ran fast: 18.375 samples per bit at
+        // 30 fps, which rounding down turned into 18.
+        for sample_rate in [44_100u32, 48_000, 88_200, 96_000] {
+            for frame_rate in EVERY_FRAME_RATE {
+                let mut bit_clock = BitClock::new(sample_rate, frame_rate);
+                let bits_per_second = frame_rate.fps() as usize * BITS_PER_FRAME;
+                let samples: usize = (0..bits_per_second).map(|_| bit_clock.next_bit().0).sum();
+                assert!(
+                    samples.abs_diff(sample_rate as usize) <= 1,
+                    "{sample_rate} Hz at {frame_rate:?}: {samples} samples"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_fractional_bit_still_flips_a_one_bit_in_its_middle() {
+        let mut level = -1.0_f32;
+        let mut bit_clock = BitClock::new(44_100, FrameRate::Smpte30);
+        let samples = biphase_samples(&[true; 8], &mut bit_clock, &mut level);
+        // Every `1` bit flips at its start and in its middle; only the very
+        // first start transition falls outside `samples`, against `level`.
+        let transitions = samples.windows(2).filter(|pair| pair[0] != pair[1]).count();
+        assert_eq!(transitions, 8 * 2 - 1);
+    }
+
+    #[test]
+    fn next_timecode_steps_one_frame_at_a_time_through_an_hour() {
+        // The old millisecond round trip landed just short of a frame boundary
+        // on 13% of frames at 30 fps and repeated them.
+        for frame_rate in EVERY_FRAME_RATE {
+            for total_frames in 0..frame_rate.fps() * 3600 {
+                let timecode = TimeCode::from_frame_count(total_frames, frame_rate);
+                assert_eq!(
+                    next_timecode(timecode, frame_rate),
+                    TimeCode::from_frame_count(total_frames + 1, frame_rate),
+                    "{frame_rate:?} after {timecode:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_advancing_latch_projects_its_target_forward_in_real_time() {
+        let set_at = Instant::now();
+        let latch = latch(sample_timecode(), true, set_at);
+        let one_second_later = latch.timecode_at(set_at + Duration::from_secs(1));
+        assert_eq!(
+            frames_apart(one_second_later, sample_timecode(), FrameRate::Smpte30),
+            30
+        );
+    }
+
+    #[test]
+    fn a_playing_deck_gets_every_frame_in_turn() {
+        let set_at = Instant::now();
+        let latch = latch(sample_timecode(), true, set_at);
+        let mut sequencer = FrameSequencer::default();
+        assert_eq!(
+            sequencer.next_frame(&latch, set_at),
+            Some(sample_timecode())
+        );
+        let base = sample_timecode().frame_count(FrameRate::Smpte30);
+        for step in 1..=300u32 {
+            let now = set_at + frame_duration(FrameRate::Smpte30) * step;
+            let frame = sequencer.next_frame(&latch, now).expect("the deck plays");
+            assert_eq!(
+                frame.frame_count(FrameRate::Smpte30),
+                base + u64::from(step)
+            );
+        }
+    }
+
+    #[test]
+    fn a_paused_deck_sends_no_ltc() {
+        let set_at = Instant::now();
+        let latch = latch(sample_timecode(), false, set_at);
+        let mut sequencer = FrameSequencer::default();
+        for step in 1..=10u32 {
+            let now = set_at + frame_duration(FrameRate::Smpte30) * step;
+            assert_eq!(sequencer.next_frame(&latch, now), None);
+        }
+    }
+
+    #[test]
+    fn playing_again_picks_up_exactly_where_the_deck_is() {
+        let set_at = Instant::now();
+        let mut sequencer = FrameSequencer::default();
+        let playing = latch(sample_timecode(), true, set_at);
+        sequencer.next_frame(&playing, set_at);
+        sequencer.next_frame(&latch(sample_timecode(), false, set_at), set_at);
+
+        let resumed_at = TimeCode::from_frame_count(
+            sample_timecode().frame_count(FrameRate::Smpte30) - 100,
+            FrameRate::Smpte30,
+        );
+        let resumed = latch(resumed_at, true, set_at);
+        assert_eq!(sequencer.next_frame(&resumed, set_at), Some(resumed_at));
+    }
+
+    #[test]
+    fn a_drifted_count_jam_syncs_onto_the_deck() {
+        let set_at = Instant::now();
+        let mut sequencer = FrameSequencer::default();
+        sequencer.next_frame(&latch(sample_timecode(), true, set_at), set_at);
+        let ahead = TimeCode::from_frame_count(
+            sample_timecode().frame_count(FrameRate::Smpte30) + 10,
+            FrameRate::Smpte30,
+        );
+        let latch = latch(ahead, true, set_at);
+        assert_eq!(sequencer.next_frame(&latch, set_at), Some(ahead));
+    }
+
+    #[test]
+    fn a_silent_frame_lasts_as_long_as_a_sounding_one() {
+        let mut silent = BitClock::new(44_100, FrameRate::Ebu25);
+        let mut sounding = silent;
+        let mut level = -1.0_f32;
+        let sounding_length = biphase_samples(
+            &frame_bits(sample_timecode(), FrameRate::Ebu25),
+            &mut sounding,
+            &mut level,
+        )
+        .len();
+        assert_eq!(silent.next_frame_length(), sounding_length);
+        assert_eq!(
+            silent, sounding,
+            "both leave the bit clock in the same place"
+        );
     }
 }
