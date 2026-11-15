@@ -13,6 +13,13 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-15
+
+Your own logo in the header, rekordbox's phrases as the track structure and pop-out
+panels in the remote view — plus a round of timecode fixes: a steady position on
+players older than the CDJ-3000, LTC at the right speed, and output that stops when the
+deck does.
+
 ### Added
 
 - **Pinky theme** — hot neon pink on a deep magenta background, in Settings →
