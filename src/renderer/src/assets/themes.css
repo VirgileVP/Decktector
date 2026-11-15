@@ -222,3 +222,34 @@
   --flag-text: #0c0c0c;
   --loop-active: #e6e6e6;
 }
+
+/* On-air shifts to orange-red so it never blends into the hot pink accents. */
+[data-theme='pinky'] {
+  color-scheme: dark;
+  --bg: #14030e;
+  --bg-panel: #1f0517;
+  --bg-inset: #180411;
+  --bg-idle-panel: #180411;
+  --border: #4d0f38;
+  --border-strong: #7a1659;
+  --text: #ffd6f0;
+  --text-muted: #ff5cc0;
+  --text-faint: #a33a7d;
+  --onair-rgb: 255, 60, 40;
+  --ok-rgb: 120, 230, 170;
+  --warn: #ffd166;
+  --master: #ffffff;
+  --sync: #ff4fd8;
+  --row-highlight: rgba(255, 47, 168, 0.14);
+  --logo-glow: rgba(255, 47, 168, 0.8);
+  --waveform-idle-filter: brightness(0.3) saturate(0.5);
+  --wave-empty: rgba(255, 47, 168, 0.08);
+  --wave-played: rgba(255, 47, 168, 0.22);
+  --wave-unplayed: rgba(255, 47, 168, 1);
+  --playhead: #ffffff;
+  --grid-downbeat: rgba(255, 140, 220, 0.6);
+  --grid-beat: rgba(255, 140, 220, 0.2);
+  --overlay-text: rgba(255, 92, 192, 0.5);
+  --flag-text: #14030e;
+  --loop-active: #ff8a00;
+}

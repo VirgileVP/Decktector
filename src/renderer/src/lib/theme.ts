@@ -10,7 +10,8 @@ export const THEME_IDS = [
   'contrast',
   'amber',
   'midnight',
-  'monochrome'
+  'monochrome',
+  'pinky'
 ] as const
 export type ThemeId = (typeof THEME_IDS)[number]
 
@@ -27,7 +28,8 @@ export const THEMES: readonly ThemeOption[] = [
   { id: 'contrast', label: 'High contrast', description: 'Pure black and saturated accents' },
   { id: 'amber', label: 'Amber CRT', description: 'Monochrome amber, vintage hardware' },
   { id: 'midnight', label: 'Midnight', description: 'Deep blue, easy on long sessions' },
-  { id: 'monochrome', label: 'Monochrome', description: 'Pure greyscale, no hue anywhere' }
+  { id: 'monochrome', label: 'Monochrome', description: 'Pure greyscale, no hue anywhere' },
+  { id: 'pinky', label: 'Pinky', description: 'Hot neon pink on deep magenta' }
 ] as const
 
 export const DEFAULT_THEME: ThemeId = 'original'
