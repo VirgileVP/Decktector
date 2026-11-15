@@ -43,6 +43,10 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
   `GLIBC_2.43' not found` error.
 - A player's empty answer — no cues, or no beat grid for an unanalysed track — no longer
   holds up the track's metadata for five seconds.
+- Timecode no longer steps backwards several frames at a time on players older than
+  the CDJ-3000: their position now runs smoothly from one beat to the next instead of
+  falling back to the start of the beat a few times per beat. The deck's time display
+  runs smoother too.
 
 ## [1.5.1] - 2026-10-22
 

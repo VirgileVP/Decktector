@@ -364,7 +364,9 @@ async fn run_reporting(
                     Ok(BeatMessage::PrecisePosition(update)) => {
                         position.record_precise_position(update.device_number, update.position_ms, now_ms());
                     }
-                    Ok(BeatMessage::Beat(_)) => {} // Not needed by this phase's DeckState mapping.
+                    Ok(BeatMessage::Beat(beat)) => {
+                        position.record_beat(beat.device_number, now_ms());
+                    }
                     Err(broadcast::error::RecvError::Lagged(_)) => continue,
                     Err(broadcast::error::RecvError::Closed) => break,
                 }

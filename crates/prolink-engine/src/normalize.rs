@@ -46,7 +46,7 @@ fn active_loop(status: &DeviceStatus) -> Option<ActiveLoop> {
 /// in progress" read as cued, and "cue scratch in progress" reads as
 /// paused. A value this parser doesn't recognize falls back to `Empty`,
 /// matching that same table's fallback for anything outside its map.
-fn play_state(raw: RawPlayState) -> PlayState {
+pub(crate) fn play_state(raw: RawPlayState) -> PlayState {
     match raw {
         RawPlayState::NoTrack => PlayState::Empty,
         RawPlayState::Loading => PlayState::Loading,
