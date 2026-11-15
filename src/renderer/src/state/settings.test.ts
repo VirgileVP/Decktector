@@ -72,3 +72,18 @@ describe('pickDeckViewToggles', () => {
     expect(pickDeckViewToggles(DEFAULT_SETTINGS)).toEqual(DECK_VIEW_PRESETS.full.values)
   })
 })
+
+describe('custom logo setting', () => {
+  it('defaults to the built-in logo', () => {
+    expect(DEFAULT_SETTINGS.customLogo).toBeNull()
+    expect(mergePersistedSettings({}, DEFAULT_SETTINGS).customLogo).toBeNull()
+  })
+
+  it('restores a stored logo and drops an invalid one', () => {
+    const logo = 'data:image/png;base64,iVBORw0KGgo='
+    expect(mergePersistedSettings({ customLogo: logo }, DEFAULT_SETTINGS).customLogo).toBe(logo)
+    expect(
+      mergePersistedSettings({ customLogo: 'javascript:alert(1)' }, DEFAULT_SETTINGS).customLogo
+    ).toBeNull()
+  })
+})

@@ -92,6 +92,7 @@ function App(): React.JSX.Element {
   }
   const deckViewToggles = useDeckViewToggles()
   const enlargeOnAirDeck = useSettings((s) => s.enlargeOnAirDeck)
+  const customLogo = useSettings((s) => s.customLogo)
 
   useAppShortcuts({
     toggleFullscreen,
@@ -128,7 +129,11 @@ function App(): React.JSX.Element {
     <div className="app">
       <RemoteLinkBanner />
       <header className="app-header">
-        <img className="neon-logo" src={neonLogo} alt="NEON" />
+        {customLogo === null ? (
+          <img className="neon-logo" src={neonLogo} alt="NEON" />
+        ) : (
+          <img className="custom-header-logo" src={customLogo} alt="Logo" />
+        )}
         <HeaderBlock />
         <div className="header-right">
           {networkFailed && IS_TAURI ? (

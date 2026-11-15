@@ -15,6 +15,8 @@ the new version and date in the `chore(release)` commit; the `Build` workflow re
 
 ### Added
 
+- **Your own header logo** — Settings → Interface → Logo swaps the NEON logo at the
+  top left for your own image (PNG, JPEG, WebP, GIF or SVG, up to 512 KB).
 - **Detachable panels in the remote view** — the pop-out buttons now work in the
   browser too: a deck, the clock, the timecode or the header block opens in its own
   browser window, with the zoom and display controls of a desktop panel window.

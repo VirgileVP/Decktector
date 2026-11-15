@@ -202,6 +202,15 @@ input[type='checkbox']:focus-visible {
   filter: drop-shadow(0 0 7px var(--logo-glow));
 }
 
+/* The operator's own logo: no glow (it has its own look) and a cap on width
+   so a very wide image cannot push the header block aside. */
+.custom-header-logo {
+  height: 30px;
+  width: auto;
+  max-width: 200px;
+  object-fit: contain;
+}
+
 .header-right {
   display: flex;
   align-items: center;
@@ -2487,6 +2496,23 @@ input[type='checkbox']:focus-visible {
 
 .setting-btn:hover {
   background: var(--border-strong);
+}
+
+.setting-error {
+  color: rgb(var(--onair-rgb));
+}
+
+.custom-logo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.custom-logo-preview {
+  height: 24px;
+  max-width: 120px;
+  object-fit: contain;
 }
 
 .setting-warning {

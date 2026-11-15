@@ -19,6 +19,7 @@ import {
   type Settings
 } from '../state/settings'
 import { AboutSettings } from './AboutSettings'
+import { CustomLogoSetting } from './CustomLogoSetting'
 import { DECK_VIEW_TOGGLE_GROUPS } from './deck-view-toggle-rows'
 import { DeckLabelsEditor } from './DeckLabelsEditor'
 import { DevicesPanel } from './DevicesPanel'
@@ -205,6 +206,11 @@ export function SettingsDialog({
                     </button>
                   ))}
                 </div>
+              </section>
+
+              <section className="settings-section">
+                <h3>Logo</h3>
+                <CustomLogoSetting logo={settings.customLogo} onChange={update('customLogo')} />
               </section>
 
               <section className="settings-section">

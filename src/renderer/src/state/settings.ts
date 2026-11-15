@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { useShallow } from 'zustand/react/shallow'
 
+import { parseCustomLogo, type CustomLogo } from '../lib/custom-logo'
 import { DEFAULT_ON_AIR_SOURCE, parseOnAirSource, type OnAirSource } from '../lib/deck-activity'
 import { sanitizeDeckLabels, type DeckLabels } from '../lib/deck-labels'
 import { DEFAULT_THEME, parseTheme, type ThemeId } from '../lib/theme'
@@ -180,6 +181,9 @@ export function matchingDeckViewPreset(settings: DeckViewToggles): DeckViewPrese
 
 export interface Settings {
   theme: ThemeId
+  /** Operator's own header logo as a `data:` URL; `null` shows the built-in
+   *  NEON logo — see `lib/custom-logo.ts`. */
+  customLogo: CustomLogo
   /** 1 = raw rekordbox waveform colors, 0 = fully white — a CDJ-style
    *  crossfade between the "Color" and "White" waveform display modes. */
   waveformSaturation: number
@@ -286,6 +290,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: DEFAULT_THEME,
+  customLogo: null,
   waveformSaturation: 1,
   waveformMirrored: true,
   waveformSmoothing: true,
@@ -356,6 +361,7 @@ export function mergePersistedSettings<T extends Settings>(persisted: unknown, c
     ...current,
     ...stored,
     theme: parseTheme(stored.theme),
+    customLogo: parseCustomLogo(stored.customLogo),
     onAirSource: parseOnAirSource(stored.onAirSource),
     waveformPlayheadPosition: parseWaveformPlayheadPosition(stored.waveformPlayheadPosition),
     deckLabels: sanitizeDeckLabels(stored.deckLabels)
@@ -365,6 +371,7 @@ export function mergePersistedSettings<T extends Settings>(persisted: unknown, c
 function pickSettings(state: Settings): Settings {
   const {
     theme,
+    customLogo,
     waveformSaturation,
     waveformMirrored,
     waveformSmoothing,
@@ -412,6 +419,7 @@ function pickSettings(state: Settings): Settings {
   } = state
   return {
     theme,
+    customLogo,
     waveformSaturation,
     waveformMirrored,
     waveformSmoothing,
