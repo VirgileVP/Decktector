@@ -121,6 +121,22 @@ pub struct TimecodeStatus {
     pub frames: u8,
 }
 
+/// How many seconds a timecode clock counts before it wraps to `00:00:00:00`.
+const SECONDS_PER_DAY: u64 = 24 * 3600;
+
+/// Where a track's own timeline starts, and its manual nudge.
+///
+/// The default — start `00:00:00:00`, no trim — is the timeline every deck
+/// ran on before tracks had their own: the timecode is the playhead itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct Timeline {
+    /// Frames from `00:00:00:00` at the output frame rate.
+    start_frames: u64,
+    /// Signed nudge added to the playhead: positive runs the timecode ahead
+    /// of the music, so cues fire earlier.
+    trim_ms: i64,
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 struct TimeCode {
     hours: u8,
@@ -130,8 +146,22 @@ struct TimeCode {
 }
 
 impl TimeCode {
-    fn from_elapsed_ms(elapsed_ms: f64, frame_rate: FrameRate) -> Self {
-        let total_frames = ((elapsed_ms.max(0.0) / 1000.0) * frame_rate.fps() as f64) as u64;
+    /// `timeline.start_frames` plus `elapsed_ms` of playback (nudged by the
+    /// trim), wrapped at 24 hours.
+    ///
+    /// The playback position is floored to whole frames *before* the start is
+    /// added, and the start is added as a frame count: a start never goes
+    /// through milliseconds, so it lands on exactly the frame it names (see
+    /// [`Self::frame_count`]). A trim can pull the position back to the start
+    /// but never before it.
+    fn from_timeline(timeline: Timeline, elapsed_ms: f64, frame_rate: FrameRate) -> Self {
+        let fps = frame_rate.fps();
+        let effective_ms = (elapsed_ms + timeline.trim_ms as f64).max(0.0);
+        let elapsed_frames = ((effective_ms / 1000.0) * fps as f64) as u64;
+        let frames_per_day = SECONDS_PER_DAY * fps;
+        let total_frames = (timeline.start_frames % frames_per_day
+            + elapsed_frames % frames_per_day)
+            % frames_per_day;
         Self::from_frame_count(total_frames, frame_rate)
     }
 
@@ -173,12 +203,23 @@ struct SourceReading {
     /// Whether that timecode is moving forward in real time — see
     /// [`Playhead::is_advancing`].
     is_advancing: bool,
+    /// The timeline `timecode` was placed on; a change re-latches MTC
+    /// receivers (see [`MtcSession`]).
+    timeline: Timeline,
 }
 
 #[derive(Debug, Clone, Default)]
 struct GeneratorState {
     source_deck_id: Option<DeckId>,
     config: TimecodeConfig,
+}
+
+impl GeneratorState {
+    /// The timeline `deck_id`'s playhead runs on. Every deck shares the
+    /// default one until tracks get their own start timecode.
+    fn timeline_for(&self, _deck_id: DeckId) -> Timeline {
+        Timeline::default()
+    }
 }
 
 /// Generates timecode from a deck's playhead and sends it out.
@@ -376,9 +417,9 @@ impl TimecodeService {
     /// not be sent.
     ///
     /// A Full Timecode SysEx is sent whenever output (re)starts or the
-    /// source deck / frame rate changes, detected by comparing against the
-    /// session recorded on the previous tick — so a receiver can lock
-    /// immediately instead of waiting on the quarter-frame stream.
+    /// source deck / frame rate / timeline changes, detected by comparing
+    /// against the session recorded on the previous tick — so a receiver can
+    /// lock immediately instead of waiting on the quarter-frame stream.
     fn tick_mtc(
         &self,
         output: &mut OutputState,
@@ -386,15 +427,11 @@ impl TimecodeService {
         reading: SourceReading,
         frame_rate: FrameRate,
     ) -> Option<TimecodeStatus> {
-        let session = MtcSession {
+        let is_restart = output.latch_mtc_session(MtcSession {
             deck_id: reading.deck_id,
             frame_rate,
-        };
-        let is_restart = output.mtc_session != Some(session);
-        output.mtc_session = Some(session);
-        if is_restart {
-            output.mtc_cycle = mtc::QuarterFrameCycle::new();
-        }
+            timeline: reading.timeline,
+        });
 
         let quarter_frame = output.mtc_cycle.tick(reading.timecode, frame_rate);
 
@@ -481,10 +518,16 @@ impl TimecodeService {
         // deck alone, not a whole snapshot that clones every track's waveform.
         let deck = self.engine.handle().deck_state(deck_id)?;
         let playhead = extrapolate_playhead(&deck, epoch_ms())?;
+        let timeline = state.timeline_for(deck_id);
         Some(SourceReading {
             deck_id,
-            timecode: TimeCode::from_elapsed_ms(playhead.position_ms, state.config.frame_rate),
+            timecode: TimeCode::from_timeline(
+                timeline,
+                playhead.position_ms,
+                state.config.frame_rate,
+            ),
             is_advancing: playhead.is_advancing,
+            timeline,
         })
     }
 }
@@ -644,6 +687,19 @@ impl OutputState {
             && matches!(self.held, Some(held) if held.timecode == reading.timecode && held.is_sent)
     }
 
+    /// Makes `session` the one the MTC stream describes and returns whether
+    /// that is a restart — a different session from last tick's, or none at
+    /// all — in which case the quarter-frame cycle starts over and the caller
+    /// owes receivers a Full Timecode SysEx.
+    fn latch_mtc_session(&mut self, session: MtcSession) -> bool {
+        let is_restart = self.mtc_session != Some(session);
+        self.mtc_session = Some(session);
+        if is_restart {
+            self.mtc_cycle = mtc::QuarterFrameCycle::new();
+        }
+        is_restart
+    }
+
     /// Records what this tick sent for `reading` and returns its status.
     fn record_send(&mut self, reading: SourceReading, is_sent: bool) -> TimecodeStatus {
         self.held = (!reading.is_advancing).then_some(HeldPosition {
@@ -668,12 +724,15 @@ struct HeldPosition {
 }
 
 /// Identifies what an MTC output stream is currently describing — compared
-/// tick-to-tick to detect a source deck or frame-rate change, which needs
-/// an immediate re-latch and a fresh Full Timecode SysEx.
+/// tick-to-tick to detect a source deck, frame-rate or timeline change, which
+/// needs an immediate re-latch and a fresh Full Timecode SysEx. The timeline
+/// is part of the key because a new track on the *same* deck jumps the
+/// timecode without changing the deck or the rate.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct MtcSession {
     deck_id: DeckId,
     frame_rate: FrameRate,
+    timeline: Timeline,
 }
 
 /// How far past its last status a playing deck's position is projected —
@@ -744,10 +803,128 @@ mod tests {
 
     #[test]
     fn timecode_rolls_over_at_60_seconds_and_60_minutes() {
-        let timecode = TimeCode::from_elapsed_ms(61_500.0, FrameRate::Smpte30);
+        let timecode = TimeCode::from_timeline(Timeline::default(), 61_500.0, FrameRate::Smpte30);
         assert_eq!(timecode.minutes, 1);
         assert_eq!(timecode.seconds, 1);
         assert_eq!(timecode.frames, 15);
+    }
+
+    fn timecode(hours: u8, minutes: u8, seconds: u8, frames: u8) -> TimeCode {
+        TimeCode {
+            hours,
+            minutes,
+            seconds,
+            frames,
+        }
+    }
+
+    fn timeline_from(start: TimeCode, trim_ms: i64, frame_rate: FrameRate) -> Timeline {
+        Timeline {
+            start_frames: start.frame_count(frame_rate),
+            trim_ms,
+        }
+    }
+
+    #[test]
+    fn a_start_offset_is_added_in_frames_not_milliseconds() {
+        let rate = FrameRate::Ebu25;
+        let timeline = timeline_from(timecode(1, 0, 0, 0), 0, rate);
+        assert_eq!(
+            TimeCode::from_timeline(timeline, 1_000.0, rate),
+            timecode(1, 0, 1, 0)
+        );
+        assert_eq!(
+            TimeCode::from_timeline(timeline, 999.0, rate),
+            timecode(1, 0, 0, 24),
+            "a position short of a frame boundary stays on the previous frame"
+        );
+    }
+
+    #[test]
+    fn the_timeline_wraps_at_24_hours() {
+        let rate = FrameRate::Ebu25;
+        let timeline = timeline_from(timecode(23, 59, 59, 0), 0, rate);
+        assert_eq!(
+            TimeCode::from_timeline(timeline, 2_000.0, rate),
+            timecode(0, 0, 1, 0)
+        );
+    }
+
+    #[test]
+    fn a_negative_trim_never_goes_below_the_start() {
+        let rate = FrameRate::Ebu25;
+        let timeline = timeline_from(timecode(0, 10, 0, 0), -5_000, rate);
+        assert_eq!(
+            TimeCode::from_timeline(timeline, 2_000.0, rate),
+            timecode(0, 10, 0, 0)
+        );
+    }
+
+    #[test]
+    fn a_positive_trim_runs_the_timecode_ahead_of_the_music() {
+        let rate = FrameRate::Ebu25;
+        let timeline = timeline_from(timecode(0, 0, 0, 0), 80, rate);
+        assert_eq!(
+            TimeCode::from_timeline(timeline, 0.0, rate),
+            timecode(0, 0, 0, 2)
+        );
+    }
+
+    #[test]
+    fn the_default_timeline_matches_the_old_behaviour() {
+        // The pre-timeline formula, kept here as the reference it must match.
+        fn from_elapsed_ms(elapsed_ms: f64, frame_rate: FrameRate) -> TimeCode {
+            let total_frames = ((elapsed_ms.max(0.0) / 1000.0) * frame_rate.fps() as f64) as u64;
+            TimeCode::from_frame_count(total_frames, frame_rate)
+        }
+
+        let positions_ms = [
+            -250.0,
+            0.0,
+            33.3,
+            999.0,
+            1_000.0,
+            61_500.0,
+            3_599_999.9,
+            86_399_960.0,
+            86_400_000.0,
+            90_061_234.5,
+        ];
+        for frame_rate in [FrameRate::Film24, FrameRate::Ebu25, FrameRate::Smpte30] {
+            for position_ms in positions_ms {
+                assert_eq!(
+                    TimeCode::from_timeline(Timeline::default(), position_ms, frame_rate),
+                    from_elapsed_ms(position_ms, frame_rate),
+                    "{frame_rate:?} at {position_ms} ms"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn mtc_restarts_when_the_start_timecode_changes_on_the_same_deck() {
+        let rate = FrameRate::Ebu25;
+        let first_track = MtcSession {
+            deck_id: 1,
+            frame_rate: rate,
+            timeline: timeline_from(timecode(0, 10, 0, 0), 0, rate),
+        };
+        let next_track = MtcSession {
+            timeline: timeline_from(timecode(0, 20, 0, 0), 0, rate),
+            ..first_track
+        };
+        assert_ne!(first_track, next_track);
+
+        let mut output = OutputState::default();
+        assert!(output.latch_mtc_session(first_track), "output starts");
+        assert!(
+            !output.latch_mtc_session(first_track),
+            "the same track keeps streaming"
+        );
+        assert!(
+            output.latch_mtc_session(next_track),
+            "a new start on the same deck and rate re-latches receivers"
+        );
     }
 
     #[test]
@@ -837,6 +1014,7 @@ mod tests {
             deck_id: 1,
             timecode: TimeCode::from_frame_count(total_frames, FrameRate::Smpte30),
             is_advancing,
+            timeline: Timeline::default(),
         }
     }
 
