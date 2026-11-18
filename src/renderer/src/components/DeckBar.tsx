@@ -10,6 +10,7 @@ import { selectTimecodeSource, useTimecodeStore } from '../state/timecode'
 import type { DeckBarFields, DeckBarLayout } from './DeckBarLayout'
 import { DeckStat } from './DeckStat'
 import { DeckSyncBadges } from './DeckSyncBadges'
+import { DeckTimecodeLine } from './DeckTimecodeLine'
 
 const IDLE_DOWNLOAD_STATE: DownloadState = { status: 'idle' }
 
@@ -60,6 +61,8 @@ export function DeckBar({ deckId, track, fields, layout }: DeckBarProps): React.
         // to push against, so it does without.
         layout === 'bar' && <div className="deck-info-spacer" />
       )}
+
+      {track && <DeckTimecodeLine deckId={deckId} compact={layout === 'rail'} />}
 
       {fields.trackTags && (
         <div className="deck-props">
