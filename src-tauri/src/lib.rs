@@ -116,6 +116,8 @@ pub fn run() {
             timecode::timecode_status,
             timecode::set_timecode_source,
             timecode::set_timecode_config,
+            timecode::set_timecode_show,
+            timecode::timecode_deck_matches,
             timecode::list_network_interfaces,
             timecode::list_midi_output_ports,
             timecode::list_ltc_output_devices,

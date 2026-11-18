@@ -12,11 +12,13 @@
 //! events, the same bridge shape as the engine layer.
 
 pub mod artnet;
+mod deck_matches;
 pub mod identity;
 pub mod ltc;
 pub mod mtc;
 mod show;
 
+pub use deck_matches::DeckMatchStatus;
 pub use show::{
     resolve_deck, timeline_for, DeckResolution, ShowRowEntry, TimecodeShow, UnidentifiedReason,
     PENDING_TIMEOUT_MS,
@@ -28,8 +30,9 @@ pub use decktector_net as network;
 
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use deck_matches::DeckMatches;
 use decktector_core::model::{DeckId, DeckState, PlayState};
 use decktector_core::Engine;
 use serde::{Deserialize, Serialize};
@@ -40,6 +43,11 @@ use ts_rs::TS;
 /// How many status ticks a lagging subscriber may miss before it has to
 /// re-hydrate from [`TimecodeService::status`].
 const STATUS_BUFFER: usize = 16;
+
+/// How many deck-match updates a lagging subscriber may miss before it has
+/// to re-hydrate from [`TimecodeService::deck_matches`]. They only change on
+/// a track load, a show push or a position-quality flip.
+const DECK_MATCHES_BUFFER: usize = 16;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -215,18 +223,16 @@ struct SourceReading {
     timeline: Timeline,
 }
 
+/// Everything a tick reads, as one snapshot: the source deck, the output
+/// config and the show table change together or not at all, so a tick can
+/// never pair a new source deck with an old table.
 #[derive(Debug, Clone, Default)]
 struct GeneratorState {
     source_deck_id: Option<DeckId>,
     config: TimecodeConfig,
-}
-
-impl GeneratorState {
-    /// The timeline `deck_id`'s playhead runs on. Every deck shares the
-    /// default one until tracks get their own start timecode.
-    fn timeline_for(&self, _deck_id: DeckId) -> Timeline {
-        Timeline::default()
-    }
+    /// Tonight's show; `None` leaves every deck on `00:00:00:00`, as before
+    /// shows existed.
+    show: Option<Arc<TimecodeShow>>,
 }
 
 /// Generates timecode from a deck's playhead and sends it out.
@@ -240,6 +246,8 @@ pub struct TimecodeService {
     state_rx: watch::Receiver<GeneratorState>,
     status_tx: broadcast::Sender<TimecodeStatus>,
     last_status: Mutex<TimecodeStatus>,
+    deck_matches_tx: broadcast::Sender<Vec<DeckMatchStatus>>,
+    last_deck_matches: Mutex<Vec<DeckMatchStatus>>,
 }
 
 impl TimecodeService {
@@ -251,6 +259,8 @@ impl TimecodeService {
             state_rx,
             status_tx: broadcast::channel(STATUS_BUFFER).0,
             last_status: Mutex::new(TimecodeStatus::default()),
+            deck_matches_tx: broadcast::channel(DECK_MATCHES_BUFFER).0,
+            last_deck_matches: Mutex::new(Vec::new()),
         })
     }
 
@@ -261,6 +271,27 @@ impl TimecodeService {
 
     pub fn set_config(&self, config: TimecodeConfig) {
         self.state_tx.send_modify(|state| state.config = config);
+    }
+
+    /// Replaces the whole show table — or drops it, back to every deck on
+    /// `00:00:00:00`. One snapshot update, like the source and the config.
+    pub fn set_show(&self, show: Option<TimecodeShow>) {
+        self.state_tx
+            .send_modify(|state| state.show = show.map(Arc::new));
+    }
+
+    /// Subscribes to deck-match updates, sent whenever any deck's changes.
+    /// Pair with [`Self::deck_matches`] to hydrate a fresh listener.
+    pub fn subscribe_deck_matches(&self) -> broadcast::Receiver<Vec<DeckMatchStatus>> {
+        self.deck_matches_tx.subscribe()
+    }
+
+    /// Where every deck that has reported stands against the show.
+    pub fn deck_matches(&self) -> Vec<DeckMatchStatus> {
+        self.last_deck_matches
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
     }
 
     /// Subscribes to status ticks. Pair with [`Self::status`] to hydrate a
@@ -316,8 +347,9 @@ impl TimecodeService {
     async fn tick(&self, output: &mut OutputState, state_rx: &watch::Receiver<GeneratorState>) {
         let state = state_rx.borrow().clone();
         let frame_rate = state.config.frame_rate;
+        self.refresh_deck_matches(output, &state, Instant::now());
 
-        let new_status = match self.resolve(&state) {
+        let new_status = match self.resolve(&state, output) {
             Some(reading) => match &state.config.protocol {
                 TimecodeProtocol::ArtNet {
                     interface_name,
@@ -359,6 +391,9 @@ impl TimecodeService {
                     // No locate here: a paused deck's LTC is silence, which
                     // the audio thread produces from the jam-sync target.
                     let is_sent = self.tick_ltc(output, device_name, reading, frame_rate);
+                    if is_sent {
+                        output.last_timecode = Some(reading.timecode);
+                    }
                     Some(output_status(
                         reading.timecode,
                         reading.deck_id,
@@ -374,6 +409,8 @@ impl TimecodeService {
                 output.mtc_session = None;
                 output.ltc_stream = None;
                 output.held = None;
+                // Stopped: a deck that holds later has nothing current to hold.
+                output.last_timecode = None;
                 Some(stopped_status(state.source_deck_id))
             }
         };
@@ -449,8 +486,11 @@ impl TimecodeService {
             }
             mtc::send(connection, &quarter_frame.bytes)
         });
-        if let Err(error) = &sent {
-            tracing::warn!(%error, port_name, "failed to send MTC to the chosen MIDI output port");
+        match &sent {
+            Ok(()) => output.last_timecode = Some(quarter_frame.timecode),
+            Err(error) => {
+                tracing::warn!(%error, port_name, "failed to send MTC to the chosen MIDI output port")
+            }
         }
 
         quarter_frame
@@ -514,9 +554,38 @@ impl TimecodeService {
         }
     }
 
+    /// Brings every deck's match up to date and publishes the statuses when
+    /// they changed. Runs whatever the protocol: the deck bars show matches
+    /// while the output is off, too.
+    fn refresh_deck_matches(&self, output: &mut OutputState, state: &GeneratorState, now: Instant) {
+        let handle = self.engine.handle();
+        let Some(statuses) = output.deck_matches.refresh(
+            handle,
+            &handle.deck_states(),
+            state.show.as_deref(),
+            state.config.frame_rate,
+            now,
+        ) else {
+            return;
+        };
+        statuses.clone_into(
+            &mut self
+                .last_deck_matches
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
+        );
+        // No subscribers yet (window still opening) is not an error.
+        let _ = self.deck_matches_tx.send(statuses);
+    }
+
     /// The timecode for this instant, if the config and source deck allow
     /// producing one at all.
-    fn resolve(&self, state: &GeneratorState) -> Option<SourceReading> {
+    ///
+    /// The source deck's match decides which timeline it runs on. A deck
+    /// still identifying its track, or cut by the show, holds the last
+    /// timecode sent — frozen, like a paused deck — or stops if nothing went
+    /// out yet; an empty deck or a frame-rate mismatch stops the output.
+    fn resolve(&self, state: &GeneratorState, output: &OutputState) -> Option<SourceReading> {
         if matches!(state.config.protocol, TimecodeProtocol::Off) {
             return None;
         }
@@ -524,8 +593,24 @@ impl TimecodeService {
         // Runs on every tick (up to ~120 a second for MTC): read the source
         // deck alone, not a whole snapshot that clones every track's waveform.
         let deck = self.engine.handle().deck_state(deck_id)?;
+        let resolution = output.deck_matches.resolution(deck_id);
+        match resolution {
+            Some(DeckResolution::Pending | DeckResolution::Cut { .. }) => {
+                return Some(SourceReading {
+                    deck_id,
+                    timecode: output.last_timecode?,
+                    is_advancing: false,
+                    timeline: Timeline::default(),
+                });
+            }
+            Some(DeckResolution::None | DeckResolution::RateMismatch) => return None,
+            _ => {}
+        }
         let playhead = extrapolate_playhead(&deck, epoch_ms())?;
-        let timeline = state.timeline_for(deck_id);
+        let timeline = match (state.show.as_deref(), resolution) {
+            (Some(show), Some(resolution)) => timeline_for(show, resolution),
+            _ => Timeline::default(),
+        };
         Some(SourceReading {
             deck_id,
             timecode: TimeCode::from_timeline(
@@ -685,6 +770,10 @@ struct OutputState {
     /// moves (a jump to the cue point while paused). `None` while the deck
     /// advances, and after any change to the source or config.
     held: Option<HeldPosition>,
+    /// The timecode that last actually went out, on any protocol: what a
+    /// deck holds while it identifies its track. `None` once output stops.
+    last_timecode: Option<TimeCode>,
+    deck_matches: DeckMatches,
 }
 
 impl OutputState {
@@ -713,6 +802,9 @@ impl OutputState {
             timecode: reading.timecode,
             is_sent,
         });
+        if is_sent {
+            self.last_timecode = Some(reading.timecode);
+        }
         output_status(
             reading.timecode,
             reading.deck_id,
@@ -1059,5 +1151,352 @@ mod tests {
         let status = output.record_send(playing, true);
         assert!(status.running && !status.paused);
         assert_eq!(output.held, None);
+    }
+
+    /// A service running on a simulated engine that is never started: tests
+    /// report deck states and metadata through its handle themselves.
+    mod with_a_show {
+        use super::*;
+        use decktector_core::model::{TrackInfo, TrackRef};
+        use decktector_core::sim::{SimEngine, SimLibrary};
+        use decktector_core::EngineHandle;
+
+        const RATE: FrameRate = FrameRate::Ebu25;
+        const FPS: u64 = 25;
+        const FRAMES_PER_HOUR: u64 = 3600 * FPS;
+        /// Every loaded deck sits paused two seconds into its track.
+        const PLAYHEAD_MS: f64 = 2_000.0;
+        const INTRO: u32 = 14;
+        const STROBE: u32 = 15;
+        const UNKNOWN: u32 = 99;
+
+        fn track_ref(track_id: u32) -> TrackRef {
+            TrackRef {
+                source_device: 1,
+                slot: "usb".to_owned(),
+                track_id,
+            }
+        }
+
+        fn title_of(track_id: u32) -> &'static str {
+            match track_id {
+                INTRO => "Intro",
+                STROBE => "Strobe",
+                _ => "Not in the show",
+            }
+        }
+
+        fn metadata(track_id: u32) -> TrackInfo {
+            TrackInfo {
+                track_id,
+                source: Some(track_ref(track_id)),
+                title: title_of(track_id).to_owned(),
+                artist: Some("Artist".to_owned()),
+                album: None,
+                genre: None,
+                key: None,
+                label: None,
+                comment: None,
+                duration_ms: 300_000.0,
+                bpm: None,
+                artwork: None,
+                beat_grid: None,
+                waveform: None,
+                cues: Vec::new(),
+                events: Vec::new(),
+            }
+        }
+
+        fn row(id: &str, track_id: u32, start_hours: u64) -> ShowRowEntry {
+            ShowRowEntry {
+                id: id.to_owned(),
+                title: title_of(track_id).to_owned(),
+                artist: "Artist".to_owned(),
+                duration_seconds: 300,
+                start_frames: Some(start_hours * FRAMES_PER_HOUR),
+                trim_ms: 0,
+            }
+        }
+
+        /// Intro at 02:00:00:00, Strobe at 01:00:00:00, fallback at 23:00:00:00.
+        fn table(revision: u64, cut_when_unidentified: bool) -> TimecodeShow {
+            TimecodeShow {
+                revision,
+                frame_rate: RATE,
+                fallback_start_frames: 23 * FRAMES_PER_HOUR,
+                cut_when_unidentified,
+                rows: vec![row("intro", INTRO, 2), row("strobe", STROBE, 1)],
+            }
+        }
+
+        /// The timecode two seconds into a timeline starting at `start_hours`.
+        fn two_seconds_after(start_hours: u64) -> TimeCode {
+            TimeCode::from_frame_count(start_hours * FRAMES_PER_HOUR + 2 * FPS, RATE)
+        }
+
+        struct Rig {
+            engine: Arc<SimEngine>,
+            service: Arc<TimecodeService>,
+            output: OutputState,
+            started_at: Instant,
+        }
+
+        impl Rig {
+            /// Art-Net output at 25 fps from deck 1, with `show` pushed.
+            fn new(show: Option<TimecodeShow>) -> Self {
+                let engine = Arc::new(SimEngine::with_library(1, SimLibrary::default()));
+                let service = TimecodeService::new(Arc::clone(&engine) as Arc<dyn Engine>);
+                service.set_config(TimecodeConfig {
+                    protocol: TimecodeProtocol::ArtNet {
+                        interface_name: "booth".to_owned(),
+                        port: 6454,
+                    },
+                    frame_rate: RATE,
+                });
+                service.set_source(Some(1));
+                service.set_show(show);
+                Self {
+                    engine,
+                    service,
+                    output: OutputState::default(),
+                    started_at: Instant::now(),
+                }
+            }
+
+            fn handle(&self) -> &EngineHandle {
+                self.engine.handle()
+            }
+
+            /// Deck 1 reports `track_id` loaded; its metadata is left as it was.
+            fn load(&self, track_id: u32) {
+                self.handle().update_deck_state(DeckState {
+                    track_id: Some(track_id),
+                    loaded_track: Some(track_ref(track_id)),
+                    ..deck(PLAYHEAD_MS, PlayState::Paused, 0.0, 0.0)
+                });
+            }
+
+            /// Deck 1's metadata for `track_id` lands.
+            fn identify(&self, track_id: u32) {
+                self.handle().update_deck_track(1, Some(metadata(track_id)));
+            }
+
+            /// One tick `after_ms` into the test: what would go out.
+            fn tick_at(&mut self, after_ms: u64) -> Option<SourceReading> {
+                let state = self.service.state_rx.borrow().clone();
+                let now = self.started_at + Duration::from_millis(after_ms);
+                self.service
+                    .refresh_deck_matches(&mut self.output, &state, now);
+                self.service.resolve(&state, &self.output)
+            }
+
+            /// A tick whose timecode went out.
+            fn send_at(&mut self, after_ms: u64) -> SourceReading {
+                let reading = self.tick_at(after_ms).expect("a timecode to send");
+                self.output.record_send(reading, true);
+                reading
+            }
+        }
+
+        fn held(reading: Option<SourceReading>) -> Option<TimeCode> {
+            reading
+                .filter(|reading| !reading.is_advancing)
+                .map(|reading| reading.timecode)
+        }
+
+        #[test]
+        fn no_show_keeps_the_timecode_on_the_playhead() {
+            let mut rig = Rig::new(None);
+            rig.load(STROBE);
+            assert_eq!(rig.send_at(0).timecode, two_seconds_after(0));
+        }
+
+        #[test]
+        fn a_pending_deck_holds_the_last_timecode_sent_and_then_jumps_to_the_correct_one() {
+            let mut rig = Rig::new(Some(table(1, false)));
+            rig.load(INTRO);
+            rig.identify(INTRO);
+            let intro = rig.send_at(0).timecode;
+            assert_eq!(intro, two_seconds_after(2));
+
+            // Strobe loads; the deck still shows the Intro's metadata.
+            rig.load(STROBE);
+            assert_eq!(held(rig.tick_at(100)), Some(intro));
+
+            rig.identify(STROBE);
+            assert_eq!(
+                rig.tick_at(200).map(|reading| reading.timecode),
+                Some(two_seconds_after(1))
+            );
+        }
+
+        #[test]
+        fn a_pending_deck_with_nothing_sent_yet_is_stopped_not_zero() {
+            let mut rig = Rig::new(Some(table(1, false)));
+            rig.load(STROBE);
+            assert_eq!(rig.tick_at(0), None);
+        }
+
+        #[test]
+        fn a_rate_mismatch_sends_no_timecode_until_the_rates_match() {
+            let show_at_30 = TimecodeShow {
+                frame_rate: FrameRate::Smpte30,
+                ..table(1, false)
+            };
+            let mut rig = Rig::new(Some(show_at_30));
+            rig.load(STROBE);
+            rig.identify(STROBE);
+            assert_eq!(rig.tick_at(0), None);
+
+            // Read first: a borrow still alive inside `set_config` would deadlock it.
+            let config = rig.service.state_rx.borrow().config.clone();
+            rig.service.set_config(TimecodeConfig {
+                frame_rate: FrameRate::Smpte30,
+                ..config
+            });
+            assert!(rig.tick_at(100).is_some());
+        }
+
+        #[test]
+        fn a_deck_pending_past_the_timeout_runs_from_the_fallback_start() {
+            let mut rig = Rig::new(Some(table(1, false)));
+            rig.load(STROBE);
+            assert_eq!(rig.tick_at(0), None);
+            assert_eq!(rig.tick_at(PENDING_TIMEOUT_MS - 1), None);
+            assert_eq!(
+                rig.tick_at(PENDING_TIMEOUT_MS)
+                    .map(|reading| reading.timecode),
+                Some(two_seconds_after(23))
+            );
+        }
+
+        #[test]
+        fn a_deck_pending_past_the_timeout_is_held_when_the_cut_switch_is_on() {
+            let mut rig = Rig::new(Some(table(1, true)));
+            rig.load(INTRO);
+            rig.identify(INTRO);
+            let intro = rig.send_at(0).timecode;
+
+            rig.load(STROBE);
+            assert_eq!(held(rig.tick_at(100)), Some(intro));
+            assert_eq!(held(rig.tick_at(100 + PENDING_TIMEOUT_MS)), Some(intro));
+        }
+
+        #[test]
+        fn late_metadata_after_the_timeout_jumps_once_to_the_matched_timecode() {
+            let mut rig = Rig::new(Some(table(1, false)));
+            rig.load(STROBE);
+            rig.tick_at(0);
+            let fallback = rig.send_at(PENDING_TIMEOUT_MS);
+            assert_eq!(fallback.timecode, two_seconds_after(23));
+
+            rig.identify(STROBE);
+            let matched = rig.send_at(PENDING_TIMEOUT_MS + 10_000);
+            assert_eq!(matched.timecode, two_seconds_after(1));
+            assert_ne!(matched.timeline, fallback.timeline);
+            assert_eq!(
+                rig.tick_at(PENDING_TIMEOUT_MS + 10_100),
+                Some(matched),
+                "and it stays there"
+            );
+        }
+
+        #[test]
+        fn an_unidentified_deck_runs_from_the_fallback_start() {
+            let mut rig = Rig::new(Some(table(1, false)));
+            rig.load(UNKNOWN);
+            rig.identify(UNKNOWN);
+            assert_eq!(
+                rig.tick_at(0).map(|reading| reading.timecode),
+                Some(two_seconds_after(23))
+            );
+        }
+
+        #[test]
+        fn an_unidentified_deck_is_held_when_the_cut_switch_is_on() {
+            let mut rig = Rig::new(Some(table(1, true)));
+            rig.load(INTRO);
+            rig.identify(INTRO);
+            let intro = rig.send_at(0).timecode;
+
+            rig.load(UNKNOWN);
+            rig.identify(UNKNOWN);
+            assert_eq!(held(rig.tick_at(100)), Some(intro));
+        }
+
+        #[test]
+        fn an_ambiguous_deck_follows_the_same_fallback_or_cut_rule() {
+            let twice = |cut_when_unidentified| TimecodeShow {
+                rows: vec![row("strobe", STROBE, 1), row("strobe-again", STROBE, 3)],
+                ..table(1, cut_when_unidentified)
+            };
+
+            let mut falling_back = Rig::new(Some(twice(false)));
+            falling_back.load(STROBE);
+            falling_back.identify(STROBE);
+            assert_eq!(
+                falling_back.tick_at(0).map(|reading| reading.timecode),
+                Some(two_seconds_after(23))
+            );
+
+            let mut cut = Rig::new(Some(twice(true)));
+            cut.load(STROBE);
+            cut.identify(STROBE);
+            assert_eq!(cut.tick_at(0), None, "cut with nothing sent yet");
+        }
+
+        #[test]
+        fn loading_a_new_track_on_the_source_deck_restarts_the_mtc_session() {
+            let mut rig = Rig::new(Some(table(1, false)));
+            rig.load(INTRO);
+            rig.identify(INTRO);
+            let intro = rig.send_at(0);
+            rig.load(STROBE);
+            rig.identify(STROBE);
+            let strobe = rig.send_at(100);
+
+            let session = |reading: SourceReading| MtcSession {
+                deck_id: reading.deck_id,
+                frame_rate: RATE,
+                timeline: reading.timeline,
+            };
+            assert!(rig.output.latch_mtc_session(session(intro)));
+            assert!(rig.output.latch_mtc_session(session(strobe)));
+        }
+
+        #[test]
+        fn changing_the_source_and_the_table_in_one_tick_never_mixes_old_and_new() {
+            let rig = Rig::new(Some(table(1, false)));
+            let before = rig.service.state_rx.borrow().clone();
+
+            rig.service.set_source(Some(2));
+            rig.service.set_show(Some(table(2, true)));
+            let after = rig.service.state_rx.borrow().clone();
+
+            assert_eq!(before.source_deck_id, Some(1));
+            assert_eq!(before.show.as_deref().map(|show| show.revision), Some(1));
+            assert_eq!(after.source_deck_id, Some(2));
+            assert_eq!(after.show.as_deref().map(|show| show.revision), Some(2));
+        }
+
+        #[test]
+        fn trim_edits_apply_on_the_next_tick_without_a_rematch() {
+            let mut rig = Rig::new(Some(table(1, false)));
+            rig.load(STROBE);
+            rig.identify(STROBE);
+            assert_eq!(rig.send_at(0).timecode, two_seconds_after(1));
+
+            // +80 ms is two frames at 25 fps; the copy would make a fresh match ambiguous.
+            let mut trimmed = table(2, false);
+            trimmed.rows[1].trim_ms = 80;
+            trimmed.rows.push(row("strobe-copy", STROBE, 5));
+            rig.service.set_show(Some(trimmed));
+
+            let reading = rig.tick_at(100).expect("still on its row");
+            assert_eq!(
+                reading.timecode,
+                TimeCode::from_frame_count(FRAMES_PER_HOUR + 2 * FPS + 2, RATE)
+            );
+        }
     }
 }

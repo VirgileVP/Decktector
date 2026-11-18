@@ -119,6 +119,12 @@ impl EngineHandle {
         self.lock().decks.get(&deck_id).cloned()
     }
 
+    /// Current state of every deck that has reported, in deck order — as
+    /// cheap as [`Self::deck_state`] per deck, for readers that follow them all.
+    pub fn deck_states(&self) -> Vec<DeckState> {
+        self.lock().decks.values().cloned().collect()
+    }
+
     pub fn set_network_state(&self, network_state: NetworkState) {
         self.lock().network_state = network_state;
         self.emit(EngineEvent::NetworkState(network_state));
@@ -298,6 +304,15 @@ mod tests {
 
         assert_eq!(handle.deck_state(2), Some(deck_state(2)));
         assert_eq!(handle.deck_state(3), None);
+    }
+
+    #[test]
+    fn deck_states_lists_every_deck_in_deck_order() {
+        let handle = EngineHandle::new();
+        handle.update_deck_state(deck_state(3));
+        handle.update_deck_state(deck_state(1));
+
+        assert_eq!(handle.deck_states(), vec![deck_state(1), deck_state(3)]);
     }
 
     #[test]

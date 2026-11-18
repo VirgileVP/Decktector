@@ -10,6 +10,7 @@
 export type { ActiveLoop } from './ActiveLoop'
 export type { BeatGridBeat } from './BeatGridBeat'
 export type { CueKind } from './CueKind'
+export type { DeckMatchStatus } from './DeckMatchStatus'
 export type { DeckResolution } from './DeckResolution'
 export type { DeckState } from './DeckState'
 export type { DeckTrack } from './DeckTrack'
