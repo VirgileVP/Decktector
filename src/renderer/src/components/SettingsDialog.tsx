@@ -25,6 +25,7 @@ import { DeckLabelsEditor } from './DeckLabelsEditor'
 import { DevicesPanel } from './DevicesPanel'
 import { LineupEditor } from './LineupEditor'
 import { ShowPanel } from './ShowPanel'
+import { ShowSettingsSection } from './ShowSettingsSection'
 import { OnAirSourceSetting } from './OnAirSourceSetting'
 import { ResetSettingsSetting } from './ResetSettingsSetting'
 import { ChoiceRow, SliderRow, TextRow, ToggleRow } from './SettingControls'
@@ -360,89 +361,95 @@ export function SettingsDialog({
           {IS_TAURI && activeTab === 'Show' && <ShowPanel />}
 
           {IS_TAURI && activeTab === 'Timecode' && (
-            <section className="settings-section">
-              <h3>Timecode</h3>
-              <p className="setting-hint setting-warning" role="note">
-                Timecode output is still in development. Check it against your console before
-                relying on it during a show, and expect behaviour to change in future releases.
-              </p>
-              <ChoiceRow
-                label="Output"
-                hint="Which deck to send from is picked in the header, or follows the on-air deck below"
-                value={settings.timecodeProtocol}
-                options={TIMECODE_PROTOCOL_OPTIONS}
-                onChange={update('timecodeProtocol')}
-              />
-              <ToggleRow
-                label="Follow the on-air deck"
-                hint="Sends timecode from whichever deck is on air, as set by the on-air source in Interface. A manual pick in the header holds until another deck goes on air."
-                checked={settings.timecodeFollowOnAir}
-                onChange={update('timecodeFollowOnAir')}
-              />
-              <ChoiceRow
-                label="Frame rate"
-                hint="Must match the receiving lighting or video console"
-                value={settings.timecodeFrameRate}
-                options={TIMECODE_FRAME_RATE_OPTIONS}
-                onChange={update('timecodeFrameRate')}
-              />
-              {settings.timecodeProtocol === 'artnet' && (
-                <>
-                  {networkInterfaces.length > 0 ? (
+            <>
+              <section className="settings-section">
+                <h3>Timecode</h3>
+                <p className="setting-hint setting-warning" role="note">
+                  Timecode output is still in development. Check it against your console before
+                  relying on it during a show, and expect behaviour to change in future releases.
+                </p>
+                <ChoiceRow
+                  label="Output"
+                  hint="Which deck to send from is picked in the header, or follows the on-air deck below"
+                  value={settings.timecodeProtocol}
+                  options={TIMECODE_PROTOCOL_OPTIONS}
+                  onChange={update('timecodeProtocol')}
+                />
+                <ToggleRow
+                  label="Follow the on-air deck"
+                  hint="Sends timecode from whichever deck is on air, as set by the on-air source in Interface. A manual pick in the header holds until another deck goes on air."
+                  checked={settings.timecodeFollowOnAir}
+                  onChange={update('timecodeFollowOnAir')}
+                />
+                <ChoiceRow
+                  label="Frame rate"
+                  hint="Must match the receiving lighting or video console"
+                  value={settings.timecodeFrameRate}
+                  options={TIMECODE_FRAME_RATE_OPTIONS}
+                  onChange={update('timecodeFrameRate')}
+                />
+                {settings.timecodeProtocol === 'artnet' && (
+                  <>
+                    {networkInterfaces.length > 0 ? (
+                      <ChoiceRow
+                        label="Network interface"
+                        hint="Adapter to broadcast Art-Net from — pick the one on the lighting network"
+                        value={settings.timecodeArtNetInterface}
+                        options={networkInterfaces.map((networkInterface) => ({
+                          value: networkInterface.name,
+                          label: `${networkInterface.name} (${networkInterface.ip})`
+                        }))}
+                        onChange={update('timecodeArtNetInterface')}
+                      />
+                    ) : (
+                      <p className="setting-hint">
+                        No network interface found — connect the lighting network and reopen
+                        settings.
+                      </p>
+                    )}
+                    <TextRow
+                      label="Art-Net port"
+                      hint="6454 by convention — change only for a non-standard node"
+                      type="number"
+                      value={String(settings.timecodeArtNetPort)}
+                      onChange={(value) =>
+                        settings.update('timecodeArtNetPort', Number(value) || 0)
+                      }
+                    />
+                  </>
+                )}
+                {settings.timecodeProtocol === 'mtc' &&
+                  (midiPorts.length > 0 ? (
                     <ChoiceRow
-                      label="Network interface"
-                      hint="Adapter to broadcast Art-Net from — pick the one on the lighting network"
-                      value={settings.timecodeArtNetInterface}
-                      options={networkInterfaces.map((networkInterface) => ({
-                        value: networkInterface.name,
-                        label: `${networkInterface.name} (${networkInterface.ip})`
-                      }))}
-                      onChange={update('timecodeArtNetInterface')}
+                      label="MIDI output"
+                      hint="Port to send MTC quarter-frame messages to"
+                      value={settings.timecodeMtcPort}
+                      options={midiPorts.map((port) => ({ value: port, label: port }))}
+                      onChange={update('timecodeMtcPort')}
                     />
                   ) : (
                     <p className="setting-hint">
-                      No network interface found — connect the lighting network and reopen settings.
+                      No MIDI output port found — Windows has no built-in virtual MIDI cable,
+                      install loopMIDI (or similar) to create one, then reopen settings.
                     </p>
-                  )}
-                  <TextRow
-                    label="Art-Net port"
-                    hint="6454 by convention — change only for a non-standard node"
-                    type="number"
-                    value={String(settings.timecodeArtNetPort)}
-                    onChange={(value) => settings.update('timecodeArtNetPort', Number(value) || 0)}
-                  />
-                </>
-              )}
-              {settings.timecodeProtocol === 'mtc' &&
-                (midiPorts.length > 0 ? (
-                  <ChoiceRow
-                    label="MIDI output"
-                    hint="Port to send MTC quarter-frame messages to"
-                    value={settings.timecodeMtcPort}
-                    options={midiPorts.map((port) => ({ value: port, label: port }))}
-                    onChange={update('timecodeMtcPort')}
-                  />
-                ) : (
-                  <p className="setting-hint">
-                    No MIDI output port found — Windows has no built-in virtual MIDI cable, install
-                    loopMIDI (or similar) to create one, then reopen settings.
-                  </p>
-                ))}
-              {settings.timecodeProtocol === 'ltc' &&
-                (ltcDevices.length > 0 ? (
-                  <ChoiceRow
-                    label="Audio output"
-                    hint="Device to send the LTC audio signal to — route it into the lighting or video console"
-                    value={settings.timecodeLtcDevice}
-                    options={ltcDevices.map((device) => ({ value: device, label: device }))}
-                    onChange={update('timecodeLtcDevice')}
-                  />
-                ) : (
-                  <p className="setting-hint">
-                    No audio output device found — connect one and reopen settings.
-                  </p>
-                ))}
-            </section>
+                  ))}
+                {settings.timecodeProtocol === 'ltc' &&
+                  (ltcDevices.length > 0 ? (
+                    <ChoiceRow
+                      label="Audio output"
+                      hint="Device to send the LTC audio signal to — route it into the lighting or video console"
+                      value={settings.timecodeLtcDevice}
+                      options={ltcDevices.map((device) => ({ value: device, label: device }))}
+                      onChange={update('timecodeLtcDevice')}
+                    />
+                  ) : (
+                    <p className="setting-hint">
+                      No audio output device found — connect one and reopen settings.
+                    </p>
+                  ))}
+              </section>
+              <ShowSettingsSection />
+            </>
           )}
 
           {IS_TAURI && activeTab === 'Remote view' && (

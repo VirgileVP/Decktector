@@ -23,9 +23,21 @@ const FRAME_RATE_OF_FPS: Readonly<Record<ShowFps, FrameRate>> = {
   30: 'smpte30'
 }
 
+/** The show rate of each timecode service rate: the inverse of {@link FRAME_RATE_OF_FPS}. */
+const FPS_OF_FRAME_RATE: Readonly<Record<FrameRate, ShowFps>> = {
+  film24: 24,
+  ebu25: 25,
+  smpte30: 30
+}
+
 /** `fps` as the timecode service names it. */
 export function frameRateOfFps(fps: ShowFps): FrameRate {
   return FRAME_RATE_OF_FPS[fps]
+}
+
+/** The show rate the timecode service's `rate` runs at. */
+export function fpsOfFrameRate(rate: FrameRate): ShowFps {
+  return FPS_OF_FRAME_RATE[rate]
 }
 
 /** The largest trim either way: far beyond any cue nudge, short of a mistake. */

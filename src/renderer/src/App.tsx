@@ -5,6 +5,7 @@ import { useShallow } from 'zustand/react/shallow'
 import neonLogo from './assets/neon-logo.png'
 import { DeckPanel } from './components/DeckPanel'
 import { DeckViewToggle } from './components/DeckViewToggle'
+import { FrameRateMismatchDialog } from './components/FrameRateMismatchDialog'
 import { HeaderBlock } from './components/HeaderBlock'
 import { RemoteLinkBanner } from './components/RemoteLinkBanner'
 import { SettingsDialog, type SettingsTab } from './components/SettingsDialog'
@@ -196,6 +197,8 @@ function App(): React.JSX.Element {
       {settingsTab !== null && (
         <SettingsDialog initialTab={settingsTab} onClose={() => setSettingsTab(null)} />
       )}
+
+      {IS_TAURI && <FrameRateMismatchDialog />}
 
       {welcomeOpen && <WelcomeDialog onClose={closeWelcome} />}
 

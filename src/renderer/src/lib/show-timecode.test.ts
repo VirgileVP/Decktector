@@ -4,6 +4,8 @@ import {
   FALLBACK_START_TC_DEFAULT,
   SHOW_FPS_OPTIONS,
   formatTimecode,
+  fpsOfFrameRate,
+  frameRateOfFps,
   framesPerDay,
   parseTimecode,
   readTimecodeLabel,
@@ -89,6 +91,14 @@ describe('FALLBACK_START_TC_DEFAULT', () => {
   it('is a valid label at every rate', () => {
     for (const fps of SHOW_FPS_OPTIONS) {
       expect(parseTimecode(FALLBACK_START_TC_DEFAULT, fps)).not.toBeNull()
+    }
+  })
+})
+
+describe('frameRateOfFps and fpsOfFrameRate', () => {
+  it('fps and frame rate names round trip for all three rates', () => {
+    for (const fps of SHOW_FPS_OPTIONS) {
+      expect(fpsOfFrameRate(frameRateOfFps(fps))).toBe(fps)
     }
   })
 })

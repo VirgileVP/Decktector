@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { countLabel } from '../lib/count-label'
 import type { ShowData } from '../lib/show'
+import { readinessLabel } from '../lib/show-readiness'
 import { summariseIssues } from '../lib/show-summary-view'
 import { SHOW_FPS_OPTIONS, type ShowFps } from '../lib/show-timecode'
 import {
@@ -52,7 +53,7 @@ export function ShowSummary({ show, analysis, readOnly }: ShowSummaryProps): Rea
           className={`show-readiness ${analysis.ready ? 'show-ready' : 'show-not-ready'}`}
           role="status"
         >
-          {analysis.ready ? 'Ready' : `Not ready — ${countLabel(analysis.conflicts, 'conflict')}`}
+          {readinessLabel(analysis)}
         </span>
         {issues.map((issue) => (
           <button
