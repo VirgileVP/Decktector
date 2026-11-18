@@ -15,6 +15,12 @@ pub mod artnet;
 pub mod identity;
 pub mod ltc;
 pub mod mtc;
+mod show;
+
+pub use show::{
+    resolve_deck, timeline_for, DeckResolution, ShowRowEntry, TimecodeShow, UnidentifiedReason,
+    PENDING_TIMEOUT_MS,
+};
 
 /// Re-exported so existing callers keep writing `decktector_timecode::network::*` —
 /// the lookup itself now lives in `decktector-net`, shared with the remote service.
@@ -130,12 +136,12 @@ const SECONDS_PER_DAY: u64 = 24 * 3600;
 /// The default — start `00:00:00:00`, no trim — is the timeline every deck
 /// ran on before tracks had their own: the timecode is the playhead itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-struct Timeline {
+pub struct Timeline {
     /// Frames from `00:00:00:00` at the output frame rate.
-    start_frames: u64,
+    pub start_frames: u64,
     /// Signed nudge added to the playhead: positive runs the timecode ahead
     /// of the music, so cues fire earlier.
-    trim_ms: i64,
+    pub trim_ms: i64,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
