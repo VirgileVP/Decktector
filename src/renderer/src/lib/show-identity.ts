@@ -76,6 +76,17 @@ export interface TrackIdentity {
   durationSeconds: number
 }
 
+/** Separates title from artist in {@link identityKey}: no title or artist holds it. */
+const KEY_SEPARATOR = '\u0000'
+
+/**
+ * The normalised title and artist of `track` as one string. Tracks that can
+ * match share it, so it buckets candidates before durations are compared.
+ */
+export function identityKey(track: Pick<TrackIdentity, 'title' | 'artist'>): string {
+  return `${normaliseText(track.title)}${KEY_SEPARATOR}${normaliseText(track.artist)}`
+}
+
 /**
  * Whether `a` and `b` describe the same track. An unknown duration never
  * matches, not even on an identical title and artist: without it a cover or

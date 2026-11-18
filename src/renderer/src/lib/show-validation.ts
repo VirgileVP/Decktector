@@ -14,7 +14,7 @@
  */
 
 import type { ShowData, ShowRow } from './show'
-import { identityMatches, normaliseText } from './show-identity'
+import { identityKey, identityMatches } from './show-identity'
 import { formatTimecode, framesPerDay, parseTimecode, type ShowFps } from './show-timecode'
 
 export type RowIssue =
@@ -50,10 +50,6 @@ interface TimedRow {
   end: number
 }
 
-function identityKey(row: ShowRow): string {
-  return `${normaliseText(row.title)}\u0000${normaliseText(row.artist)}`
-}
-
 function hasSameStart(rows: readonly ShowRow[]): boolean {
   const [first, ...others] = rows
   return (
@@ -74,7 +70,9 @@ function duplicateGroups(rows: readonly ShowRow[]): DuplicateGroup[] {
   for (const row of rows) {
     if (row.durationSeconds <= 0) continue
     const key = identityKey(row)
-    byKey.set(key, [...(byKey.get(key) ?? []), row])
+    const candidates = byKey.get(key)
+    if (candidates === undefined) byKey.set(key, [row])
+    else candidates.push(row)
   }
 
   const groups: DuplicateGroup[] = []
