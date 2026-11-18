@@ -17,7 +17,8 @@ Around the decks:
 
 - **Clock and lineup** — the night's sets, with a progress bar and per-artist notes
 - **Timecode output** — Art-Net TC, MIDI Time Code or LTC, following a chosen deck
-  or the on-air one
+  or the on-air one, with [a start timecode per track](#per-track-timecode) from a
+  rekordbox playlist
 - **[Remote view](#remote-view)** — a read-only copy of the screen in any browser on
   the local network
 - **[Detachable panels](#detachable-panels)** — decks, clock, timecode or lineup in
@@ -255,6 +256,78 @@ _"Apple could not verify Decktector is free of malware"_. Either:
 Either has to be done again after installing each new version. Releases up to
 1.5.1 were not signed at all, which macOS reports as _"Decktector is damaged and
 can't be opened"_; only the `xattr` command gets past that one.
+
+## Per-track timecode
+
+By default the timecode output runs the source deck's playhead from
+`00:00:00:00`, so every track starts at the same timecode. A **show** gives
+each track of the night its own start, so a lighting or video console can
+hold one timeline per track and fire the right cues whichever order the DJ
+plays them in:
+
+```text
+timecode = the row's start timecode + the deck's position in the file + the row's trim
+```
+
+**Building a show.** Export a playlist from rekordbox as XML (_File → Export
+Collection in xml format_), then in **Settings → Show** press **Import
+rekordbox XML…** and pick a playlist from the file's folder tree. Each track
+becomes a row — title, artist, length, a blank start timecode and no trim. If
+a show is already loaded, the import asks first:
+
+- **Merge** keeps every row you already timed, adds the playlist's new tracks
+  in playlist order, and marks rows the playlist no longer lists as _absent_ —
+  dimmed, never deleted for you.
+- **Replace** throws the current rows away and starts from the playlist.
+
+Type each row's start as `HH:MM:SS:FF`, or let **Fill blanks** number the
+blank ones at a fixed step (10 min, 30 min, 1 h or your own) after the
+previous timed row. The editor flags overlapping rows, rows that run past
+midnight, the same track listed twice with different starts and frames too
+high for the show's rate — any of these makes the show **Not ready**. A blank
+start or an absent row is a warning only. The editor can also be popped out
+into its own window, read-only there.
+
+**Trim** nudges a row by whole frames while the set runs: **+** makes the
+cues fire earlier, **−** later. It applies at once, with no confirmation.
+
+**Matching a deck to a row.** When a deck loads a track, the app looks it up
+in the show by title and artist — ignoring case, accents and spacing — and by
+length, within 2 seconds. A track the show does not list, one that matches
+several rows, one without a length, or one still unidentified after 10 seconds
+runs from the **fallback start timecode** (`23:00:00:00` unless you change it
+in **Settings → Timecode**), or sends nothing at all if **Cut timecode when a
+track is unknown** is on. Editing a start, replacing the show or importing
+over it while a deck on air would change timecode asks first, naming the deck
+with its old and new timecode.
+
+**Frame rate.** A show records its rate: 24, 25 or 30 fps (no drop-frame).
+Nothing is ever converted. Changing a show's rate keeps every start as typed
+and flags the ones whose frames no longer fit. When the show and **Settings →
+Timecode → Frame rate** disagree, the output sends nothing and a dialog offers
+to switch the output to the show's rate or leave it cut.
+
+**Handover.** When the timecode follows the on-air deck, **Hand over the
+timecode** chooses when it moves to the next one: once the old deck leaves the
+air (the default), or the moment the new deck goes on air, even while the old
+one is still up. The second choice needs a single linked mixer as the on-air
+source: following playback, a deck cued in the headphones would count as on
+air and take the timecode, so the choice is held at the default otherwise.
+
+**On the decks.** Every loaded deck's bar says where it stands: the row it runs
+on and its start (`▸ Strobe · 00:20:00:00`), or why it is at the fallback, cut
+or still identifying. A badge says where its playhead comes from: **precise**
+(a CDJ-3000's absolute position), **grid** (the beat counter placed on the
+track's beat grid) or **est.** (the beat counter at the track's constant BPM,
+before its grid has arrived — lead-in silence and tempo changes skew it).
+
+**The show file.** The show is kept across restarts with no manual save.
+**Export show…** and **Import show…** move a whole night between machines as a
+`show-YYYY-MM-DD.json` file. It is separate from the lineup file: the lineup
+says who plays when, the show says where each track sits on the timecode.
+
+Not included yet: building a show by browsing a player's USB library over the
+network, and sending one timecode stream per deck at the same time.
 
 ## Remote view
 
