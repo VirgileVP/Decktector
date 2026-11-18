@@ -12,6 +12,7 @@
 //! events, the same bridge shape as the engine layer.
 
 pub mod artnet;
+pub mod identity;
 pub mod ltc;
 pub mod mtc;
 

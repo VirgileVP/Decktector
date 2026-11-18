@@ -54,6 +54,8 @@ thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util", "fs"] }
 tracing = "0.1"
 ts-rs = "10"
+# NFC for track titles matched against the show (decktector-timecode::identity).
+unicode-normalization = "0.1"
 
 [profile.dev]
 # Full MSVC debug info (.pdb) dominates `target/` size; line tables are enough

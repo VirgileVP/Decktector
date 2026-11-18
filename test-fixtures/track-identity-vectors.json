@@ -66,6 +66,31 @@
       "out": "at&t"
     },
     {
+      "why": "a reference without its semicolon is text",
+      "in": "Tom &amp Jerry",
+      "out": "tom &amp jerry"
+    },
+    {
+      "why": "a failed reference does not swallow the next one",
+      "in": "&&amp;",
+      "out": "&&"
+    },
+    {
+      "why": "a number reference needs digits",
+      "in": "&#; &#x;",
+      "out": "&#; &#x;"
+    },
+    {
+      "why": "a reference beyond U+10FFFF is left as text",
+      "in": "&#99999999999;",
+      "out": "&#99999999999;"
+    },
+    {
+      "why": "entity names are case-sensitive",
+      "in": "&AMP;",
+      "out": "&amp;"
+    },
+    {
       "why": "a reference to a surrogate is left as text",
       "in": "&#xD800; is not a character",
       "out": "&#xd800; is not a character"

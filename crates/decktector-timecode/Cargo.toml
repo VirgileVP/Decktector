@@ -16,3 +16,8 @@ serde = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 ts-rs = { workspace = true }
+unicode-normalization = { workspace = true }
+
+[dev-dependencies]
+# Reads the identity vectors shared with the renderer's tests.
+serde_json = { workspace = true }
