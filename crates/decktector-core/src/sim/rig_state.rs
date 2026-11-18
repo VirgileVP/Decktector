@@ -6,7 +6,9 @@ use ts_rs::TS;
 
 use super::command::TempoRange;
 use super::media::sim_track_ref;
-use crate::model::{ActiveLoop, DeckId, DeckState, LoopRange, PlayState, TrackInfo};
+use crate::model::{
+    ActiveLoop, DeckId, DeckState, LoopRange, PlayState, PositionQuality, TrackInfo,
+};
 
 /// One entry of the sorted library the control page can load from.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -106,6 +108,8 @@ impl SimDeckView {
                 .track_id
                 .map(|track_id| sim_track_ref(self.deck_id, track_id)),
             playhead_ms: self.track_index.map(|_| self.position_ms),
+            // The rig moves the playhead itself: it knows exactly where it is.
+            position_quality: self.track_index.map(|_| PositionQuality::Precise),
             reported_at,
             active_loop: self.loop_state.and_then(SimLoop::as_active_loop),
         }

@@ -3,15 +3,18 @@
 use decktector_core::model::{ActiveLoop, DeckState, LoopRange, PlayState, TrackRef};
 use prolink::status::{DeviceStatus, LoopBounds, RawPlayState};
 
+use crate::position::PositionEstimate;
+
 /// Builds the deck state a status packet implies, anchored at `now_ms`.
-/// `playhead_ms` comes from [`crate::position::PositionTracker`] rather than
+/// `playhead` comes from [`crate::position::PositionTracker`] rather than
 /// being derived here, since it also has to fold in CDJ-3000 precise
-/// -position packets that arrive on a separate stream. `loaded_track` is the
+/// -position packets that arrive on a separate stream, and the loaded
+/// track's beat grid. `loaded_track` is the
 /// track the same status names, resolved to the player holding its media by
 /// the caller (`crate::engine`), which needs it for the metadata fetch too.
 pub fn to_deck_state(
     status: &DeviceStatus,
-    playhead_ms: Option<f64>,
+    playhead: Option<PositionEstimate>,
     loaded_track: Option<TrackRef>,
     now_ms: f64,
 ) -> DeckState {
@@ -28,7 +31,8 @@ pub fn to_deck_state(
         beat_in_measure: status.beat_in_bar,
         track_id: status.track_id,
         loaded_track,
-        playhead_ms,
+        playhead_ms: playhead.map(|playhead| playhead.position_ms),
+        position_quality: playhead.map(|playhead| playhead.quality),
         reported_at: now_ms,
         active_loop: active_loop(status),
     }
@@ -70,6 +74,7 @@ pub(crate) fn play_state(raw: RawPlayState) -> PlayState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use decktector_core::model::PositionQuality;
     use prolink::status::MediaSlot;
 
     fn status(overrides: impl FnOnce(DeviceStatus) -> DeviceStatus) -> DeviceStatus {
@@ -311,9 +316,21 @@ mod tests {
 
     #[test]
     fn reports_the_deck_id_and_timestamp_it_was_given() {
-        let deck = to_deck_state(&status(|status| status), Some(4_200.0), None, 9_999.0);
+        let playhead = PositionEstimate {
+            position_ms: 4_200.0,
+            quality: PositionQuality::BeatGrid,
+        };
+        let deck = to_deck_state(&status(|status| status), Some(playhead), None, 9_999.0);
         assert_eq!(deck.deck_id, 2);
         assert_eq!(deck.playhead_ms, Some(4_200.0));
+        assert_eq!(deck.position_quality, Some(PositionQuality::BeatGrid));
         assert_eq!(deck.reported_at, 9_999.0);
+    }
+
+    #[test]
+    fn no_playhead_has_no_quality_either() {
+        let deck = to_deck_state(&status(|status| status), None, None, 9_999.0);
+        assert_eq!(deck.playhead_ms, None);
+        assert_eq!(deck.position_quality, None);
     }
 }

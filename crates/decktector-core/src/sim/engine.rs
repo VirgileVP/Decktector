@@ -24,7 +24,9 @@ use super::manual::{self, ManualSession};
 use super::media::{on_deck, sim_track_ref};
 use super::rig::{SimRig, DECK_COUNT};
 use crate::engine::{Engine, EngineHandle};
-use crate::model::{DeckId, DeckState, DeviceInfo, NetworkState, PlayState, TrackInfo};
+use crate::model::{
+    DeckId, DeckState, DeviceInfo, NetworkState, PlayState, PositionQuality, TrackInfo,
+};
 
 const TICK: Duration = Duration::from_millis(200);
 /// Time before the end of a track at which the sim deck loads the next one.
@@ -169,6 +171,8 @@ impl SimDeck {
                 .as_ref()
                 .map(|track| sim_track_ref(self.deck_id, track.track_id)),
             playhead_ms: self.track.as_ref().map(|_| self.playhead_ms),
+            // The sim moves the playhead itself: it knows exactly where it is.
+            position_quality: self.track.as_ref().map(|_| PositionQuality::Precise),
             reported_at: epoch_ms(),
             active_loop: None,
         }

@@ -173,6 +173,23 @@ impl EngineHandle {
         self.lock().tracks.get(&deck_id)?.as_ref()?.source.clone()
     }
 
+    /// Which track the beat grid `deck_id` shows belongs to: the source of
+    /// its metadata, when that metadata carries a beat grid.
+    ///
+    /// For per-status readers, as cheap as [`Self::deck_track_source`]. Unlike
+    /// it, this changes when a grid arrives *after* its track's metadata — a
+    /// player still analysing the track sends it later — so a reader keyed
+    /// on it picks the late grid up.
+    pub fn deck_beat_grid_source(&self, deck_id: DeckId) -> Option<TrackRef> {
+        let state = self.lock();
+        let track = state.tracks.get(&deck_id)?.as_ref()?;
+        let has_grid = track
+            .beat_grid
+            .as_ref()
+            .is_some_and(|grid| !grid.is_empty());
+        has_grid.then(|| track.source.clone()).flatten()
+    }
+
     /// The metadata `deck_id` currently shows, waveform and all.
     pub fn deck_track(&self, deck_id: DeckId) -> Option<TrackInfo> {
         self.lock().tracks.get(&deck_id)?.clone()
@@ -221,7 +238,7 @@ pub trait Engine: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::PlayState;
+    use crate::model::{BeatGridBeat, PlayState};
 
     fn device(deck_id: DeckId) -> DeviceInfo {
         DeviceInfo {
@@ -267,6 +284,7 @@ mod tests {
             track_id: None,
             loaded_track: None,
             playhead_ms: Some(1_000.0),
+            position_quality: None,
             reported_at: 0.0,
             active_loop: None,
         }
@@ -364,6 +382,32 @@ mod tests {
 
         handle.update_deck_track(1, None);
         assert_eq!(handle.deck_track(1), None);
+    }
+
+    #[test]
+    fn a_decks_beat_grid_source_waits_for_a_grid_to_arrive() {
+        let handle = EngineHandle::new();
+        let source = TrackRef {
+            source_device: 2,
+            slot: "usb".into(),
+            track_id: 1234,
+        };
+        handle.update_deck_track(1, Some(track_info(Some(source.clone()))));
+        assert_eq!(
+            handle.deck_beat_grid_source(1),
+            None,
+            "the player is still analysing the track"
+        );
+
+        let with_grid = TrackInfo {
+            beat_grid: Some(vec![BeatGridBeat {
+                offset_ms: 120.0,
+                beat_in_measure: 1,
+            }]),
+            ..track_info(Some(source.clone()))
+        };
+        handle.update_deck_track(1, Some(with_grid));
+        assert_eq!(handle.deck_beat_grid_source(1), Some(source));
     }
 
     #[test]

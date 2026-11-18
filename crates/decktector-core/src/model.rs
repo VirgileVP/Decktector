@@ -78,11 +78,30 @@ pub struct DeckState {
     /// beat grid (Pro DJ Link has no absolute position on CDJ-2000-era
     /// hardware). null when it cannot be inferred yet.
     pub playhead_ms: Option<f64>,
+    /// How far `playhead_ms` can be trusted; null exactly when `playhead_ms` is.
+    #[serde(default)]
+    pub position_quality: Option<PositionQuality>,
     /// Epoch ms at which this state was computed (interpolation anchor).
     pub reported_at: f64,
     /// The loop the deck is playing, null when it isn't looping.
     #[serde(default)]
     pub active_loop: Option<ActiveLoop>,
+}
+
+/// Where a deck's playhead comes from, best first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "PositionQuality.ts")]
+pub enum PositionQuality {
+    /// A fresh absolute position: a CDJ-3000's precise-position packet, or a
+    /// simulated deck, which knows exactly where it is.
+    Precise,
+    /// The player's beat counter placed on the loaded track's beat grid:
+    /// right wherever the track has lead-in silence or changes tempo.
+    BeatGrid,
+    /// The beat counter at the track's constant BPM from track-ms 0: no
+    /// grid for the loaded track yet, so lead-in and tempo drift skew it.
+    Estimate,
 }
 
 /// A loop a deck is playing right now.

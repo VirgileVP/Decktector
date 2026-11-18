@@ -797,6 +797,7 @@ mod tests {
             track_id: None,
             loaded_track: None,
             playhead_ms: Some(playhead_ms),
+            position_quality: None,
             reported_at,
             active_loop: None,
         }

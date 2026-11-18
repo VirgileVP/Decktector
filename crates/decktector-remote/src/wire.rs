@@ -82,7 +82,7 @@ fn strip_heavy_payload(mut track: TrackInfo) -> TrackInfo {
 mod tests {
     use super::*;
     use decktector_core::model::{
-        DeckState, DeckTrack, DeviceInfo, NetworkState, PlayState, TrackRef,
+        DeckState, DeckTrack, DeviceInfo, NetworkState, PlayState, PositionQuality, TrackRef,
     };
 
     fn every_event() -> Vec<EngineEvent> {
@@ -111,6 +111,7 @@ mod tests {
                 track_id: None,
                 loaded_track: None,
                 playhead_ms: None,
+                position_quality: None,
                 reported_at: 0.0,
                 active_loop: None,
             }),
@@ -144,6 +145,7 @@ mod tests {
                 track_id: 7,
             }),
             playhead_ms: Some(12_345.0),
+            position_quality: Some(PositionQuality::BeatGrid),
             reported_at: 999.0,
             active_loop: None,
         };

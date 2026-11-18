@@ -124,6 +124,7 @@ mod tests {
             beat_in_measure: None,
             track_id: None,
             loaded_track: None,
+            position_quality: None,
             playhead_ms: None,
             reported_at: 0.0,
             active_loop: None,

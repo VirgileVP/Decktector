@@ -5,8 +5,9 @@ import type { SimDeckView } from '@renderer/model/SimDeckView'
  * The shared waveform canvases read a `DeckState` from the renderer's main
  * store and interpolate the playhead from it. This maps the simulator's
  * authoritative deck view onto that shape, anchored on the server's clock.
- * The canvases never ask which media a track lives on, so `loadedTrack` is
- * left unknown here; the engine's own deck state carries it.
+ * The canvases never ask which media a track lives on or how far its
+ * position can be trusted, so `loadedTrack` and `positionQuality` are left
+ * unknown here; the engine's own deck state carries both.
  */
 export function toDeckState(view: SimDeckView, reportedAt: number): DeckState {
   return {
@@ -22,6 +23,7 @@ export function toDeckState(view: SimDeckView, reportedAt: number): DeckState {
     trackId: view.trackId,
     loadedTrack: null,
     playheadMs: view.trackIndex !== null ? view.positionMs : null,
+    positionQuality: null,
     reportedAt,
     activeLoop:
       view.loopState?.active === true

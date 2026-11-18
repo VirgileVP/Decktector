@@ -399,13 +399,10 @@ fn handle_status(
     let now = now_ms();
     let deck_id = status.device_number;
     let loaded = loaded_track(&status);
-    let playhead_ms = position.estimate(deck_id, &status, now);
-    handle.update_deck_state(to_deck_state(
-        &status,
-        playhead_ms,
-        loaded.as_ref().map(TrackRef::from),
-        now,
-    ));
+    let loaded_ref = loaded.as_ref().map(TrackRef::from);
+    sync_beat_grid(handle, position, deck_id);
+    let playhead = position.estimate(deck_id, &status, loaded_ref.as_ref(), now);
+    handle.update_deck_state(to_deck_state(&status, playhead, loaded_ref, now));
 
     // Reset backoff if the player reports a different track
     if known_tracks.get(&deck_id) != Some(&loaded) {
@@ -464,6 +461,28 @@ fn handle_status(
             status_bpm: status.track_bpm,
         },
     );
+}
+
+/// Hands `position` the beat grid `deck_id`'s metadata carries, whenever
+/// that grid changes: a new track's metadata landed, a grid the player was
+/// still analysing arrived, or the deck no longer shows one.
+///
+/// Runs on every status, so it compares the cheap
+/// [`EngineHandle::deck_beat_grid_source`] with the grid already held and
+/// clones the track — waveform and all — only when they differ. Which track
+/// the grid gets applied to is the tracker's call, not this one's.
+fn sync_beat_grid(handle: &EngineHandle, position: &mut PositionTracker, deck_id: DeckId) {
+    let shown = handle.deck_beat_grid_source(deck_id);
+    if position.beat_grid_track(deck_id) == shown.as_ref() {
+        return;
+    }
+    let grid = shown
+        .and_then(|_| handle.deck_track(deck_id))
+        .and_then(|track| Some((track.source?, track.beat_grid?)));
+    match grid {
+        Some((source, beats)) => position.set_beat_grid(deck_id, source, beats),
+        None => position.clear_beat_grid(deck_id),
+    }
 }
 
 /// The track `status` reports loaded, if any, identified by where it lives
@@ -908,6 +927,48 @@ mod tests {
     fn a_zero_source_device_means_the_deck_itself() {
         let loaded = reported_loaded_track(status_of(2, 0, 15)).expect("a track is loaded");
         assert_eq!(loaded.source_device, 2);
+    }
+
+    #[test]
+    fn a_beat_grid_that_arrives_after_its_track_is_picked_up() {
+        let handle = EngineHandle::new();
+        let mut position = PositionTracker::new();
+        let status = status_of(1, 1, 15);
+        let loaded = loaded_track(&status).as_ref().map(TrackRef::from);
+        let shown = decktector_core::model::TrackInfo {
+            source: loaded.clone(),
+            ..shown_track(15)
+        };
+
+        // The player is still analysing the track: no grid yet.
+        handle.update_deck_track(1, Some(shown.clone()));
+        sync_beat_grid(&handle, &mut position, 1);
+        assert_eq!(position.beat_grid_track(1), None);
+
+        let grid = vec![decktector_core::model::BeatGridBeat {
+            offset_ms: 1_800.0,
+            beat_in_measure: 1,
+        }];
+        handle.update_deck_track(
+            1,
+            Some(decktector_core::model::TrackInfo {
+                beat_grid: Some(grid),
+                ..shown
+            }),
+        );
+        sync_beat_grid(&handle, &mut position, 1);
+        assert_eq!(position.beat_grid_track(1), loaded.as_ref());
+        let estimate = position
+            .estimate(1, &status, loaded.as_ref(), 0.0)
+            .expect("the status carries a beat count and BPM");
+        assert_eq!(
+            estimate.quality,
+            decktector_core::model::PositionQuality::BeatGrid
+        );
+
+        handle.update_deck_track(1, None);
+        sync_beat_grid(&handle, &mut position, 1);
+        assert_eq!(position.beat_grid_track(1), None, "the deck was emptied");
     }
 
     /// Gives a test device the shared-number marking [`DeviceWatcher`] would
