@@ -2,12 +2,14 @@ import { isTauri } from '@tauri-apps/api/core'
 import { useState } from 'react'
 
 import { countLabel } from '../lib/count-label'
+import { createShow } from '../lib/show'
 import { planImport, type ImportPlan } from '../lib/show-import-plan'
 import type { OpenedRekordboxLibrary, RekordboxPlaylist } from '../model'
 import { useShow } from '../state/show'
 import { closeRekordboxXml, openRekordboxXml } from '../state/show-import'
 import { ShowImportDialog } from './ShowImportDialog'
 import { ShowMergeDialog } from './ShowMergeDialog'
+import { useOnAirConfirmation } from './useOnAirConfirmation'
 
 /** File dialogs are a desktop-shell feature; the remote view has no use for them. */
 const IS_TAURI = isTauri()
@@ -24,14 +26,16 @@ interface PendingImport {
 /**
  * Imports a playlist from a rekordbox XML export into the show: open the
  * file, pick the playlist, then Merge or Replace when the show already has
- * rows. An empty show takes the playlist without asking. Cancelling at any
- * point leaves the show as it was.
+ * rows. An empty show takes the playlist without asking. When the import
+ * would move a deck on air to another timecode, it asks once more. Cancelling
+ * at any point leaves the show as it was.
  */
 export function ShowImportAction(): React.JSX.Element | null {
   const [library, setLibrary] = useState<OpenedRekordboxLibrary | null>(null)
   const [pending, setPending] = useState<PendingImport | null>(null)
   const [status, setStatus] = useState<Status>(null)
   const [busy, setBusy] = useState(false)
+  const { confirmShowChange, dialog } = useOnAirConfirmation()
 
   if (!IS_TAURI) return null
 
@@ -42,10 +46,14 @@ export function ShowImportAction(): React.JSX.Element | null {
   }
 
   const apply = (plan: ImportPlan, playlistName: string): void => {
-    useShow.getState().applyImport(plan.rows)
-    setStatus({
-      kind: 'info',
-      text: `${playlistName} imported: ${countLabel(plan.rows.length, 'row')}.`
+    const current = useShow.getState().show
+    const after = current === null ? createShow(plan.rows) : { ...current, rows: plan.rows }
+    confirmShowChange(after, () => {
+      useShow.getState().applyImport(plan.rows)
+      setStatus({
+        kind: 'info',
+        text: `${playlistName} imported: ${countLabel(plan.rows.length, 'row')}.`
+      })
     })
     finish(library)
   }
@@ -102,6 +110,7 @@ export function ShowImportAction(): React.JSX.Element | null {
           onCancel={() => finish(library)}
         />
       )}
+      {dialog}
     </div>
   )
 }

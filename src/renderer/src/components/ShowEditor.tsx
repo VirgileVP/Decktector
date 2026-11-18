@@ -3,10 +3,12 @@ import { useMemo } from 'react'
 import { countLabel } from '../lib/count-label'
 import { analyseShow } from '../lib/show-validation'
 import { isPanelWindow } from '../panels/params'
-import { useShow } from '../state/show'
+import { useShow, type ShowRowPatch } from '../state/show'
+import { ShowFileActions } from './ShowFileActions'
 import { ShowImportAction } from './ShowImportAction'
 import { ShowRowEditor } from './ShowRowEditor'
 import { ShowSummary } from './ShowSummary'
+import { useOnAirConfirmation } from './useOnAirConfirmation'
 
 const NO_ISSUES = [] as const
 
@@ -14,24 +16,49 @@ const NO_ISSUES = [] as const
  * The show as a table: a row per track, its start timecode and trim
  * editable, its issues shown. Editable in the main window only; a Show panel
  * window mirrors it read-only, since only the main window pushes the show to
- * the timecode service.
+ * the timecode service. A start edit or a removal that would move a deck on
+ * air asks first; a trim nudge applies at once.
  */
 export function ShowEditor(): React.JSX.Element {
   const show = useShow((state) => state.show)
   const name = useShow((state) => state.name)
   const readOnly = isPanelWindow(window.location)
   const analysis = useMemo(() => (show === null ? null : analyseShow(show)), [show])
+  const { confirmShowChange, dialog } = useOnAirConfirmation()
+
+  const actions = !readOnly && (
+    <div className="show-actions">
+      <ShowImportAction />
+      <ShowFileActions />
+    </div>
+  )
 
   if (show === null || show.rows.length === 0) {
     return (
       <div className="show-empty">
         <p className="setting-hint">No show — import a rekordbox playlist.</p>
-        {!readOnly && <ShowImportAction />}
+        {actions}
       </div>
     )
   }
 
   const { updateRow, removeRow } = useShow.getState()
+  const changeRow = (rowId: string, patch: ShowRowPatch): void => {
+    if (patch.startTimecode === undefined) {
+      updateRow(rowId, patch)
+      return
+    }
+    const after = {
+      ...show,
+      rows: show.rows.map((row) => (row.id === rowId ? { ...row, ...patch } : row))
+    }
+    confirmShowChange(after, () => updateRow(rowId, patch))
+  }
+  const deleteRow = (rowId: string): void => {
+    const after = { ...show, rows: show.rows.filter((row) => row.id !== rowId) }
+    confirmShowChange(after, () => removeRow(rowId))
+  }
+
   return (
     <div className="show-editor">
       <div className="show-editor-head">
@@ -42,7 +69,7 @@ export function ShowEditor(): React.JSX.Element {
         {readOnly && <span className="setting-hint">Read-only here — edit in the main window</span>}
       </div>
       {analysis !== null && <ShowSummary show={show} analysis={analysis} readOnly={readOnly} />}
-      {!readOnly && <ShowImportAction />}
+      {actions}
       <div className="show-table-scroll">
         <table className="show-table">
           <thead>
@@ -72,13 +99,14 @@ export function ShowEditor(): React.JSX.Element {
                 fps={show.fps}
                 issues={analysis?.byRow.get(row.id) ?? NO_ISSUES}
                 readOnly={readOnly}
-                onChange={(patch) => updateRow(row.id, patch)}
-                onRemove={() => removeRow(row.id)}
+                onChange={(patch) => changeRow(row.id, patch)}
+                onRemove={() => deleteRow(row.id)}
               />
             ))}
           </tbody>
         </table>
       </div>
+      {dialog}
     </div>
   )
 }

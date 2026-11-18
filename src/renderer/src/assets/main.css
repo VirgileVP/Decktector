@@ -2910,6 +2910,27 @@ input[type='checkbox']:focus-visible {
   width: 80px;
 }
 
+/* Import a playlist, load or save the show file: one row of file actions. */
+.show-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.show-actions > .lineup-file-actions {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+/* The decks on air an edit would move, with their old and new timecode. */
+.show-impact-list {
+  margin: 0;
+  padding-left: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
 /* A conflict keeps the show from being ready; a warning does not. */
 .show-badge-conflict {
   color: var(--onair);
