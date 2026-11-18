@@ -1,5 +1,6 @@
 //! Moves a document's text to or from a file the user picks in the native
-//! dialog — the one way the lineup and the show reach the disk.
+//! dialog — the one way the lineup, the show and a rekordbox export reach
+//! the disk.
 //!
 //! The renderer owns each format and its validation; this side only shows
 //! the dialog and moves text. Paths never come from the renderer, so it
@@ -28,7 +29,11 @@ fn into_path(file: FilePath) -> Result<PathBuf, String> {
 }
 
 /// Refuses `path` when its `len` bytes cannot be a `document`.
-fn ensure_importable_size(document: &TextDocument, path: &Path, len: u64) -> Result<(), String> {
+pub(crate) fn ensure_importable_size(
+    document: &TextDocument,
+    path: &Path,
+    len: u64,
+) -> Result<(), String> {
     if len > document.max_import_bytes {
         return Err(format!(
             "{} is too large to be a {} file.",
@@ -64,9 +69,10 @@ pub async fn save(
     Ok(Some(path.to_string_lossy().into_owned()))
 }
 
-/// Asks which `document` file to open and returns its text, or `None` if the
-/// user cancelled the dialog.
-pub async fn open(app: &AppHandle, document: &TextDocument) -> Result<Option<String>, String> {
+/// Asks which `document` file to open and returns its path, once its size
+/// is known to fit; `None` if the user cancelled the dialog. For a document
+/// read some other way than as one string.
+pub async fn pick(app: &AppHandle, document: &TextDocument) -> Result<Option<PathBuf>, String> {
     let Some(file) = app
         .dialog()
         .file()
@@ -81,7 +87,15 @@ pub async fn open(app: &AppHandle, document: &TextDocument) -> Result<Option<Str
         .await
         .map_err(|error| format!("Failed to read {}: {error}", path.display()))?;
     ensure_importable_size(document, &path, metadata.len())?;
+    Ok(Some(path))
+}
 
+/// Asks which `document` file to open and returns its text, or `None` if the
+/// user cancelled the dialog.
+pub async fn open(app: &AppHandle, document: &TextDocument) -> Result<Option<String>, String> {
+    let Some(path) = pick(app, document).await? else {
+        return Ok(None);
+    };
     fs::read_to_string(&path)
         .await
         .map(Some)

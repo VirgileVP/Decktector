@@ -9,6 +9,7 @@ mod download;
 mod events;
 mod lineup_file;
 mod project_links;
+mod rekordbox_import;
 mod remote;
 mod show_file;
 mod sim;
@@ -108,6 +109,7 @@ pub fn run() {
         .manage(Arc::clone(&device_watcher))
         .manage(interface_preference)
         .manage(SleepBlocker::default())
+        .manage(rekordbox_import::RekordboxImport::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
@@ -132,6 +134,9 @@ pub fn run() {
             lineup_file::import_lineup_file,
             show_file::export_show_file,
             show_file::import_show_file,
+            rekordbox_import::open_rekordbox_xml,
+            rekordbox_import::read_rekordbox_playlist,
+            rekordbox_import::close_rekordbox_xml,
             project_links::open_project_link
         ])
         .setup(move |app| {

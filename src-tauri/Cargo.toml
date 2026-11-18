@@ -20,6 +20,7 @@ tauri-build = { version = "2", features = [] }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 decktector-core = { workspace = true }
+decktector-rekordbox-xml = { workspace = true }
 decktector-remote = { workspace = true }
 # Serves the CDJ page that drives the manual simulation (`npm run dev:sim`);
 # only started in that mode.
@@ -41,6 +42,8 @@ tauri-plugin-opener = "~2.5"
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# TypeScript bindings for the rekordbox import's payloads (`rekordbox_import`).
+ts-rs = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

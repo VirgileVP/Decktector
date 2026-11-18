@@ -1057,6 +1057,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "decktector-core",
+ "decktector-rekordbox-xml",
  "decktector-remote",
  "decktector-sim-control",
  "decktector-timecode",
@@ -1072,6 +1073,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "ts-rs",
 ]
 
 [[package]]
