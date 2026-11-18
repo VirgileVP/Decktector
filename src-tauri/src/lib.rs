@@ -10,7 +10,9 @@ mod events;
 mod lineup_file;
 mod project_links;
 mod remote;
+mod show_file;
 mod sim;
+mod text_file;
 mod timecode;
 mod track_log;
 mod window_prefs;
@@ -126,6 +128,8 @@ pub fn run() {
             download::download_deck_track,
             lineup_file::export_lineup_file,
             lineup_file::import_lineup_file,
+            show_file::export_show_file,
+            show_file::import_show_file,
             project_links::open_project_link
         ])
         .setup(move |app| {

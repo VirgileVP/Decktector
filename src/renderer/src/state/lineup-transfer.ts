@@ -7,11 +7,7 @@ import {
   serializeLineup,
   type LineupFileResult
 } from '../lib/lineup-file'
-
-/** Tauri commands reject with the Rust side's error string; this gives callers an `Error`. */
-function toError(reason: unknown): Error {
-  return reason instanceof Error ? reason : new Error(String(reason))
-}
+import { toError } from './tauri-error'
 
 /**
  * Asks the user where to save the lineup and writes it there. Resolves to the
