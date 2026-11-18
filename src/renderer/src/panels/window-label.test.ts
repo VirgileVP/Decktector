@@ -9,7 +9,8 @@ describe('panelWindowLabel', () => {
     { panelId: 'clock', deckId: null, instance: 0 },
     { panelId: 'timecode', deckId: null, instance: 3 },
     { panelId: 'header-block', deckId: null, instance: 0 },
-    { panelId: 'deck', deckId: 2, instance: 1 }
+    { panelId: 'deck', deckId: 2, instance: 1 },
+    { panelId: 'show', deckId: null, instance: 0 }
   ]
 
   it.each(cases)('builds a label matching the capability glob for $panelId', (params) => {
@@ -22,6 +23,19 @@ describe('panelWindowLabel', () => {
     expect(panelWindowLabel({ panelId: 'clock', deckId: null, instance: 0 })).toBe(
       'panel-clock-x-0'
     )
+  })
+
+  it('a show window label matches the allowed charset and parses back', () => {
+    const params: PanelParams = { panelId: 'show', deckId: null, instance: 2 }
+    const label = panelWindowLabel(params)
+    expect(label).toBe('panel-show-x-2')
+    expect(label).toMatch(LABEL_CHARSET)
+    expect(parsePanelLabel(label)).toEqual(params)
+  })
+
+  it('an unknown panel id is still rejected', () => {
+    expect(parsePanelLabel('panel-shows-x-0')).toBeNull()
+    expect(parsePanelLabel('panel-lineup-x-0')).toBeNull()
   })
 
   it('carries the deck id for deck panels', () => {

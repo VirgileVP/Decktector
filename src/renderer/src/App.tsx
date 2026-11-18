@@ -26,6 +26,7 @@ import { connectRemoteToEngine } from './state/remote'
 import { connectSettingsBroadcast } from './state/settings-broadcast'
 import { useDeckViewToggles, useSettings } from './state/settings'
 import { connectSettingsToApp } from './state/settings-sync'
+import { connectShowBroadcast } from './state/show-broadcast'
 import { connectDeckMatchesToEngine } from './state/show-matches'
 import { connectShowToEngine } from './state/show-sync'
 import { connectStoreToEngine, useDecktectorStore } from './state/store'
@@ -65,6 +66,7 @@ function App(): React.JSX.Element {
   useEffect(() => connectSettingsToApp('main'), [])
   useEffect(() => connectSettingsBroadcast(), [])
   useEffect(() => connectLineupBroadcast(), [])
+  useEffect(() => connectShowBroadcast(), [])
   useEffect(() => connectTimecodeToEngine(), [])
   useEffect(() => connectShowToEngine(), [])
   useEffect(() => connectDeckMatchesToEngine(), [])

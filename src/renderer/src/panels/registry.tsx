@@ -8,6 +8,7 @@ import { DeckPanelHost } from '../components/DeckPanelHost'
 import { HeaderBlock } from '../components/HeaderBlock'
 import { HeaderBlockVisibilityToggle } from '../components/HeaderBlockVisibilityToggle'
 import { HeaderClock } from '../components/HeaderClock'
+import { ShowPanel } from '../components/ShowPanel'
 import { TimecodeClock } from '../components/TimecodeClock'
 import { TimecodeSourceButtons } from '../components/TimecodeSourceButtons'
 import { DeckDisplayControl } from './DeckDisplayControl'
@@ -31,6 +32,10 @@ const HEADER_BLOCK_MIN_SIZE: PanelSize = { width: 320, height: 120 }
 
 const DECK_DEFAULT_SIZE: PanelSize = { width: 1000, height: 340 }
 const DECK_MIN_SIZE: PanelSize = { width: 420, height: 160 }
+
+/** Room for the editor's table: a row per track, title to trim. */
+const SHOW_DEFAULT_SIZE: PanelSize = { width: 900, height: 560 }
+const SHOW_MIN_SIZE: PanelSize = { width: 520, height: 260 }
 
 export interface PanelDefinition<P extends PanelId> {
   /** Window title, also shown in the chrome bar. */
@@ -85,5 +90,11 @@ export const PANELS: { [P in PanelId]: PanelDefinition<P> } = {
         <DeckPanelHost deckId={params.deckId} view={display} />
       ),
     DisplayControl: DeckDisplayControl
+  },
+  show: {
+    title: () => 'Show',
+    defaultSize: SHOW_DEFAULT_SIZE,
+    minSize: SHOW_MIN_SIZE,
+    render: () => <ShowPanel />
   }
 }

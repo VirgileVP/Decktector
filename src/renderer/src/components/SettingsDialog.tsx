@@ -24,6 +24,7 @@ import { DECK_VIEW_TOGGLE_GROUPS } from './deck-view-toggle-rows'
 import { DeckLabelsEditor } from './DeckLabelsEditor'
 import { DevicesPanel } from './DevicesPanel'
 import { LineupEditor } from './LineupEditor'
+import { ShowPanel } from './ShowPanel'
 import { OnAirSourceSetting } from './OnAirSourceSetting'
 import { ResetSettingsSetting } from './ResetSettingsSetting'
 import { ChoiceRow, SliderRow, TextRow, ToggleRow } from './SettingControls'
@@ -35,6 +36,7 @@ const SETTINGS_TABS = [
   'Interface',
   'Deck view',
   'Line up',
+  'Show',
   'Timecode',
   'Remote view',
   'Devices',
@@ -43,7 +45,7 @@ const SETTINGS_TABS = [
 export type SettingsTab = (typeof SETTINGS_TABS)[number]
 
 /** Tabs whose content needs more room than a settings list — the rail chief among them. */
-const WIDE_TABS: readonly SettingsTab[] = ['Line up']
+const WIDE_TABS: readonly SettingsTab[] = ['Line up', 'Show']
 
 /** Tabs desktop-only gear needs — a remote browser has nothing to send timecode to,
  *  must not be able to control the very server that is showing it this screen, and
@@ -51,7 +53,13 @@ const WIDE_TABS: readonly SettingsTab[] = ['Line up']
  *  remote link itself treats as untrusted. About opens its links through the shell,
  *  like the welcome notice it mirrors. */
 const IS_TAURI = isTauri()
-const SHELL_ONLY_TABS: readonly SettingsTab[] = ['Timecode', 'Remote view', 'Devices', 'About']
+const SHELL_ONLY_TABS: readonly SettingsTab[] = [
+  'Show',
+  'Timecode',
+  'Remote view',
+  'Devices',
+  'About'
+]
 const VISIBLE_SETTINGS_TABS = SETTINGS_TABS.filter(
   (tab) => IS_TAURI || !SHELL_ONLY_TABS.includes(tab)
 )
@@ -349,6 +357,7 @@ export function SettingsDialog({
           )}
 
           {activeTab === 'Line up' && <LineupEditor />}
+          {IS_TAURI && activeTab === 'Show' && <ShowPanel />}
 
           {IS_TAURI && activeTab === 'Timecode' && (
             <section className="settings-section">

@@ -24,6 +24,7 @@ export interface PanelDisplayByPanel {
   'header-block': HeaderBlockDisplay
   /** Same toggles as the Deck view settings tab, owned by this window alone. */
   deck: DeckViewToggles
+  show: null
 }
 
 export type PanelDisplay = PanelDisplayByPanel[PanelId]
@@ -85,7 +86,8 @@ const PANEL_DISPLAY_CODECS: { [P in PanelId]: PanelDisplayCodec<PanelDisplayByPa
     // and the Deck view settings tab only drives the main window.
     initial: (mainDeckView) => ({ ...mainDeckView }),
     parse: parseBooleanFields
-  }
+  },
+  show: NO_DISPLAY
 }
 
 /** The display a freshly popped-out `panelId` window starts with. */

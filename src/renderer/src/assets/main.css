@@ -2664,6 +2664,24 @@ input[type='checkbox']:focus-visible {
   color: var(--text-faint);
 }
 
+/* ---------- Show editor ---------- */
+
+/* Inline in the Settings "Show" tab, or the whole Show panel window; the
+   pop-out button sits in its top-right corner like the deck's. */
+.show-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.show-panel.poppable > .pop-out-button {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
 /* ---------- Welcome dialog ---------- */
 
 /* Reuses the confirm dialog's frame; only the tone differs — this is a

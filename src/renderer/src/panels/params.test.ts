@@ -11,7 +11,8 @@ describe('panelParams / panelSearch', () => {
     { panelId: 'clock', deckId: null, instance: 2 },
     { panelId: 'timecode', deckId: null, instance: 0 },
     { panelId: 'header-block', deckId: null, instance: 1 },
-    { panelId: 'deck', deckId: 3, instance: 0 }
+    { panelId: 'deck', deckId: 3, instance: 0 },
+    { panelId: 'show', deckId: null, instance: 0 }
   ]
 
   it.each(cases)('round-trips $panelId (instance $instance)', (params) => {
@@ -21,6 +22,14 @@ describe('panelParams / panelSearch', () => {
 
   it('rejects an unknown panel id', () => {
     expect(panelParams(locationFor('?panel=nope'))).toBeNull()
+  })
+
+  it('a show panel url round trips through panelParams and never carries a deck', () => {
+    const params = panelParams(locationFor('?panel=show&deckId=2&instance=1'))
+    expect(params).toEqual({ panelId: 'show', deckId: null, instance: 1 })
+    expect(panelSearch({ panelId: 'show', deckId: null, instance: 1 })).toBe(
+      '?panel=show&instance=1'
+    )
   })
 
   it('rejects a deck panel with no deckId', () => {
