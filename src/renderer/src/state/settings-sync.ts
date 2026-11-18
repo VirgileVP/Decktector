@@ -3,6 +3,8 @@ import { invoke, isTauri } from '@tauri-apps/api/core'
 import { applyTheme } from '../lib/theme'
 import type { RemoteConfig, TimecodeConfig } from '../model'
 import { useSettings, type Settings } from './settings'
+import { useShow } from './show'
+import { pushShowThenConfig, pushTimecodeShow } from './show-sync'
 
 /**
  * Settings the renderer cannot honour by itself; the Rust side owns the
@@ -115,13 +117,21 @@ function apply(scope: SettingsScope, settings: Settings, previous?: Settings): v
   ) {
     pushWindowPrefs(settings)
   }
-  if (
-    previous?.timecodeProtocol !== settings.timecodeProtocol ||
-    previous?.timecodeFrameRate !== settings.timecodeFrameRate ||
-    previous?.timecodeArtNetInterface !== settings.timecodeArtNetInterface ||
-    previous?.timecodeArtNetPort !== settings.timecodeArtNetPort ||
-    previous?.timecodeMtcPort !== settings.timecodeMtcPort ||
-    previous?.timecodeLtcDevice !== settings.timecodeLtcDevice
+  if (previous === undefined) {
+    // The service starts with its output off: hand it the show before the
+    // config can turn output on, or a restart mid-set would send
+    // 00:00:00:00 for a track that has a row. Later changes push on their own.
+    void pushShowThenConfig(
+      () => pushTimecodeShow(useShow.getState().show),
+      () => pushTimecodeConfig(settings)
+    )
+  } else if (
+    previous.timecodeProtocol !== settings.timecodeProtocol ||
+    previous.timecodeFrameRate !== settings.timecodeFrameRate ||
+    previous.timecodeArtNetInterface !== settings.timecodeArtNetInterface ||
+    previous.timecodeArtNetPort !== settings.timecodeArtNetPort ||
+    previous.timecodeMtcPort !== settings.timecodeMtcPort ||
+    previous.timecodeLtcDevice !== settings.timecodeLtcDevice
   ) {
     pushTimecodeConfig(settings)
   }

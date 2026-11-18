@@ -9,10 +9,24 @@
  * position — and shown and stepped in frames.
  */
 
+import type { FrameRate } from '../model'
+
 /** The frame rates a show can run at; drop-frame is not supported. */
 export type ShowFps = 24 | 25 | 30
 
 export const SHOW_FPS_OPTIONS: readonly ShowFps[] = [24, 25, 30]
+
+/** The timecode service's name for each show rate. */
+const FRAME_RATE_OF_FPS: Readonly<Record<ShowFps, FrameRate>> = {
+  24: 'film24',
+  25: 'ebu25',
+  30: 'smpte30'
+}
+
+/** `fps` as the timecode service names it. */
+export function frameRateOfFps(fps: ShowFps): FrameRate {
+  return FRAME_RATE_OF_FPS[fps]
+}
 
 /** The largest trim either way: far beyond any cue nudge, short of a mistake. */
 export const MAX_TRIM_MS = 10_000
