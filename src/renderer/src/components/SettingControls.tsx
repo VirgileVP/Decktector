@@ -29,6 +29,8 @@ interface ChoiceRowProps<T extends string> {
   value: T
   options: readonly { value: T; label: string }[]
   onChange: (value: T) => void
+  /** Shows the choice without letting it change, e.g. while another setting overrides it. */
+  disabled?: boolean
 }
 
 /** Segmented picker for a handful of named alternatives, one per line. */
@@ -37,7 +39,8 @@ export function ChoiceRow<T extends string>({
   hint,
   value,
   options,
-  onChange
+  onChange,
+  disabled = false
 }: ChoiceRowProps<T>): React.JSX.Element {
   return (
     <div className="setting-row">
@@ -52,6 +55,7 @@ export function ChoiceRow<T extends string>({
             type="button"
             className={option.value === value ? 'active' : ''}
             aria-pressed={option.value === value}
+            disabled={disabled}
             onClick={() => onChange(option.value)}
           >
             {option.label}

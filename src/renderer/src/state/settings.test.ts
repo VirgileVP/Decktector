@@ -87,3 +87,19 @@ describe('custom logo setting', () => {
     ).toBeNull()
   })
 })
+
+describe('timecode handover setting', () => {
+  it('defaults to oldLeaves for a store written before the setting existed', () => {
+    expect(DEFAULT_SETTINGS.timecodeHandover).toBe('oldLeaves')
+    expect(mergePersistedSettings({}, DEFAULT_SETTINGS).timecodeHandover).toBe('oldLeaves')
+  })
+
+  it('restores a stored handover and drops an unknown one', () => {
+    expect(
+      mergePersistedSettings({ timecodeHandover: 'newOnAir' }, DEFAULT_SETTINGS).timecodeHandover
+    ).toBe('newOnAir')
+    expect(
+      mergePersistedSettings({ timecodeHandover: 'never' }, DEFAULT_SETTINGS).timecodeHandover
+    ).toBe('oldLeaves')
+  })
+})

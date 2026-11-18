@@ -26,6 +26,7 @@ import { DevicesPanel } from './DevicesPanel'
 import { LineupEditor } from './LineupEditor'
 import { ShowPanel } from './ShowPanel'
 import { ShowSettingsSection } from './ShowSettingsSection'
+import { TimecodeHandoverSetting } from './TimecodeHandoverSetting'
 import { OnAirSourceSetting } from './OnAirSourceSetting'
 import { ResetSettingsSetting } from './ResetSettingsSetting'
 import { ChoiceRow, SliderRow, TextRow, ToggleRow } from './SettingControls'
@@ -380,6 +381,10 @@ export function SettingsDialog({
                   hint="Sends timecode from whichever deck is on air, as set by the on-air source in Interface. A manual pick in the header holds until another deck goes on air."
                   checked={settings.timecodeFollowOnAir}
                   onChange={update('timecodeFollowOnAir')}
+                />
+                <TimecodeHandoverSetting
+                  value={settings.timecodeHandover}
+                  onChange={update('timecodeHandover')}
                 />
                 <ChoiceRow
                   label="Frame rate"

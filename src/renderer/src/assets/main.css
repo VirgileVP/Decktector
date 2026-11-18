@@ -695,6 +695,16 @@ input[type='checkbox']:focus-visible {
   color: var(--text);
 }
 
+/* A choice another setting overrides: shown, not changeable. */
+.setting-choice button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.setting-choice button:disabled:hover {
+  color: var(--text-faint);
+}
+
 .lineup-rows {
   display: flex;
   flex-direction: column;

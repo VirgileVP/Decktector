@@ -1,7 +1,8 @@
 import { isTauri } from '@tauri-apps/api/core'
 
 import { countMixers } from '../lib/deck-activity'
-import { onAirDeckIds, pickOnAirTimecodeSource } from '../lib/timecode-follow'
+import { effectiveHandover, onAirDeckIds, pickOnAirTimecodeSource } from '../lib/timecode-follow'
+import type { DeckId } from '../model'
 import { useDevicesStore } from './devices'
 import { useSettings } from './settings'
 import { useDecktectorStore } from './store'
@@ -9,33 +10,41 @@ import { selectTimecodeSource, useTimecodeStore } from './timecode'
 
 /**
  * Keeps the timecode source on the on-air deck while the `timecodeFollowOnAir`
- * setting is on. Returns the teardown function.
+ * setting is on, handing over as `timecodeHandover` says. Returns the
+ * teardown function.
  *
  * Acts only when the set of live decks changes (or the setting is switched on),
  * not on every deck tick, so a manual pick in the header holds until the next
- * deck goes on air.
+ * deck goes on air. The live decks seen last are kept to tell which deck just
+ * went on air; the first look after switching on has nothing to compare
+ * with, so no deck counts as having just gone on air.
  */
 export function connectTimecodeFollowOnAir(): () => void {
   if (!isTauri()) {
     return () => {}
   }
 
-  let lastOnAirKey: string | null = null
+  let previousOnAirIds: DeckId[] | null = null
 
   const sync = (): void => {
-    const { timecodeFollowOnAir, onAirSource } = useSettings.getState()
+    const { timecodeFollowOnAir, onAirSource, timecodeHandover } = useSettings.getState()
     if (!timecodeFollowOnAir) {
-      lastOnAirKey = null
+      previousOnAirIds = null
       return
     }
 
     const mixerCount = countMixers(useDevicesStore.getState().devices)
     const onAirIds = onAirDeckIds(useDecktectorStore.getState().decks, onAirSource, mixerCount)
-    const onAirKey = onAirIds.join(',')
-    if (onAirKey === lastOnAirKey) return
-    lastOnAirKey = onAirKey
+    const previous = previousOnAirIds
+    if (previous !== null && onAirIds.join(',') === previous.join(',')) return
+    previousOnAirIds = onAirIds
 
-    const nextSource = pickOnAirTimecodeSource(onAirIds, useTimecodeStore.getState().sourceDeckId)
+    const nextSource = pickOnAirTimecodeSource(
+      onAirIds,
+      previous ?? onAirIds,
+      useTimecodeStore.getState().sourceDeckId,
+      effectiveHandover(timecodeHandover, onAirSource, mixerCount)
+    )
     if (nextSource !== null) selectTimecodeSource(nextSource)
   }
 

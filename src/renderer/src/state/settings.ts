@@ -7,6 +7,11 @@ import { DEFAULT_ON_AIR_SOURCE, parseOnAirSource, type OnAirSource } from '../li
 import { sanitizeDeckLabels, type DeckLabels } from '../lib/deck-labels'
 import { DEFAULT_THEME, parseTheme, type ThemeId } from '../lib/theme'
 import {
+  DEFAULT_TIMECODE_HANDOVER,
+  parseTimecodeHandover,
+  type TimecodeHandover
+} from '../lib/timecode-follow'
+import {
   DEFAULT_WAVEFORM_PLAYHEAD_POSITION,
   parseWaveformPlayheadPosition,
   type WaveformPlayheadPosition
@@ -220,6 +225,9 @@ export interface Settings {
   /** Whether the timecode source follows the on-air deck by itself instead of
    *  the manual pick in the header — see `state/timecode-follow.ts`. */
   timecodeFollowOnAir: boolean
+  /** When following the on-air deck hands the timecode over to the next
+   *  deck — see `lib/timecode-follow.ts`. */
+  timecodeHandover: TimecodeHandover
   /** Name of the network adapter to broadcast from, e.g. `"eth0"` — picked
    *  from `list_network_interfaces`, not typed in. */
   timecodeArtNetInterface: string
@@ -306,6 +314,7 @@ export const DEFAULT_SETTINGS: Settings = {
   timecodeProtocol: 'off',
   timecodeFrameRate: 'smpte30',
   timecodeFollowOnAir: false,
+  timecodeHandover: DEFAULT_TIMECODE_HANDOVER,
   timecodeArtNetInterface: NO_NETWORK_INTERFACE,
   timecodeArtNetPort: ART_NET_DEFAULT_PORT,
   timecodeMtcPort: NO_MIDI_PORT,
@@ -363,6 +372,7 @@ export function mergePersistedSettings<T extends Settings>(persisted: unknown, c
     theme: parseTheme(stored.theme),
     customLogo: parseCustomLogo(stored.customLogo),
     onAirSource: parseOnAirSource(stored.onAirSource),
+    timecodeHandover: parseTimecodeHandover(stored.timecodeHandover),
     waveformPlayheadPosition: parseWaveformPlayheadPosition(stored.waveformPlayheadPosition),
     deckLabels: sanitizeDeckLabels(stored.deckLabels)
   }
@@ -387,6 +397,7 @@ function pickSettings(state: Settings): Settings {
     timecodeProtocol,
     timecodeFrameRate,
     timecodeFollowOnAir,
+    timecodeHandover,
     timecodeArtNetInterface,
     timecodeArtNetPort,
     timecodeMtcPort,
@@ -435,6 +446,7 @@ function pickSettings(state: Settings): Settings {
     timecodeProtocol,
     timecodeFrameRate,
     timecodeFollowOnAir,
+    timecodeHandover,
     timecodeArtNetInterface,
     timecodeArtNetPort,
     timecodeMtcPort,
