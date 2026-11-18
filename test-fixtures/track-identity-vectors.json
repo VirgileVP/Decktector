@@ -1,0 +1,287 @@
+{
+  "normalise": [
+    {
+      "why": "NFC input is kept",
+      "in": "Caf\u00e9",
+      "out": "caf\u00e9"
+    },
+    {
+      "why": "NFD input is composed",
+      "in": "Cafe\u0301",
+      "out": "caf\u00e9"
+    },
+    {
+      "why": "Unicode lowercase",
+      "in": "\u00c4rger",
+      "out": "\u00e4rger"
+    },
+    {
+      "why": "padded and double-spaced",
+      "in": "  Strobe   (Extended  Mix) ",
+      "out": "strobe (extended mix)"
+    },
+    {
+      "why": "any whitespace run becomes one space",
+      "in": "Tab\tand\nnewline",
+      "out": "tab and newline"
+    },
+    {
+      "why": "Unicode White_Space, not only ASCII",
+      "in": "No\u00a0Break\u2003Space",
+      "out": "no break space"
+    },
+    {
+      "why": "U+FEFF is not White_Space",
+      "in": "\ufeffByte Order Mark",
+      "out": "\ufeffbyte order mark"
+    },
+    {
+      "why": "named entity",
+      "in": "Tom &amp; Jerry",
+      "out": "tom & jerry"
+    },
+    {
+      "why": "decimal reference",
+      "in": "Tom &#38; Jerry",
+      "out": "tom & jerry"
+    },
+    {
+      "why": "hexadecimal reference",
+      "in": "Tom &#x26; Jerry",
+      "out": "tom & jerry"
+    },
+    {
+      "why": "the five named entities",
+      "in": "&lt;3 &gt; &quot;x&quot; &apos;y&apos;",
+      "out": "<3 > \"x\" 'y'"
+    },
+    {
+      "why": "references are decoded in one pass",
+      "in": "&amp;lt; is decoded once",
+      "out": "&lt; is decoded once"
+    },
+    {
+      "why": "a bare ampersand is text",
+      "in": "AT&T",
+      "out": "at&t"
+    },
+    {
+      "why": "a reference to a surrogate is left as text",
+      "in": "&#xD800; is not a character",
+      "out": "&#xd800; is not a character"
+    },
+    {
+      "why": "feat. is kept",
+      "in": "Song (feat. Someone)",
+      "out": "song (feat. someone)"
+    },
+    {
+      "why": "final sigma",
+      "in": "\u039f\u0394\u039f\u03a3",
+      "out": "\u03bf\u03b4\u03bf\u03c2"
+    },
+    {
+      "why": "empty",
+      "in": "",
+      "out": ""
+    }
+  ],
+  "match": [
+    {
+      "why": "identical",
+      "a": {
+        "title": "Strobe",
+        "artist": "deadmau5",
+        "durationSeconds": 637
+      },
+      "b": {
+        "title": "Strobe",
+        "artist": "deadmau5",
+        "durationSeconds": 637
+      },
+      "matches": true
+    },
+    {
+      "why": "NFC and NFD spellings",
+      "a": {
+        "title": "Caf\u00e9 del Mar",
+        "artist": "Energy 52",
+        "durationSeconds": 480
+      },
+      "b": {
+        "title": "Cafe\u0301 del Mar",
+        "artist": "Energy 52",
+        "durationSeconds": 480
+      },
+      "matches": true
+    },
+    {
+      "why": "case",
+      "a": {
+        "title": "Song",
+        "artist": "\u00c4rger",
+        "durationSeconds": 300
+      },
+      "b": {
+        "title": "song",
+        "artist": "\u00e4rger",
+        "durationSeconds": 300
+      },
+      "matches": true
+    },
+    {
+      "why": "padding",
+      "a": {
+        "title": "  Strobe ",
+        "artist": " deadmau5",
+        "durationSeconds": 637
+      },
+      "b": {
+        "title": "Strobe",
+        "artist": "deadmau5",
+        "durationSeconds": 637
+      },
+      "matches": true
+    },
+    {
+      "why": "double spaces",
+      "a": {
+        "title": "One  Two",
+        "artist": "A  B",
+        "durationSeconds": 200
+      },
+      "b": {
+        "title": "One Two",
+        "artist": "A B",
+        "durationSeconds": 200
+      },
+      "matches": true
+    },
+    {
+      "why": "an entity against its character",
+      "a": {
+        "title": "Tom &amp; Jerry",
+        "artist": "X",
+        "durationSeconds": 200
+      },
+      "b": {
+        "title": "Tom & Jerry",
+        "artist": "X",
+        "durationSeconds": 200
+      },
+      "matches": true
+    },
+    {
+      "why": "feat. is part of the key",
+      "a": {
+        "title": "Song (feat. X)",
+        "artist": "Y",
+        "durationSeconds": 200
+      },
+      "b": {
+        "title": "Song",
+        "artist": "Y",
+        "durationSeconds": 200
+      },
+      "matches": false
+    },
+    {
+      "why": "remix names are part of the key",
+      "a": {
+        "title": "Track (Extended Mix)",
+        "artist": "Y",
+        "durationSeconds": 400
+      },
+      "b": {
+        "title": "Track (Radio Edit)",
+        "artist": "Y",
+        "durationSeconds": 400
+      },
+      "matches": false
+    },
+    {
+      "why": "2 s apart is within the tolerance",
+      "a": {
+        "title": "Track",
+        "artist": "Y",
+        "durationSeconds": 300
+      },
+      "b": {
+        "title": "Track",
+        "artist": "Y",
+        "durationSeconds": 302
+      },
+      "matches": true
+    },
+    {
+      "why": "3 s apart is not",
+      "a": {
+        "title": "Track",
+        "artist": "Y",
+        "durationSeconds": 300
+      },
+      "b": {
+        "title": "Track",
+        "artist": "Y",
+        "durationSeconds": 303
+      },
+      "matches": false
+    },
+    {
+      "why": "an unknown duration on both sides never matches",
+      "a": {
+        "title": "Track",
+        "artist": "Y",
+        "durationSeconds": 0
+      },
+      "b": {
+        "title": "Track",
+        "artist": "Y",
+        "durationSeconds": 0
+      },
+      "matches": false
+    },
+    {
+      "why": "an unknown duration on one side never matches",
+      "a": {
+        "title": "Track",
+        "artist": "Y",
+        "durationSeconds": 300
+      },
+      "b": {
+        "title": "Track",
+        "artist": "Y",
+        "durationSeconds": 0
+      },
+      "matches": false
+    },
+    {
+      "why": "another artist",
+      "a": {
+        "title": "Track",
+        "artist": "Y",
+        "durationSeconds": 300
+      },
+      "b": {
+        "title": "Track",
+        "artist": "Z",
+        "durationSeconds": 300
+      },
+      "matches": false
+    },
+    {
+      "why": "both artists empty",
+      "a": {
+        "title": "Track",
+        "artist": "",
+        "durationSeconds": 300
+      },
+      "b": {
+        "title": "Track",
+        "artist": "",
+        "durationSeconds": 300
+      },
+      "matches": true
+    }
+  ]
+}
