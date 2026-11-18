@@ -2865,6 +2865,51 @@ input[type='checkbox']:focus-visible {
   white-space: nowrap;
 }
 
+.show-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.show-summary-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.show-readiness {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.show-ready {
+  color: var(--ok);
+}
+
+.show-not-ready {
+  color: var(--onair);
+}
+
+/* A count is a badge that jumps to its first row. */
+.show-summary-count {
+  background: none;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.show-fill {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.show-fill-custom {
+  width: 80px;
+}
+
 /* A conflict keeps the show from being ready; a warning does not. */
 .show-badge-conflict {
   color: var(--onair);

@@ -6,6 +6,7 @@ import { isPanelWindow } from '../panels/params'
 import { useShow } from '../state/show'
 import { ShowImportAction } from './ShowImportAction'
 import { ShowRowEditor } from './ShowRowEditor'
+import { ShowSummary } from './ShowSummary'
 
 const NO_ISSUES = [] as const
 
@@ -40,6 +41,7 @@ export function ShowEditor(): React.JSX.Element {
         </span>
         {readOnly && <span className="setting-hint">Read-only here — edit in the main window</span>}
       </div>
+      {analysis !== null && <ShowSummary show={show} analysis={analysis} readOnly={readOnly} />}
       {!readOnly && <ShowImportAction />}
       <div className="show-table-scroll">
         <table className="show-table">

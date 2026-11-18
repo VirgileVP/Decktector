@@ -145,6 +145,14 @@ describe('useShow', () => {
     expect(store.getState().show?.rows[0].startTimecode).toBe('00:00:00:00')
   })
 
+  it('mergeDuplicates folds copies of a track at one start into the first', () => {
+    const store = createShowStore(memoryStorage)
+    const copy = { ...SHOW.rows[0], id: 'row-1-copy', trimMs: 0 }
+    store.getState().load({ ...SHOW, rows: [SHOW.rows[0], copy, SHOW.rows[1]] }, null)
+    store.getState().mergeDuplicates()
+    expect(store.getState().show?.rows.map((row) => row.id)).toEqual(['row-1', 'row-2'])
+  })
+
   it('a stored show of another shape is dropped, not half read', () => {
     const storage = memoryStorage()
     storage.setItem(
