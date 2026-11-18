@@ -7,6 +7,7 @@
  * session, and an imported lineup gets fresh ones.
  */
 
+import { localDayStamp } from './file-date'
 import { isRecord } from './is-record'
 import { AXIS_MINUTES, type AxisMinutes } from './lineup-axis'
 import { generateId, type LineupData, type LineupSlot } from './lineup'
@@ -47,12 +48,7 @@ export function serializeLineup({ slots, endOffset, doorsOffset }: LineupData): 
 
 /** A suggested file name for today's export, e.g. `lineup-2026-10-09.json`. */
 export function lineupFileName(date: Date): string {
-  const day = [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0')
-  ].join('-')
-  return `lineup-${day}.json`
+  return `lineup-${localDayStamp(date)}.json`
 }
 
 class LineupFileError extends Error {}
