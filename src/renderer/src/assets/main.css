@@ -2682,6 +2682,198 @@ input[type='checkbox']:focus-visible {
   right: 0;
 }
 
+.show-empty,
+.show-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.show-editor-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  /* Clear of the pop-out button in the corner. */
+  padding-right: 24px;
+}
+
+.show-editor-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* The table scrolls inside the tab or the window; its head stays put. */
+.show-table-scroll {
+  flex: 1;
+  min-height: 0;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+/* In its own window the editor is the whole page: it fills the window from
+   the top, and the table takes the height left. */
+.panel-chrome-content > .show-panel {
+  align-self: stretch;
+  width: 100%;
+}
+
+.panel-window .show-editor {
+  height: 100%;
+}
+
+.panel-window .show-table-scroll {
+  max-height: none;
+}
+
+.show-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.show-table th {
+  position: sticky;
+  top: 0;
+  padding: 4px 6px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-strong);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-align: left;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.show-table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.show-cell-position,
+.show-cell-duration {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.show-cell-text {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.show-cell-muted {
+  color: var(--text-muted);
+}
+
+/* A row the last merged playlist no longer lists: kept, but stepped back. */
+.show-row-absent td {
+  opacity: 0.5;
+}
+
+.timecode-input {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.timecode-input-field {
+  width: 96px;
+  padding: 3px 6px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  outline: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  /* Text selection is off globally, which a typed field cannot inherit. */
+  user-select: text;
+  transition: border-color 0.15s ease;
+}
+
+.timecode-input-field:focus {
+  border-color: var(--sync);
+}
+
+.timecode-input-invalid {
+  border-color: var(--warn);
+}
+
+.timecode-input-error {
+  max-width: 180px;
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--warn);
+}
+
+.show-trim {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.show-trim-step {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.show-trim-step:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--sync);
+}
+
+.show-trim-step:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.show-trim-value {
+  min-width: 34px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.show-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.show-badge {
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* A conflict keeps the show from being ready; a warning does not. */
+.show-badge-conflict {
+  color: var(--onair);
+}
+
+.show-badge-warning {
+  color: var(--warn);
+}
+
 /* ---------- Welcome dialog ---------- */
 
 /* Reuses the confirm dialog's frame; only the tone differs — this is a
