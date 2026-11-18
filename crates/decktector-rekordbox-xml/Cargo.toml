@@ -1,0 +1,11 @@
+[package]
+name = "decktector-rekordbox-xml"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Reads the playlist tree and tracks of a rekordbox XML export"
+
+[dependencies]
+quick-xml = { workspace = true }
+thiserror = { workspace = true }

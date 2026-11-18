@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Hand-written: the shape of rekordbox's "Export Collection in xml format", with made-up tracks. -->
+<DJ_PLAYLISTS Version="1.0.0">
+  <PRODUCT Name="rekordbox" Version="6.8.5" Company="AlphaTheta"/>
+  <COLLECTION Entries="4">
+    <TRACK TrackID="101" Name="Strobe" Artist="deadmau5" Kind="MP3 File" TotalTime="637"
+           AverageBpm="128.00" Location="file://localhost/C:/Music/deadmau5/Strobe.mp3">
+      <TEMPO Inizio="0.050" Bpm="128.00" Metro="4/4" Battito="1"/>
+      <POSITION_MARK Name="" Type="0" Start="0.050" Num="-1"/>
+    </TRACK>
+    <TRACK TrackID="102" Name="Tom &amp;amp; Jerry &amp; Friends" Artist="A &lt;B&gt;"
+           TotalTime="300" Location="file://localhost/C:/Music/My%20Song%20%C3%A9t%C3%A9.mp3"/>
+    <TRACK TrackID="103" Name="No Time" Artist="" Location="file://localhost/C:/Music/no-time.mp3"/>
+    <TRACK TrackID="104" Name="Café del Mar" Artist="Energy 52" TotalTime="480"
+           Location="file://localhost/D:/Musique/Caf%C3%A9%20del%20Mar.flac"/>
+  </COLLECTION>
+  <PLAYLISTS>
+    <NODE Type="0" Name="ROOT" Count="2">
+      <NODE Type="0" Name="Gigs" Count="2">
+        <NODE Name="Friday" Type="1" KeyType="0" Entries="4">
+          <TRACK Key="101"/>
+          <TRACK Key="102"/>
+          <TRACK Key="999"/>
+          <TRACK Key="104"/>
+        </NODE>
+        <NODE Type="0" Name="Empty folder" Count="0"/>
+      </NODE>
+      <NODE Name="By location" Type="1" KeyType="1" Entries="3">
+        <TRACK Key="file://localhost/C:/Music/My%20Song%20%C3%A9t%C3%A9.mp3"/>
+        <TRACK Key="file://localhost/D:/Musique/Café%20del%20Mar.flac"/>
+        <TRACK Key="file://localhost/C:/Music/no-time.mp3"/>
+      </NODE>
+    </NODE>
+  </PLAYLISTS>
+</DJ_PLAYLISTS>

@@ -1099,6 +1099,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "decktector-rekordbox-xml"
+version = "1.6.0"
+dependencies = [
+ "quick-xml 0.37.5",
+ "thiserror 2.0.19",
+]
+
+[[package]]
 name = "decktector-remote"
 version = "1.6.0"
 dependencies = [

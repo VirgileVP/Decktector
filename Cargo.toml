@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/decktector-core",
     "crates/decktector-net",
+    "crates/decktector-rekordbox-xml",
     "crates/decktector-remote",
     "crates/decktector-sim-control",
     "crates/decktector-timecode",
@@ -21,6 +22,7 @@ license = "GPL-3.0-or-later"
 [workspace.dependencies]
 decktector-core = { path = "crates/decktector-core" }
 decktector-net = { path = "crates/decktector-net" }
+decktector-rekordbox-xml = { path = "crates/decktector-rekordbox-xml" }
 decktector-remote = { path = "crates/decktector-remote" }
 decktector-sim-control = { path = "crates/decktector-sim-control" }
 decktector-timecode = { path = "crates/decktector-timecode" }
@@ -37,6 +39,9 @@ cpal = "0.15"
 # adapters' 169.254 addresses stay out: if-addrs skips non-"Preferred" ones.
 if-addrs = { version = "0.13", features = ["link-local"] }
 midir = "0.10"
+# Streaming reader for rekordbox XML exports, which run to tens of MB
+# (decktector-rekordbox-xml); 0.37 is the version the tree already builds.
+quick-xml = "0.37"
 rand = { version = "0.9", features = ["small_rng"] }
 # `anlz` module only — its `pdb` module's row types are private in this
 # published version, see crates/prolink/src/nfs/pdb.rs's doc comment for
