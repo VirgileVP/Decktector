@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
-use decktector_core::model::{DeckId, DeviceInfo, NetworkState};
+use decktector_core::model::{DeckId, DeviceInfo, NetworkState, TrackRef};
 use decktector_core::{Engine, EngineHandle};
 use prolink::beat::{BeatMessage, BeatWatcher};
 use prolink::discovery::{conflicting_numbers, DeviceKind, DeviceWatcher, DiscoveredDevice};
@@ -397,11 +397,15 @@ fn handle_status(
         return; // The mixer shares this port but not this packet's shape.
     }
     let now = now_ms();
-    let playhead_ms = position.estimate(status.device_number, &status, now);
-    handle.update_deck_state(to_deck_state(&status, playhead_ms, now));
-
     let deck_id = status.device_number;
     let loaded = loaded_track(&status);
+    let playhead_ms = position.estimate(deck_id, &status, now);
+    handle.update_deck_state(to_deck_state(
+        &status,
+        playhead_ms,
+        loaded.as_ref().map(TrackRef::from),
+        now,
+    ));
 
     // Reset backoff if the player reports a different track
     if known_tracks.get(&deck_id) != Some(&loaded) {
@@ -804,6 +808,7 @@ mod tests {
     fn shown_track(track_id: u32) -> decktector_core::model::TrackInfo {
         decktector_core::model::TrackInfo {
             track_id,
+            source: None,
             title: "Shown".to_string(),
             artist: None,
             album: None,
@@ -863,6 +868,46 @@ mod tests {
         assert_eq!(known_tracks[&1], loaded_track(&status_of(1, 1, 15)));
         assert!(metadata_fetcher.is_fetching(1));
         metadata_fetcher.abort_all();
+    }
+
+    /// The loaded track `handle_status` reports for `status`, with no player
+    /// address known — so the status is reported and no fetch is spawned.
+    fn reported_loaded_track(status: DeviceStatus) -> Option<TrackRef> {
+        let (handle, metadata_fetcher) = engine_fixture();
+        let handle = Arc::new(handle);
+        let deck_id = status.device_number;
+        handle_status(
+            &handle,
+            &metadata_fetcher,
+            &mut PositionTracker::new(),
+            &HashMap::new(),
+            &mut HashMap::new(),
+            &mut HashMap::new(),
+            status,
+        );
+        handle
+            .deck_state(deck_id)
+            .expect("the status was reported")
+            .loaded_track
+    }
+
+    #[test]
+    fn a_status_reports_the_loaded_track_with_its_source_player() {
+        // Deck 2 plays track 15 off player 1's stick, on a linked booth.
+        assert_eq!(
+            reported_loaded_track(status_of(2, 1, 15)),
+            Some(TrackRef {
+                source_device: 1,
+                slot: "usb".to_owned(),
+                track_id: 15,
+            })
+        );
+    }
+
+    #[test]
+    fn a_zero_source_device_means_the_deck_itself() {
+        let loaded = reported_loaded_track(status_of(2, 0, 15)).expect("a track is loaded");
+        assert_eq!(loaded.source_device, 2);
     }
 
     /// Gives a test device the shared-number marking [`DeviceWatcher`] would

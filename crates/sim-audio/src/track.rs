@@ -33,6 +33,7 @@ pub fn build(path: &Path) -> anyhow::Result<TrackInfo> {
 
     Ok(TrackInfo {
         track_id: track_id_for(path),
+        source: None,
         title: audio.tags.title_or_placeholder(path),
         artist: audio.tags.artist,
         album: audio.tags.album,

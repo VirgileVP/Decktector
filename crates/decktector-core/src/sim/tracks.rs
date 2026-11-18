@@ -269,6 +269,7 @@ pub fn build_sim_track(spec: &SimTrackSpec, track_id: u32) -> TrackInfo {
 
     TrackInfo {
         track_id,
+        source: None,
         title: spec.title.to_owned(),
         artist: Some(spec.artist.to_owned()),
         album: Some(spec.album.to_owned()),

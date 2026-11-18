@@ -235,6 +235,7 @@ mod tests {
     fn track_named(title: &str, track_id: u32) -> TrackInfo {
         TrackInfo {
             track_id,
+            source: None,
             title: title.to_owned(),
             artist: None,
             album: None,

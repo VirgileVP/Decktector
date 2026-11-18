@@ -30,6 +30,7 @@ export type { TrackCue } from './TrackCue'
 export type { TrackEvent } from './TrackEvent'
 export type { TrackEventKind } from './TrackEventKind'
 export type { TrackInfo } from './TrackInfo'
+export type { TrackRef } from './TrackRef'
 export type { WaveformData } from './WaveformData'
 export type { WaveformSegment } from './WaveformSegment'
 

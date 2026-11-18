@@ -795,6 +795,7 @@ mod tests {
             effective_bpm: None,
             beat_in_measure: None,
             track_id: None,
+            loaded_track: None,
             playhead_ms: Some(playhead_ms),
             reported_at,
             active_loop: None,

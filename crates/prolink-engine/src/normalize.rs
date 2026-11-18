@@ -1,13 +1,20 @@
 //! Maps a raw [`DeviceStatus`] onto decktector's domain [`DeckState`].
 
-use decktector_core::model::{ActiveLoop, DeckState, LoopRange, PlayState};
+use decktector_core::model::{ActiveLoop, DeckState, LoopRange, PlayState, TrackRef};
 use prolink::status::{DeviceStatus, LoopBounds, RawPlayState};
 
 /// Builds the deck state a status packet implies, anchored at `now_ms`.
 /// `playhead_ms` comes from [`crate::position::PositionTracker`] rather than
 /// being derived here, since it also has to fold in CDJ-3000 precise
-/// -position packets that arrive on a separate stream.
-pub fn to_deck_state(status: &DeviceStatus, playhead_ms: Option<f64>, now_ms: f64) -> DeckState {
+/// -position packets that arrive on a separate stream. `loaded_track` is the
+/// track the same status names, resolved to the player holding its media by
+/// the caller (`crate::engine`), which needs it for the metadata fetch too.
+pub fn to_deck_state(
+    status: &DeviceStatus,
+    playhead_ms: Option<f64>,
+    loaded_track: Option<TrackRef>,
+    now_ms: f64,
+) -> DeckState {
     let track_bpm = status.track_bpm;
     DeckState {
         deck_id: status.device_number,
@@ -20,6 +27,7 @@ pub fn to_deck_state(status: &DeviceStatus, playhead_ms: Option<f64>, now_ms: f6
         effective_bpm: track_bpm.map(|bpm| bpm * (1.0 + status.pitch_percent / 100.0)),
         beat_in_measure: status.beat_in_bar,
         track_id: status.track_id,
+        loaded_track,
         playhead_ms,
         reported_at: now_ms,
         active_loop: active_loop(status),
@@ -91,6 +99,7 @@ mod tests {
                 status
             }),
             None,
+            None,
             1_000.0,
         );
         assert_eq!(deck.active_loop, None);
@@ -103,6 +112,7 @@ mod tests {
                 status.play_state = RawPlayState::Looping;
                 status
             }),
+            None,
             None,
             1_000.0,
         );
@@ -121,6 +131,7 @@ mod tests {
                 status
             }),
             None,
+            None,
             1_000.0,
         );
         assert_eq!(
@@ -136,7 +147,7 @@ mod tests {
 
     #[test]
     fn no_track_loaded_is_empty() {
-        let deck = to_deck_state(&status(|status| status), None, 1_000.0);
+        let deck = to_deck_state(&status(|status| status), None, None, 1_000.0);
         assert_eq!(deck.play_state, PlayState::Empty);
     }
 
@@ -148,6 +159,7 @@ mod tests {
                     status.play_state = raw;
                     status
                 }),
+                None,
                 None,
                 1_000.0,
             );
@@ -168,6 +180,7 @@ mod tests {
                     status
                 }),
                 None,
+                None,
                 1_000.0,
             );
             assert_eq!(
@@ -186,6 +199,7 @@ mod tests {
                     status.play_state = raw;
                     status
                 }),
+                None,
                 None,
                 1_000.0,
             );
@@ -206,6 +220,7 @@ mod tests {
                     status
                 }),
                 None,
+                None,
                 1_000.0,
             );
             assert_eq!(
@@ -224,6 +239,7 @@ mod tests {
                 status
             }),
             None,
+            None,
             1_000.0,
         );
         assert_eq!(loading.play_state, PlayState::Loading);
@@ -233,6 +249,7 @@ mod tests {
                 status.play_state = RawPlayState::Ended;
                 status
             }),
+            None,
             None,
             1_000.0,
         );
@@ -246,6 +263,7 @@ mod tests {
                 status.play_state = RawPlayState::Unknown(0x7f);
                 status
             }),
+            None,
             None,
             1_000.0,
         );
@@ -262,6 +280,7 @@ mod tests {
                 status
             }),
             None,
+            None,
             1_000.0,
         );
         assert_eq!(deck.track_bpm, Some(120.0));
@@ -269,8 +288,30 @@ mod tests {
     }
 
     #[test]
+    fn to_deck_state_stores_the_loaded_track_it_is_given() {
+        let empty = to_deck_state(&status(|status| status), None, None, 1_000.0);
+        assert_eq!(empty.loaded_track, None);
+
+        let linked = TrackRef {
+            source_device: 1,
+            slot: "usb".to_owned(),
+            track_id: 15,
+        };
+        let deck = to_deck_state(
+            &status(|mut status| {
+                status.track_id = Some(15);
+                status
+            }),
+            None,
+            Some(linked.clone()),
+            1_000.0,
+        );
+        assert_eq!(deck.loaded_track, Some(linked));
+    }
+
+    #[test]
     fn reports_the_deck_id_and_timestamp_it_was_given() {
-        let deck = to_deck_state(&status(|status| status), Some(4_200.0), 9_999.0);
+        let deck = to_deck_state(&status(|status| status), Some(4_200.0), None, 9_999.0);
         assert_eq!(deck.deck_id, 2);
         assert_eq!(deck.playhead_ms, Some(4_200.0));
         assert_eq!(deck.reported_at, 9_999.0);

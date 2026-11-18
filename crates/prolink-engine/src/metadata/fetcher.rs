@@ -27,7 +27,7 @@ use std::net::Ipv4Addr;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
 use std::time::{Duration, Instant};
 
-use decktector_core::model::{BeatGridBeat, DeckId, TrackCue, TrackInfo, WaveformData};
+use decktector_core::model::{BeatGridBeat, DeckId, TrackCue, TrackInfo, TrackRef, WaveformData};
 use decktector_core::structure::{self, StructureInput};
 use decktector_core::EngineHandle;
 use prolink::dbserver::client::TrackMenuItem;
@@ -82,6 +82,42 @@ pub struct LoadedTrack {
     pub slot: MediaSlot,
     pub track_type: u8,
     pub track_id: u32,
+}
+
+impl From<&LoadedTrack> for TrackRef {
+    fn from(track: &LoadedTrack) -> Self {
+        Self {
+            source_device: track.source_device,
+            slot: slot_wire_name(track.slot).to_owned(),
+            track_id: track.track_id,
+        }
+    }
+}
+
+/// The name a [`TrackRef`] gives `slot` on the wire. A slot byte this crate
+/// does not know is `unknown`, whatever its value.
+fn slot_wire_name(slot: MediaSlot) -> &'static str {
+    match slot {
+        MediaSlot::Cd => "cd",
+        MediaSlot::Sd => "sd",
+        MediaSlot::Usb => "usb",
+        MediaSlot::Rekordbox => "rekordbox",
+        MediaSlot::Streaming => "streaming",
+        MediaSlot::Unknown(_) => "unknown",
+    }
+}
+
+/// Shows `track_info` on `deck_id`, stamped with the track it was fetched
+/// for: a deck keeps its previous track's metadata until this lands, and the
+/// stamp is how a reader tells the two apart.
+fn show_track(
+    handle: &EngineHandle,
+    deck_id: DeckId,
+    track: &LoadedTrack,
+    mut track_info: TrackInfo,
+) {
+    track_info.source = Some(TrackRef::from(track));
+    handle.update_deck_track(deck_id, Some(track_info));
 }
 
 /// What one status packet supplies about the track it names — everything
@@ -358,7 +394,7 @@ impl MetadataFetcher {
         }
         self.lock(&self.active_sources)
             .insert(deck_id, ActiveMediaSource { player_ip, track });
-        handle.update_deck_track(deck_id, Some(track_info));
+        show_track(&handle, deck_id, &track, track_info);
 
         // The deck shows its metadata now: no fetch is in flight for it any
         // more, even while the player's own analysis is still awaited.
@@ -406,9 +442,11 @@ impl MetadataFetcher {
             if self.is_superseded(deck_id, &track) {
                 return;
             }
-            handle.update_deck_track(
+            show_track(
+                handle,
                 deck_id,
-                Some(dbserver_track.to_track_info(track.track_id, status_bpm)),
+                &track,
+                dbserver_track.to_track_info(track.track_id, status_bpm),
             );
             if dbserver_track.analysis.is_complete() {
                 return;
@@ -788,6 +826,7 @@ fn assemble_dbserver_track_info(
 
     TrackInfo {
         track_id,
+        source: None,
         title: normalize::title(items).unwrap_or_default(),
         artist: normalize::artist(items),
         album: normalize::album(items),
@@ -1081,6 +1120,35 @@ mod tests {
         assert!(fetcher.is_superseded(1, &linked_players_track));
         assert!(!fetcher.is_showing(1, &own_track));
         assert!(fetcher.is_showing(1, &linked_players_track));
+    }
+
+    #[test]
+    fn fetched_metadata_carries_the_triple_it_was_fetched_for() {
+        let handle = EngineHandle::new();
+        // Deck 1 plays track 15 off player 2's stick, on a linked booth.
+        let linked_players_track = loaded(2, 15);
+        let track_info = assemble_dbserver_track_info(15, &[], None, &DbserverAnalysis::default());
+
+        show_track(&handle, 1, &linked_players_track, track_info);
+
+        assert_eq!(
+            handle.deck_track_source(1),
+            Some(TrackRef {
+                source_device: 2,
+                slot: "usb".to_owned(),
+                track_id: 15,
+            })
+        );
+    }
+
+    #[test]
+    fn every_slot_has_a_wire_name_and_an_unknown_byte_is_unknown() {
+        assert_eq!(slot_wire_name(MediaSlot::Cd), "cd");
+        assert_eq!(slot_wire_name(MediaSlot::Sd), "sd");
+        assert_eq!(slot_wire_name(MediaSlot::Usb), "usb");
+        assert_eq!(slot_wire_name(MediaSlot::Rekordbox), "rekordbox");
+        assert_eq!(slot_wire_name(MediaSlot::Streaming), "streaming");
+        assert_eq!(slot_wire_name(MediaSlot::Unknown(0x09)), "unknown");
     }
 
     #[test]

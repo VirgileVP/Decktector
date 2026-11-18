@@ -15,6 +15,7 @@ function deck(overrides: Partial<DeckState> = {}): DeckState {
     effectiveBpm: null,
     beatInMeasure: null,
     trackId: null,
+    loadedTrack: null,
     playheadMs: 10_000,
     reportedAt: 1_000,
     activeLoop: null,

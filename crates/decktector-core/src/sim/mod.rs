@@ -13,6 +13,7 @@ mod deck;
 mod engine;
 mod library;
 mod manual;
+mod media;
 mod rig;
 mod rig_state;
 mod tracks;

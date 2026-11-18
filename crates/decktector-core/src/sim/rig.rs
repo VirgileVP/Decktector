@@ -23,6 +23,7 @@ use std::sync::Arc;
 use super::command::SimCommand;
 use super::deck::SimDeckModel;
 use super::library::{SimLibrary, FIRST_TRACK_ID};
+use super::media::on_deck;
 use super::rig_state::{SimDeckView, SimRigState, SimTrackSummary};
 use crate::model::{DeckId, DeckState, TrackInfo};
 
@@ -80,9 +81,11 @@ impl SimRig {
         Arc::clone(&self.library)
     }
 
-    /// The track a deck holds, in the form engines report it.
+    /// The track a deck holds, in the form engines report it: stamped with
+    /// the media the deck plays it from.
     pub fn loaded_track(&self, deck_id: DeckId) -> Option<TrackInfo> {
-        self.deck(deck_id)?.track().cloned()
+        let track = self.deck(deck_id)?.track()?.clone();
+        Some(on_deck(track, deck_id))
     }
 
     pub fn apply(&mut self, command: SimCommand) {

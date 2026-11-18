@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use tokio::sync::broadcast;
 
 use crate::model::{
-    DeckId, DeckState, DeckTrack, DeviceInfo, EngineSnapshot, NetworkState, TrackInfo,
+    DeckId, DeckState, DeckTrack, DeviceInfo, EngineSnapshot, NetworkState, TrackInfo, TrackRef,
 };
 
 /// How many events the broadcast channel buffers per subscriber.
@@ -163,6 +163,21 @@ impl EngineHandle {
             .is_some()
     }
 
+    /// Which track the metadata `deck_id` shows was fetched for, if it shows
+    /// any and the engine said.
+    ///
+    /// For per-tick readers: it clones three small fields, not the track's
+    /// waveform, so comparing it with [`DeckState::loaded_track`] on every
+    /// tick is cheap. Call [`Self::deck_track`] only once it changed.
+    pub fn deck_track_source(&self, deck_id: DeckId) -> Option<TrackRef> {
+        self.lock().tracks.get(&deck_id)?.as_ref()?.source.clone()
+    }
+
+    /// The metadata `deck_id` currently shows, waveform and all.
+    pub fn deck_track(&self, deck_id: DeckId) -> Option<TrackInfo> {
+        self.lock().tracks.get(&deck_id)?.clone()
+    }
+
     /// A send failure only means nobody is subscribed yet, which is normal
     /// while the window is still opening.
     fn emit(&self, event: EngineEvent) {
@@ -250,6 +265,7 @@ mod tests {
             effective_bpm: None,
             beat_in_measure: None,
             track_id: None,
+            loaded_track: None,
             playhead_ms: Some(1_000.0),
             reported_at: 0.0,
             active_loop: None,
@@ -303,13 +319,10 @@ mod tests {
         assert_eq!(event.channel(), "engine:network:state");
     }
 
-    #[test]
-    fn has_track_reports_accurate_state() {
-        let handle = EngineHandle::new();
-        assert!(!handle.has_track(1));
-
-        let track = TrackInfo {
+    fn track_info(source: Option<TrackRef>) -> TrackInfo {
+        TrackInfo {
             track_id: 1234,
+            source,
             title: "Test Track".into(),
             artist: Some("Test Artist".into()),
             album: None,
@@ -324,9 +337,41 @@ mod tests {
             waveform: None,
             cues: vec![],
             events: vec![],
-        };
+        }
+    }
 
-        handle.update_deck_track(1, Some(track));
+    #[test]
+    fn a_decks_track_source_and_track_read_what_it_shows() {
+        let handle = EngineHandle::new();
+        assert_eq!(handle.deck_track_source(1), None);
+        assert_eq!(handle.deck_track(1), None);
+
+        let source = TrackRef {
+            source_device: 2,
+            slot: "usb".into(),
+            track_id: 1234,
+        };
+        handle.update_deck_track(1, Some(track_info(Some(source.clone()))));
+        assert_eq!(handle.deck_track_source(1), Some(source.clone()));
+        assert_eq!(handle.deck_track(1), Some(track_info(Some(source))));
+
+        handle.update_deck_track(1, Some(track_info(None)));
+        assert_eq!(
+            handle.deck_track_source(1),
+            None,
+            "metadata of unknown origin"
+        );
+
+        handle.update_deck_track(1, None);
+        assert_eq!(handle.deck_track(1), None);
+    }
+
+    #[test]
+    fn has_track_reports_accurate_state() {
+        let handle = EngineHandle::new();
+        assert!(!handle.has_track(1));
+
+        handle.update_deck_track(1, Some(track_info(None)));
         assert!(handle.has_track(1));
 
         handle.update_deck_track(1, None);

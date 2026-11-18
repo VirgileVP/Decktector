@@ -240,6 +240,7 @@ pub fn build_track_info(
 
     TrackInfo {
         track_id: track.id,
+        source: None,
         title: track.title.clone(),
         artist: pdb.artists.get(&track.artist_id).cloned(),
         album: pdb.albums.get(&track.album_id).cloned(),

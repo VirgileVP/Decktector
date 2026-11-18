@@ -2,12 +2,19 @@
 import type { BeatGridBeat } from "./BeatGridBeat";
 import type { TrackCue } from "./TrackCue";
 import type { TrackEvent } from "./TrackEvent";
+import type { TrackRef } from "./TrackRef";
 import type { WaveformData } from "./WaveformData";
 
 /**
  * Static description of a loaded track, fetched once per track change.
  */
-export type TrackInfo = { trackId: number, title: string, artist: string | null, album: string | null, genre: string | null, 
+export type TrackInfo = { trackId: number, 
+/**
+ * The track this metadata was fetched for, null when the engine did not
+ * say. A deck keeps showing its previous track's metadata until the new
+ * one's lands, so this is what tells the two apart.
+ */
+source: TrackRef | null, title: string, artist: string | null, album: string | null, genre: string | null, 
 /**
  * Musical key as displayed by Rekordbox, e.g. "8A" or "Am".
  */

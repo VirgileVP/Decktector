@@ -69,6 +69,11 @@ pub struct DeckState {
     pub beat_in_measure: Option<u8>,
     /// Identifier of the loaded track, null when no track is loaded.
     pub track_id: Option<u32>,
+    /// The loaded track with the media it lives on, null when no track is
+    /// loaded. Compare it with [`TrackInfo::source`] to tell whether the
+    /// deck's metadata is already this track's (see [`is_identified`]).
+    #[serde(default)]
+    pub loaded_track: Option<TrackRef>,
     /// Estimated playhead position in ms, derived from the last beat and the
     /// beat grid (Pro DJ Link has no absolute position on CDJ-2000-era
     /// hardware). null when it cannot be inferred yet.
@@ -194,12 +199,44 @@ pub struct TrackEvent {
     pub label: Option<String>,
 }
 
+/// A track as the player addresses it: the id is unique per media only.
+///
+/// Every rekordbox stick numbers its tracks from 1, so the next DJ's track 15
+/// is not the previous DJ's: only the player holding the media, its slot and
+/// the id together name one track.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "TrackRef.ts")]
+pub struct TrackRef {
+    /// The player whose media holds the track — the deck itself on a
+    /// stand-alone player, another player on a linked booth.
+    pub source_device: u8,
+    /// Wire name of the slot (`usb`, `sd`, `rekordbox`, `cd`, `streaming`, `unknown`).
+    pub slot: String,
+    pub track_id: u32,
+}
+
+/// Whether `info` is the metadata of the track `loaded` names, rather than
+/// what the deck still shows from the previous track while the new one's
+/// metadata is on its way (or never arrives).
+///
+/// Only meaningful for a deck holding a track: an empty deck has no
+/// `loaded` to ask about.
+pub fn is_identified(loaded: &TrackRef, info: Option<&TrackInfo>) -> bool {
+    info.and_then(|info| info.source.as_ref()) == Some(loaded)
+}
+
 /// Static description of a loaded track, fetched once per track change.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "TrackInfo.ts")]
 pub struct TrackInfo {
     pub track_id: u32,
+    /// The track this metadata was fetched for, null when the engine did not
+    /// say. A deck keeps showing its previous track's metadata until the new
+    /// one's lands, so this is what tells the two apart.
+    #[serde(default)]
+    pub source: Option<TrackRef>,
     pub title: String,
     pub artist: Option<String>,
     pub album: Option<String>,
@@ -243,4 +280,71 @@ pub struct EngineSnapshot {
     pub devices: Vec<DeviceInfo>,
     pub decks: Vec<DeckState>,
     pub tracks: Vec<DeckTrack>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn track_ref(source_device: u8, slot: &str, track_id: u32) -> TrackRef {
+        TrackRef {
+            source_device,
+            slot: slot.to_owned(),
+            track_id,
+        }
+    }
+
+    fn info_for(source: Option<TrackRef>) -> TrackInfo {
+        TrackInfo {
+            track_id: source.as_ref().map_or(0, |source| source.track_id),
+            source,
+            title: "Shown".to_owned(),
+            artist: None,
+            album: None,
+            genre: None,
+            key: None,
+            label: None,
+            comment: None,
+            duration_ms: 0.0,
+            bpm: None,
+            artwork: None,
+            beat_grid: None,
+            waveform: None,
+            cues: Vec::new(),
+            events: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_deck_whose_track_info_is_from_the_previous_track_is_pending() {
+        let loaded = track_ref(2, "usb", 15);
+
+        let same_track = info_for(Some(track_ref(2, "usb", 15)));
+        assert!(is_identified(&loaded, Some(&same_track)));
+
+        // The previous DJ's track 15, off another player's stick.
+        let other_media = info_for(Some(track_ref(3, "usb", 15)));
+        assert!(!is_identified(&loaded, Some(&other_media)));
+        let other_slot = info_for(Some(track_ref(2, "sd", 15)));
+        assert!(!is_identified(&loaded, Some(&other_slot)));
+
+        assert!(!is_identified(&loaded, None), "no metadata yet");
+        assert!(
+            !is_identified(&loaded, Some(&info_for(None))),
+            "metadata that does not say which track it describes"
+        );
+        // A deck holding no track has no `loaded` to pass: the question
+        // does not apply to it, and the signature cannot ask it.
+    }
+
+    #[test]
+    fn snapshots_from_before_tracks_named_their_media_still_load() {
+        let deck: DeckState = serde_json::from_str(
+            r#"{"deckId":1,"playState":"playing","isMaster":false,"isSynced":false,
+                "isOnAir":false,"pitch":0,"trackBpm":null,"effectiveBpm":null,
+                "beatInMeasure":null,"trackId":15,"playheadMs":null,"reportedAt":0}"#,
+        )
+        .expect("an older deck state deserializes");
+        assert_eq!(deck.loaded_track, None);
+    }
 }

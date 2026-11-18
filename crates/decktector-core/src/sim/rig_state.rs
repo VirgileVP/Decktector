@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::command::TempoRange;
+use super::media::sim_track_ref;
 use crate::model::{ActiveLoop, DeckId, DeckState, LoopRange, PlayState, TrackInfo};
 
 /// One entry of the sorted library the control page can load from.
@@ -101,6 +102,9 @@ impl SimDeckView {
             effective_bpm: self.effective_bpm,
             beat_in_measure: self.beat_in_measure,
             track_id: self.track_id,
+            loaded_track: self
+                .track_id
+                .map(|track_id| sim_track_ref(self.deck_id, track_id)),
             playhead_ms: self.track_index.map(|_| self.position_ms),
             reported_at,
             active_loop: self.loop_state.and_then(SimLoop::as_active_loop),

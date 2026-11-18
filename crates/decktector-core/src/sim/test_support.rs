@@ -10,6 +10,7 @@ const BEATS_PER_BAR: usize = 4;
 pub(super) fn titled(title: &str, artist: Option<&str>) -> TrackInfo {
     TrackInfo {
         track_id: 1,
+        source: None,
         title: title.to_owned(),
         artist: artist.map(str::to_owned),
         album: None,

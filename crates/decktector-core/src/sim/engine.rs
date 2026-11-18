@@ -21,6 +21,7 @@ use super::clock::epoch_ms;
 use super::control::SimControl;
 use super::library::{SimLibrary, FIRST_TRACK_ID};
 use super::manual::{self, ManualSession};
+use super::media::{on_deck, sim_track_ref};
 use super::rig::{SimRig, DECK_COUNT};
 use crate::engine::{Engine, EngineHandle};
 use crate::model::{DeckId, DeckState, DeviceInfo, NetworkState, PlayState, TrackInfo};
@@ -104,7 +105,7 @@ impl SimDeck {
         Self {
             deck_id,
             play_state: PlayState::Cued,
-            track: Some(library.track(track_index, track_id)),
+            track: Some(on_deck(library.track(track_index, track_id), deck_id)),
             playhead_ms: 0.0,
             track_index,
             pitch_phase: f64::from(deck_id) * 2.1,
@@ -163,6 +164,10 @@ impl SimDeck {
                 _ => None,
             },
             track_id: self.track.as_ref().map(|track| track.track_id),
+            loaded_track: self
+                .track
+                .as_ref()
+                .map(|track| sim_track_ref(self.deck_id, track.track_id)),
             playhead_ms: self.track.as_ref().map(|_| self.playhead_ms),
             reported_at: epoch_ms(),
             active_loop: None,
@@ -449,7 +454,10 @@ fn apply_scheduled(
             deck.schedule(TRACK_LOAD_DELAY, Scheduled::LoadNextTrack);
         }
         Scheduled::LoadNextTrack => {
-            let track = library.track(deck.track_index, *next_track_id);
+            let track = on_deck(
+                library.track(deck.track_index, *next_track_id),
+                deck.deck_id,
+            );
             *next_track_id += 1;
             deck.track = Some(track.clone());
             deck.play_state = PlayState::Cued;
@@ -691,6 +699,7 @@ mod tests {
     async fn a_recorded_library_reaches_the_decks_untouched() {
         let recorded = TrackInfo {
             track_id: 4242,
+            source: None,
             title: "Recorded Track".to_owned(),
             artist: Some("Recorded Artist".to_owned()),
             album: None,
@@ -723,8 +732,9 @@ mod tests {
 
         let loaded = loaded.expect("the deck should report a loaded track");
         assert_eq!(
-            loaded, recorded,
-            "a recorded track should reach the deck exactly as recorded"
+            loaded,
+            on_deck(recorded, 1),
+            "a recorded track should reach the deck exactly as recorded, only told which media it plays from"
         );
     }
 

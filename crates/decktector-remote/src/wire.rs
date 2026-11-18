@@ -81,7 +81,9 @@ fn strip_heavy_payload(mut track: TrackInfo) -> TrackInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use decktector_core::model::{DeckState, DeckTrack, DeviceInfo, NetworkState, PlayState};
+    use decktector_core::model::{
+        DeckState, DeckTrack, DeviceInfo, NetworkState, PlayState, TrackRef,
+    };
 
     fn every_event() -> Vec<EngineEvent> {
         vec![
@@ -107,6 +109,7 @@ mod tests {
                 effective_bpm: None,
                 beat_in_measure: None,
                 track_id: None,
+                loaded_track: None,
                 playhead_ms: None,
                 reported_at: 0.0,
                 active_loop: None,
@@ -135,6 +138,11 @@ mod tests {
             effective_bpm: Some(129.9),
             beat_in_measure: Some(2),
             track_id: Some(7),
+            loaded_track: Some(TrackRef {
+                source_device: 3,
+                slot: "usb".to_owned(),
+                track_id: 7,
+            }),
             playhead_ms: Some(12_345.0),
             reported_at: 999.0,
             active_loop: None,
