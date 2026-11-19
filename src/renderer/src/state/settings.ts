@@ -70,7 +70,7 @@ export const NO_MIDI_PORT = ''
 /** Placeholder LTC output device name meaning "nothing picked yet". */
 export const NO_LTC_DEVICE = ''
 
-/** The Deck view tab's fifteen visibility toggles, grouped as one preset-able unit. */
+/** The Deck view tab's sixteen visibility toggles, grouped as one preset-able unit. */
 export type DeckViewToggles = Pick<
   Settings,
   | 'showDeckNumber'
@@ -78,6 +78,7 @@ export type DeckViewToggles = Pick<
   | 'showDeckTrackInfo'
   | 'showDeckTrackTags'
   | 'showDeckTcButton'
+  | 'showDeckTcStatus'
   | 'showDeckTransport'
   | 'showDeckSyncBadges'
   | 'showDeckTime'
@@ -96,6 +97,7 @@ export const DECK_VIEW_TOGGLE_KEYS = [
   'showDeckTrackInfo',
   'showDeckTrackTags',
   'showDeckTcButton',
+  'showDeckTcStatus',
   'showDeckTransport',
   'showDeckSyncBadges',
   'showDeckTime',
@@ -125,6 +127,7 @@ const FULL_DECK_VIEW: DeckViewToggles = {
   showDeckTrackInfo: true,
   showDeckTrackTags: true,
   showDeckTcButton: true,
+  showDeckTcStatus: true,
   showDeckTransport: true,
   showDeckSyncBadges: true,
   showDeckTime: true,
@@ -137,7 +140,7 @@ const FULL_DECK_VIEW: DeckViewToggles = {
   showDeckWaveformDetail: true
 }
 
-/** Named starting points for the Deck view tab's fifteen independent toggles —
+/** Named starting points for the Deck view tab's sixteen independent toggles —
  *  still fully overridable below, this is a fast path, not a new mode. */
 export const DECK_VIEW_PRESETS: Record<
   DeckViewPreset,
@@ -152,6 +155,7 @@ export const DECK_VIEW_PRESETS: Record<
       showDeckTrackInfo: false,
       showDeckTrackTags: false,
       showDeckTcButton: true,
+      showDeckTcStatus: true,
       showDeckTransport: true,
       showDeckSyncBadges: true,
       showDeckTime: true,
@@ -265,6 +269,8 @@ export interface Settings {
   showDeckTrackTags: boolean
   /** Whether the deck bar shows the timecode-source (TC) button. */
   showDeckTcButton: boolean
+  /** Whether the deck bar shows where the deck stands against the show's timecode. */
+  showDeckTcStatus: boolean
   /** Whether the deck bar shows the play/pause transport glyph. */
   showDeckTransport: boolean
   /** Whether the deck bar shows the ON AIR / MASTER / SYNC badges. */
@@ -413,6 +419,7 @@ function pickSettings(state: Settings): Settings {
     showDeckTrackInfo,
     showDeckTrackTags,
     showDeckTcButton,
+    showDeckTcStatus,
     showDeckTransport,
     showDeckSyncBadges,
     showDeckTime,
@@ -462,6 +469,7 @@ function pickSettings(state: Settings): Settings {
     showDeckTrackInfo,
     showDeckTrackTags,
     showDeckTcButton,
+    showDeckTcStatus,
     showDeckTransport,
     showDeckSyncBadges,
     showDeckTime,

@@ -6,6 +6,7 @@ export interface DeckBarFields {
   trackInfo: boolean
   trackTags: boolean
   tcButton: boolean
+  tcStatus: boolean
   transport: boolean
   syncBadges: boolean
   time: boolean
@@ -28,6 +29,7 @@ export function deckBarFields(view: DeckViewToggles): DeckBarFields {
     trackInfo: view.showDeckTrackInfo,
     trackTags: view.showDeckTrackTags,
     tcButton: view.showDeckTcButton,
+    tcStatus: view.showDeckTcStatus,
     transport: view.showDeckTransport,
     syncBadges: view.showDeckSyncBadges,
     time: view.showDeckTime,
@@ -48,6 +50,7 @@ export function deckBarLayout(fields: DeckBarFields): DeckBarLayout {
 
   const hasReadouts =
     fields.tcButton ||
+    fields.tcStatus ||
     fields.transport ||
     fields.syncBadges ||
     fields.time ||

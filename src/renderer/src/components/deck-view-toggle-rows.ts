@@ -40,6 +40,11 @@ export const DECK_VIEW_TOGGLE_GROUPS: readonly DeckViewToggleGroup[] = [
         label: 'TC button',
         hint: 'Button to send timecode from this deck'
       },
+      {
+        key: 'showDeckTcStatus',
+        label: 'TC status',
+        hint: 'The show row the deck runs on, or why its timecode falls back or is cut, with the position quality'
+      },
       { key: 'showDeckTransport', label: 'Play/pause button', hint: 'The transport state glyph' },
       {
         key: 'showDeckSyncBadges',

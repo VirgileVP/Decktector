@@ -62,7 +62,7 @@ export function DeckBar({ deckId, track, fields, layout }: DeckBarProps): React.
         layout === 'bar' && <div className="deck-info-spacer" />
       )}
 
-      {track && <DeckTimecodeLine deckId={deckId} compact={layout === 'rail'} />}
+      {track && fields.tcStatus && <DeckTimecodeLine deckId={deckId} compact={layout === 'rail'} />}
 
       {fields.trackTags && (
         <div className="deck-props">

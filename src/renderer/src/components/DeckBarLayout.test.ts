@@ -9,6 +9,7 @@ function allFieldsFalse(): DeckBarFields {
     trackInfo: false,
     trackTags: false,
     tcButton: false,
+    tcStatus: false,
     transport: false,
     syncBadges: false,
     time: false,
@@ -38,6 +39,7 @@ describe('deckBarLayout', () => {
   it('returns "rail" when identity block is hidden but readouts are enabled', () => {
     const readouts: (keyof DeckBarFields)[] = [
       'tcButton',
+      'tcStatus',
       'transport',
       'syncBadges',
       'time',
@@ -68,12 +70,18 @@ describe('deckBarLayout', () => {
 
 describe('deckBarFields', () => {
   it('maps each Deck view toggle onto its bar field', () => {
-    const view = { ...DECK_VIEW_PRESETS.full.values, showDeckPitch: false, showDeckArtwork: false }
+    const view = {
+      ...DECK_VIEW_PRESETS.full.values,
+      showDeckPitch: false,
+      showDeckArtwork: false,
+      showDeckTcStatus: false
+    }
     expect(deckBarFields(view)).toEqual({
       artwork: false,
       trackInfo: true,
       trackTags: true,
       tcButton: true,
+      tcStatus: false,
       transport: true,
       syncBadges: true,
       time: true,
