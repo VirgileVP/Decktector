@@ -2898,6 +2898,15 @@ input[type='checkbox']:focus-visible {
   border-color: var(--sync);
 }
 
+.timecode-input-field:disabled {
+  cursor: not-allowed;
+}
+
+/* A setting that does not apply while another one is on. */
+.setting-row-disabled {
+  opacity: 0.45;
+}
+
 .timecode-input-invalid {
   border-color: var(--status-warning);
 }

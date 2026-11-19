@@ -9,7 +9,8 @@ import { useOnAirConfirmation } from './useOnAirConfirmation'
 /**
  * The show's timecode rules, under its table in Settings > Show: a note
  * while its rate and the output's disagree, and the two rules for a track
- * the show does not know — where its timeline starts, or whether it is cut.
+ * the show does not know — whether it is cut, or else where its timeline
+ * starts; the fallback start is greyed out while it is cut.
  * A fallback change that moves a deck on air asks first, like any start
  * edit. With no show there are no rules to set.
  */
@@ -19,6 +20,7 @@ export function ShowTimecodeRules(): React.JSX.Element | null {
   const { confirmShowChange, dialog } = useOnAirConfirmation()
 
   if (show === null) return null
+  const cut = show.cutWhenUnidentified
 
   const mismatch = frameRateMismatch(show, outputRate)
   const changeFallback = (label: string | null): void => {
@@ -46,11 +48,19 @@ export function ShowTimecodeRules(): React.JSX.Element | null {
           </button>
         </p>
       )}
-      <div className="setting-row">
+      <ToggleRow
+        label="Cut timecode when a track is unknown"
+        hint="Sends nothing for a track the show does not list, instead of running it from the fallback start"
+        checked={cut}
+        onChange={(enabled) => useShow.getState().setCutWhenUnidentified(enabled)}
+      />
+      <div className={`setting-row${cut ? ' setting-row-disabled' : ''}`}>
         <span className="setting-text">
           <span className="setting-label">Fallback start timecode</span>
           <span className="setting-hint">
-            Where the timeline of a track the show does not know starts
+            {cut
+              ? 'Unused while the timecode is cut for unknown tracks'
+              : 'Where the timeline of a track the show does not know starts'}
           </span>
         </span>
         <TimecodeInput
@@ -58,21 +68,16 @@ export function ShowTimecodeRules(): React.JSX.Element | null {
           fps={show.fps}
           allowBlank={false}
           ariaLabel="Fallback start timecode"
+          disabled={cut}
           onCommit={changeFallback}
         />
       </div>
-      {!fallbackStartFits(show) && (
+      {!cut && !fallbackStartFits(show) && (
         <p className="setting-hint setting-warning" role="note">
           Its frames run past {show.fps} fps: unknown tracks start at {FALLBACK_START_TC_DEFAULT}{' '}
           until it is corrected.
         </p>
       )}
-      <ToggleRow
-        label="Cut timecode when a track is unknown"
-        hint="Sends nothing for a track the show does not list, instead of running it from the fallback start"
-        checked={show.cutWhenUnidentified}
-        onChange={(cut) => useShow.getState().setCutWhenUnidentified(cut)}
-      />
       {dialog}
     </section>
   )
