@@ -326,7 +326,8 @@ The **TC status** toggle in the Deck view tab hides or shows this line.
 
 **The show file.** The show is kept across restarts with no manual save.
 **Export show…** and **Import show…** move a whole night between machines as a
-`show-YYYY-MM-DD.json` file. It is separate from the lineup file: the lineup
+`show-YYYY-MM-DD.dshow` file (JSON inside; shows exported earlier as `.json`
+still open). It is separate from the lineup file: the lineup
 says who plays when, the show says where each track sits on the timecode.
 
 Not included yet: building a show by browsing a player's USB library over the

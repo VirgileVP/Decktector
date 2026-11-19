@@ -9,7 +9,9 @@ use crate::text_file::{self, TextDocument};
 
 const SHOW: TextDocument = TextDocument {
     filter_name: "Decktector show",
-    extensions: &["json"],
+    // `.dshow` for "Decktector show"; JSON inside. Shows exported as
+    // `.json` before the extension existed still open.
+    extensions: &["dshow", "json"],
     // 2000 rows of 300-character text stay well under it.
     max_import_bytes: 2 * 1024 * 1024,
     noun: "show",

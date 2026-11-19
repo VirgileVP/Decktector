@@ -76,9 +76,12 @@ export function serializeShow(show: ShowData): string {
   return `${JSON.stringify(file, null, 2)}\n`
 }
 
-/** A suggested file name for today's export, e.g. `show-2026-10-09.json`. */
+/** The show file's extension: "Decktector show", JSON inside. */
+export const SHOW_FILE_EXTENSION = 'dshow'
+
+/** A suggested file name for today's export, e.g. `show-2026-10-09.dshow`. */
 export function showFileName(date: Date): string {
-  return `show-${localDayStamp(date)}.json`
+  return `show-${localDayStamp(date)}.${SHOW_FILE_EXTENSION}`
 }
 
 class ShowFileError extends Error {}

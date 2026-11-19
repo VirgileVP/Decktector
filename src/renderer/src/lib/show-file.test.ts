@@ -200,6 +200,6 @@ describe('parseShowFile rejects', () => {
 
 describe('showFileName', () => {
   it('names the export after the local day', () => {
-    expect(showFileName(new Date(2026, 9, 9, 23, 30))).toBe('show-2026-10-09.json')
+    expect(showFileName(new Date(2026, 9, 9, 23, 30))).toBe('show-2026-10-09.dshow')
   })
 })
