@@ -80,7 +80,7 @@ export function deckTimecodeView(
     case 'pending':
       return view('pending', 'identifying…')
     case 'rateMismatch':
-      return view('alert', `cut · show ${rates.showFps} fps, output ${rates.outputFps} fps`)
+      return view('alert', `TC cut · show ${rates.showFps} fps, output ${rates.outputFps} fps`)
     case 'matched':
       return view(
         'ok',
@@ -92,6 +92,6 @@ export function deckTimecodeView(
         `fallback ${startLabel(status.startFrames, rates.showFps)} · ${reasonText(resolution.reason)}`
       )
     case 'cut':
-      return view('alert', `cut · ${reasonText(resolution.reason)}`)
+      return view('alert', `TC cut · ${reasonText(resolution.reason)}`)
   }
 }

@@ -43,14 +43,14 @@ describe('deckTimecodeView', () => {
     expect(texts).toEqual([
       '▸ Strobe · 00:20:00:00',
       'identifying…',
-      'cut · show 25 fps, output 30 fps',
+      'TC cut · show 25 fps, output 30 fps',
       'fallback 23:00:00:00 · unknown track',
       'fallback 23:00:00:00 · no duration',
       'fallback 23:00:00:00 · ambiguous (2 rows)',
       'fallback 23:00:00:00 · not yet timed (blank start)',
       'fallback 23:00:00:00 · identification timed out',
-      'cut · unknown track',
-      'cut · identification timed out'
+      'TC cut · unknown track',
+      'TC cut · identification timed out'
     ])
     expect(new Set(texts).size).toBe(texts.length)
   })
