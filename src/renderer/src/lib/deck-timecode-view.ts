@@ -13,6 +13,8 @@ export type DeckTimecodeTone = 'ok' | 'pending' | 'warning' | 'alert'
 export interface DeckTimecodeView {
   tone: DeckTimecodeTone
   text: string
+  /** Whether the deck runs on a show row's timeline; its rail badge shows a link or a broken one. */
+  linked: boolean
 }
 
 /** Rates the line needs to read frames and to name a mismatch. */
@@ -52,8 +54,12 @@ export function deckTimecodeView(
   status: DeckMatchStatus,
   rates: DeckTimecodeRates
 ): DeckTimecodeView | null {
-  const view = (tone: DeckTimecodeTone, text: string): DeckTimecodeView => ({ tone, text })
   const { resolution } = status
+  const view = (tone: DeckTimecodeTone, text: string): DeckTimecodeView => ({
+    tone,
+    text,
+    linked: resolution.type === 'matched'
+  })
   switch (resolution.type) {
     case 'none':
     case 'inactive':

@@ -76,6 +76,21 @@ describe('deckTimecodeView', () => {
     expect(deckTimecodeView(status({ type: 'rateMismatch' }), RATES)?.tone).toBe('alert')
   })
 
+  it('only a deck on a show row is linked', () => {
+    expect(
+      deckTimecodeView(status({ type: 'matched', rowId: 'a' }, 0, 'Strobe'), RATES)?.linked
+    ).toBe(true)
+    const unlinked: DeckResolution[] = [
+      { type: 'pending' },
+      { type: 'rateMismatch' },
+      { type: 'fallback', reason: { type: 'noMatch' } },
+      { type: 'cut', reason: { type: 'noMatch' } }
+    ]
+    for (const resolution of unlinked) {
+      expect(deckTimecodeView(status(resolution, 0), RATES)?.linked).toBe(false)
+    }
+  })
+
   it('a deck with no show renders no line', () => {
     expect(deckTimecodeView(status({ type: 'inactive' }), RATES)).toBeNull()
     expect(deckTimecodeView(status({ type: 'none' }), RATES)).toBeNull()

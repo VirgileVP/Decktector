@@ -5,10 +5,11 @@ import { useSettings } from '../state/settings'
 import { useShow } from '../state/show'
 import { useDeckMatches } from '../state/show-matches'
 import { useTimecodeStore } from '../state/timecode'
+import { TcLinkIcon } from './TcLinkIcon'
 
 interface DeckTimecodeLineProps {
   deckId: DeckId
-  /** In the narrow rail only the tone fits; the text moves to the tooltip. */
+  /** In the narrow rail only a TC badge in the tone fits; the text moves to the tooltip. */
   compact: boolean
 }
 
@@ -36,7 +37,10 @@ export function DeckTimecodeLine({
       aria-live={isSource ? 'polite' : undefined}
     >
       {compact ? (
-        <span className="deck-tc-dot" aria-label={view.text} role="img" />
+        <span className="deck-tc-badge" aria-label={view.text} role="img">
+          TC
+          <TcLinkIcon linked={view.linked} />
+        </span>
       ) : (
         <span className="deck-tc-text">{view.text}</span>
       )}

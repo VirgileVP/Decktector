@@ -1812,17 +1812,19 @@ input[type='checkbox']:focus-visible {
   font-weight: 600;
 }
 
-/* The rail is too narrow for words: a dot in the tone, the text in the tooltip. */
+/* The rail is too narrow for words: a TC badge with a link or a broken link in
+   the tone, the text in the tooltip. */
 .deck-tc-line-compact {
   flex-direction: column;
   gap: 3px;
 }
 
-.deck-tc-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: currentColor;
+.deck-tc-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 /* ---------- Transport + master/sync ---------- */
