@@ -2867,6 +2867,11 @@ input[type='checkbox']:focus-visible {
   color: var(--status-ok);
 }
 
+/* A row in conflict turns its clock red, next to the badge saying why. */
+.show-cell-start-conflict .timecode-input-field {
+  color: var(--status-alert);
+}
+
 .timecode-input {
   display: inline-flex;
   flex-direction: column;

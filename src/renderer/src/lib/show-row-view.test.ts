@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { durationLabel, rowBadges, stepTrim, trimLabel } from './show-row-view'
+import { durationLabel, rowBadges, rowInConflict, stepTrim, trimLabel } from './show-row-view'
 import { MAX_TRIM_MS } from './show-timecode'
 
 describe('trimLabel', () => {
@@ -65,5 +65,18 @@ describe('rowBadges', () => {
 
   it('gives a row with no issues no badges', () => {
     expect(rowBadges([])).toEqual([])
+  })
+})
+
+describe('rowInConflict', () => {
+  it('is true when one badge is a conflict', () => {
+    expect(
+      rowInConflict(rowBadges([{ kind: 'absent' }, { kind: 'overlap', withRowId: 'a' }]))
+    ).toBe(true)
+  })
+
+  it('is false for warnings only or no badge', () => {
+    expect(rowInConflict(rowBadges([{ kind: 'absent' }, { kind: 'blankStart' }]))).toBe(false)
+    expect(rowInConflict([])).toBe(false)
   })
 })

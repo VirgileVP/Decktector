@@ -1,5 +1,5 @@
 import type { ShowRow } from '../lib/show'
-import { durationLabel, rowBadges, stepTrim, trimLabel } from '../lib/show-row-view'
+import { durationLabel, rowBadges, rowInConflict, stepTrim, trimLabel } from '../lib/show-row-view'
 import type { ShowFps } from '../lib/show-timecode'
 import type { RowIssue } from '../lib/show-validation'
 import type { DeckId } from '../model'
@@ -39,6 +39,7 @@ export function ShowRowEditor({
 }: ShowRowEditorProps): React.JSX.Element {
   const label = `${row.title}${row.artist === '' ? '' : ` — ${row.artist}`}`
   const playing = playingDecks.length > 0
+  const badges = rowBadges(issues)
   const rowClass = `show-row${row.absent ? ' show-row-absent' : ''}${playing ? ' show-row-playing' : ''}`
 
   return (
@@ -58,7 +59,7 @@ export function ShowRowEditor({
         {row.artist}
       </td>
       <td className="show-cell-duration">{durationLabel(row.durationSeconds)}</td>
-      <td>
+      <td className={rowInConflict(badges) ? 'show-cell-start-conflict' : undefined}>
         <TimecodeInput
           value={row.startTimecode}
           fps={fps}
@@ -93,7 +94,7 @@ export function ShowRowEditor({
       </td>
       <td>
         <span className="show-badges">
-          {rowBadges(issues).map((badge) => (
+          {badges.map((badge) => (
             <span key={badge.kind} className={`show-badge show-badge-${badge.tone}`}>
               {badge.label}
             </span>

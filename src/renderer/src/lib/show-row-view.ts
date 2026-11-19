@@ -83,3 +83,8 @@ export function rowBadges(issues: readonly RowIssue[]): RowBadge[] {
     return issue === undefined ? [] : [badgeOf(issue, overlaps)]
   })
 }
+
+/** Whether any of a row's badges keeps the show from being ready. */
+export function rowInConflict(badges: readonly RowBadge[]): boolean {
+  return badges.some((badge) => badge.tone === 'conflict')
+}
