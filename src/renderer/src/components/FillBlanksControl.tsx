@@ -2,34 +2,37 @@ import { useState } from 'react'
 
 import { FILL_STEP_PRESETS, parseCustomStep, stepFrames } from '../lib/show-summary-view'
 import type { ShowFps } from '../lib/show-timecode'
-import { fillBlanks } from '../lib/show-validation'
+import { fillBlanks, respaceStarts } from '../lib/show-validation'
 import { useShow } from '../state/show'
 import { useOnAirConfirmation } from './useOnAirConfirmation'
 
 interface FillBlanksControlProps {
   fps: ShowFps
-  /** Blank starts left; with none, there is nothing to fill. */
+  /** Blank starts left; with none, a step respaces every row instead. */
   blankRows: number
 }
 
 /**
  * Numbers every blank start at the previous numbered row's start plus a
- * step — a preset or a custom `HH:MM:SS`. The overlaps this may create show
- * up in the summary like any other; a deck on air waiting on a blank row is
- * named before it moves.
+ * step — a preset or a custom `HH:MM:SS`. Once no start is blank, the same
+ * step respaces every row from the first row's start, so a spacing can be
+ * tried again. The overlaps this may create show up in the summary like any
+ * other; a deck on air whose row moves is named before it does.
  */
 export function FillBlanksControl({ fps, blankRows }: FillBlanksControlProps): React.JSX.Element {
   const [custom, setCustom] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const disabled = blankRows === 0
+  const respacing = blankRows === 0
+  const actionTitle = respacing ? 'Overwrites every start, from the first row' : undefined
   const { confirmShowChange, dialog } = useOnAirConfirmation()
 
   const fill = (seconds: number): void => {
     const show = useShow.getState().show
     if (show === null) return
     const step = stepFrames(seconds, fps)
-    const after = { ...show, rows: fillBlanks(show.rows, step, fps) }
-    confirmShowChange(after, () => useShow.getState().fillBlanks(step))
+    const { fillBlanks: fillStore, respaceStarts: respaceStore } = useShow.getState()
+    const rows = respacing ? respaceStarts(show.rows, step, fps) : fillBlanks(show.rows, step, fps)
+    confirmShowChange({ ...show, rows }, () => (respacing ? respaceStore(step) : fillStore(step)))
     setError(null)
   }
 
@@ -44,14 +47,18 @@ export function FillBlanksControl({ fps, blankRows }: FillBlanksControlProps): R
   }
 
   return (
-    <div className="show-fill" role="group" aria-label="Fill blank starts">
-      <span className="setting-hint">Fill blanks every</span>
+    <div
+      className="show-fill"
+      role="group"
+      aria-label={respacing ? 'Respace every start' : 'Fill blank starts'}
+    >
+      <span className="setting-hint">{respacing ? 'Respace all every' : 'Fill blanks every'}</span>
       {FILL_STEP_PRESETS.map((preset) => (
         <button
           key={preset.label}
           type="button"
           className="lineup-file-button"
-          disabled={disabled}
+          title={actionTitle}
           onClick={() => fill(preset.seconds)}
         >
           {preset.label}
@@ -63,7 +70,6 @@ export function FillBlanksControl({ fps, blankRows }: FillBlanksControlProps): R
         value={custom}
         placeholder="HH:MM:SS"
         aria-label="Custom step"
-        disabled={disabled}
         onChange={(event) => {
           setCustom(event.target.value)
           setError(null)
@@ -75,10 +81,11 @@ export function FillBlanksControl({ fps, blankRows }: FillBlanksControlProps): R
       <button
         type="button"
         className="lineup-file-button"
-        disabled={disabled || custom.trim() === ''}
+        title={actionTitle}
+        disabled={custom.trim() === ''}
         onClick={fillCustom}
       >
-        Fill
+        {respacing ? 'Respace' : 'Fill'}
       </button>
       {error !== null && (
         <span className="timecode-input-error" role="alert">

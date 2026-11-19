@@ -145,6 +145,16 @@ describe('useShow', () => {
     expect(store.getState().show?.rows[0].startTimecode).toBe('00:00:00:00')
   })
 
+  it('respaceStarts renumbers every row at the show fps', () => {
+    const store = createShowStore(memoryStorage)
+    store.getState().load(SHOW, null)
+    store.getState().respaceStarts(30 * 60)
+    expect(store.getState().show?.rows.map((row) => row.startTimecode)).toEqual([
+      '00:10:00:28',
+      '00:11:00:28'
+    ])
+  })
+
   it('mergeDuplicates folds copies of a track at one start into the first', () => {
     const store = createShowStore(memoryStorage)
     const copy = { ...SHOW.rows[0], id: 'row-1-copy', trimMs: 0 }

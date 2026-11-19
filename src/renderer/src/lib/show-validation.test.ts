@@ -5,6 +5,7 @@ import {
   analyseShow,
   fillBlanks,
   fpsChangeImpact,
+  respaceStarts,
   mergeSameStartDuplicates,
   type RowIssue
 } from './show-validation'
@@ -182,6 +183,50 @@ describe('duplicates', () => {
       sameStart: false
     })
     expect(kindsOf(analysis.byRow.get('far'))).toEqual(['blankStart'])
+  })
+})
+
+describe('respaceStarts', () => {
+  const halfHour = 30 * FRAMES_PER_MINUTE_AT_25
+
+  it('renumbers every row from the first start, typed starts included', () => {
+    const respaced = respaceStarts(
+      [
+        row('first', { startTimecode: '01:00:00:00' }),
+        row('typed', { startTimecode: '01:03:00:00' }),
+        row('blank')
+      ],
+      halfHour,
+      25
+    )
+    expect(respaced.map((respacedRow) => respacedRow.startTimecode)).toEqual([
+      '01:00:00:00',
+      '01:30:00:00',
+      '02:00:00:00'
+    ])
+  })
+
+  it('starts at midnight when the first start is blank or does not parse', () => {
+    for (const firstStart of [null, '00:00:00:28']) {
+      const respaced = respaceStarts(
+        [row('first', { startTimecode: firstStart }), row('second')],
+        halfHour,
+        25
+      )
+      expect(respaced.map((respacedRow) => respacedRow.startTimecode)).toEqual([
+        '00:00:00:00',
+        '00:30:00:00'
+      ])
+    }
+  })
+
+  it('wraps at 24 hours', () => {
+    const respaced = respaceStarts(
+      [row('late', { startTimecode: '23:30:00:00' }), row('after midnight')],
+      2 * halfHour,
+      25
+    )
+    expect(respaced[1].startTimecode).toBe('00:30:00:00')
   })
 })
 

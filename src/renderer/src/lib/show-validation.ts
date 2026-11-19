@@ -232,3 +232,21 @@ export function fillBlanks(rows: readonly ShowRow[], stepFrames: number, fps: Sh
     return { ...row, startTimecode: formatTimecode(start, fps) }
   })
 }
+
+/**
+ * Renumbers every row `stepFrames` after the one before, from the first
+ * row's start — or `00:00:00:00` when that start is blank or does not parse
+ * at `fps`. Typed starts are overwritten; the result wraps at 24 hours.
+ */
+export function respaceStarts(
+  rows: readonly ShowRow[],
+  stepFrames: number,
+  fps: ShowFps
+): ShowRow[] {
+  const firstStart = rows.length === 0 ? null : rows[0].startTimecode
+  const origin = (firstStart === null ? null : parseTimecode(firstStart, fps)) ?? 0
+  return rows.map((row, index) => ({
+    ...row,
+    startTimecode: formatTimecode((origin + index * stepFrames) % framesPerDay(fps), fps)
+  }))
+}

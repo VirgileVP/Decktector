@@ -4,7 +4,7 @@ import { createJSONStorage, persist, type StateStorage } from 'zustand/middlewar
 import { isRecord } from '../lib/is-record'
 import { createShow, isShowData, type ShowData, type ShowRow } from '../lib/show'
 import type { ShowFps } from '../lib/show-timecode'
-import { fillBlanks, mergeSameStartDuplicates } from '../lib/show-validation'
+import { fillBlanks, mergeSameStartDuplicates, respaceStarts } from '../lib/show-validation'
 
 const SHOW_STORAGE_KEY = 'decktector.show'
 const SHOW_STORE_VERSION = 1
@@ -32,6 +32,8 @@ interface ShowActions {
   /** Keeps every start label as typed; the confirmation lives in the editor. */
   setFps(fps: ShowFps): void
   fillBlanks(stepFrames: number): void
+  /** Renumbers every row one step after the one before, from the first row's start. */
+  respaceStarts(stepFrames: number): void
   /** Folds copies of a track listed at one start into the first one. */
   mergeDuplicates(): void
   unload(): void
@@ -119,6 +121,13 @@ export function createShowStore(
             editShow(state, (show) => ({
               ...show,
               rows: fillBlanks(show.rows, stepFrames, show.fps)
+            }))
+          ),
+        respaceStarts: (stepFrames) =>
+          set((state) =>
+            editShow(state, (show) => ({
+              ...show,
+              rows: respaceStarts(show.rows, stepFrames, show.fps)
             }))
           ),
         mergeDuplicates: () =>

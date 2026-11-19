@@ -282,7 +282,9 @@ a show is already loaded, the import asks first:
 
 Type each row's start as `HH:MM:SS:FF`, or let **Fill blanks** number the
 blank ones at a fixed step (10 min, 30 min, 1 h or your own) after the
-previous timed row. The editor flags overlapping rows, rows that run past
+previous timed row. Once no start is blank, the same buttons become
+**Respace all**: every row is renumbered at that step from the first row's
+start, overwriting typed starts. The editor flags overlapping rows, rows that run past
 midnight, the same track listed twice with different starts and frames too
 high for the show's rate — any of these makes the show **Not ready**. A blank
 start or an absent row is a warning only. The editor can also be popped out
