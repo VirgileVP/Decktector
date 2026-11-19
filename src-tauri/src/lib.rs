@@ -11,6 +11,7 @@ mod lineup_file;
 mod project_links;
 mod remote;
 mod sim;
+mod tempo;
 mod timecode;
 mod track_log;
 mod window_prefs;
@@ -20,6 +21,7 @@ use std::sync::Arc;
 use decktector_core::model::EngineSnapshot;
 use decktector_core::Engine;
 use decktector_remote::RemoteService;
+use decktector_tempo::TempoOutputService;
 use decktector_timecode::TimecodeService;
 use prolink::discovery::DeviceWatcher;
 use prolink_engine::{supervise, InterfacePreference, ProlinkEngine, TASK_RESTART_DELAY};
@@ -99,10 +101,12 @@ pub fn run() {
         Arc::clone(&interface_preference),
     );
     let timecode = TimecodeService::new(Arc::clone(&engine));
+    let tempo_output = TempoOutputService::new(Arc::clone(&engine));
 
     tauri::Builder::default()
         .manage(Arc::clone(&engine))
         .manage(Arc::clone(&timecode))
+        .manage(Arc::clone(&tempo_output))
         .manage(Arc::clone(&device_watcher))
         .manage(interface_preference)
         .manage(SleepBlocker::default())
@@ -117,6 +121,9 @@ pub fn run() {
             timecode::list_network_interfaces,
             timecode::list_midi_output_ports,
             timecode::list_ltc_output_devices,
+            tempo::tempo_output_status,
+            tempo::tempo_output_config,
+            tempo::set_tempo_output_config,
             remote::remote_status,
             remote::set_remote_config,
             remote::remote_qr_svg,
@@ -141,6 +148,7 @@ pub fn run() {
 
             events::forward_to_renderer(app.handle().clone(), Arc::clone(&engine));
             timecode::forward_to_renderer(app.handle().clone(), Arc::clone(&timecode));
+            tempo::forward_to_renderer(app.handle().clone(), Arc::clone(&tempo_output));
             remote::forward_to_renderer(app.handle().clone(), Arc::clone(&remote));
             devices::forward_to_renderer(app.handle().clone(), Arc::clone(&device_watcher));
             track_log::attach(app.handle().clone(), Arc::clone(&engine));
@@ -155,6 +163,7 @@ pub fn run() {
                 }
             });
             tauri::async_runtime::spawn(Arc::clone(&timecode).run());
+            tauri::async_runtime::spawn(Arc::clone(&tempo_output).run());
             tauri::async_runtime::spawn(remote.hub().run());
             tauri::async_runtime::spawn(supervise("device discovery", TASK_RESTART_DELAY, {
                 let device_watcher = Arc::clone(&device_watcher);

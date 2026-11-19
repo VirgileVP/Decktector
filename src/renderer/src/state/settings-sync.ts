@@ -3,6 +3,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core'
 import { applyTheme } from '../lib/theme'
 import type { RemoteConfig, TimecodeConfig } from '../model'
 import { useSettings, type Settings } from './settings'
+import { syncTempoOutputConfig } from './tempo-output-sync'
 
 /**
  * Settings the renderer cannot honour by itself; the Rust side owns the
@@ -125,6 +126,7 @@ function apply(scope: SettingsScope, settings: Settings, previous?: Settings): v
   ) {
     pushTimecodeConfig(settings)
   }
+  syncTempoOutputConfig(settings, previous)
   if (
     previous?.remoteEnabled !== settings.remoteEnabled ||
     previous?.remotePort !== settings.remotePort ||

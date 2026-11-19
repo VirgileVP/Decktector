@@ -5,13 +5,20 @@ import { useShallow } from 'zustand/react/shallow'
 import { parseCustomLogo, type CustomLogo } from '../lib/custom-logo'
 import { DEFAULT_ON_AIR_SOURCE, parseOnAirSource, type OnAirSource } from '../lib/deck-activity'
 import { sanitizeDeckLabels, type DeckLabels } from '../lib/deck-labels'
+import {
+  DEFAULT_TEMPO_OUTPUT_ENABLED,
+  omitLegacyTempoSettings,
+  parseTempoOutputEnabled,
+  sanitizeOscMessages,
+  sanitizeOscTargets
+} from '../lib/tempo-output-config'
 import { DEFAULT_THEME, parseTheme, type ThemeId } from '../lib/theme'
 import {
   DEFAULT_WAVEFORM_PLAYHEAD_POSITION,
   parseWaveformPlayheadPosition,
   type WaveformPlayheadPosition
 } from '../lib/waveform-playhead'
-import type { FrameRate } from '../model'
+import type { FrameRate, OscMessageConfig, OscTarget } from '../model'
 
 /** Bounds of the sliders in the settings panel. */
 export const UI_SCALE_RANGE = { min: 0.8, max: 1.6, step: 0.05 } as const
@@ -230,6 +237,12 @@ export interface Settings {
   /** Name of the audio output device to send LTC to — picked from
    *  `list_ltc_output_devices`, not typed in. */
   timecodeLtcDevice: string
+  /** Whether the tempo (BPM / beat) OSC output is turned on. */
+  tempoOutputEnabled: boolean
+  /** Where tempo OSC can go. */
+  tempoOutputTargets: OscTarget[]
+  /** The OSC messages to send, each routed to the targets it checks. */
+  tempoOutputMessages: OscMessageConfig[]
   /** Whether the remote web view server is turned on. */
   remoteEnabled: boolean
   /** Port the remote server listens on. */
@@ -310,6 +323,9 @@ export const DEFAULT_SETTINGS: Settings = {
   timecodeArtNetPort: ART_NET_DEFAULT_PORT,
   timecodeMtcPort: NO_MIDI_PORT,
   timecodeLtcDevice: NO_LTC_DEVICE,
+  tempoOutputEnabled: DEFAULT_TEMPO_OUTPUT_ENABLED,
+  tempoOutputTargets: [],
+  tempoOutputMessages: [],
   remoteEnabled: false,
   remotePort: REMOTE_DEFAULT_PORT,
   remoteInterface: NO_NETWORK_INTERFACE,
@@ -356,7 +372,7 @@ export const useSettings = create<Settings & SettingsActions>()(
 
 /** Overlays what storage held onto `current`, re-validating the fields that have a closed set of values. */
 export function mergePersistedSettings<T extends Settings>(persisted: unknown, current: T): T {
-  const stored = (persisted ?? {}) as Partial<Settings>
+  const stored = omitLegacyTempoSettings((persisted ?? {}) as Partial<Settings>)
   return {
     ...current,
     ...stored,
@@ -364,7 +380,10 @@ export function mergePersistedSettings<T extends Settings>(persisted: unknown, c
     customLogo: parseCustomLogo(stored.customLogo),
     onAirSource: parseOnAirSource(stored.onAirSource),
     waveformPlayheadPosition: parseWaveformPlayheadPosition(stored.waveformPlayheadPosition),
-    deckLabels: sanitizeDeckLabels(stored.deckLabels)
+    deckLabels: sanitizeDeckLabels(stored.deckLabels),
+    tempoOutputEnabled: parseTempoOutputEnabled(stored.tempoOutputEnabled),
+    tempoOutputTargets: sanitizeOscTargets(stored.tempoOutputTargets),
+    tempoOutputMessages: sanitizeOscMessages(stored.tempoOutputMessages)
   }
 }
 
@@ -391,6 +410,9 @@ function pickSettings(state: Settings): Settings {
     timecodeArtNetPort,
     timecodeMtcPort,
     timecodeLtcDevice,
+    tempoOutputEnabled,
+    tempoOutputTargets,
+    tempoOutputMessages,
     remoteEnabled,
     remotePort,
     remoteInterface,
@@ -439,6 +461,9 @@ function pickSettings(state: Settings): Settings {
     timecodeArtNetPort,
     timecodeMtcPort,
     timecodeLtcDevice,
+    tempoOutputEnabled,
+    tempoOutputTargets,
+    tempoOutputMessages,
     remoteEnabled,
     remotePort,
     remoteInterface,

@@ -1,0 +1,20 @@
+[package]
+name = "decktector-tempo"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Tempo and phase output (OSC over UDP) driven by the decks' BPM and beat position"
+
+[dependencies]
+decktector-core = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+ts-rs = { workspace = true }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+serde_json = { workspace = true }

@@ -1059,6 +1059,7 @@ dependencies = [
  "decktector-core",
  "decktector-remote",
  "decktector-sim-control",
+ "decktector-tempo",
  "decktector-timecode",
  "keepawake",
  "prolink",
@@ -1142,6 +1143,21 @@ dependencies = [
  "tokio-tungstenite 0.24.0",
  "tower",
  "tower-http",
+ "tracing",
+ "ts-rs",
+]
+
+[[package]]
+name = "decktector-tempo"
+version = "1.6.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "decktector-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "tokio",
  "tracing",
  "ts-rs",
 ]

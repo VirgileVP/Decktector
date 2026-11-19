@@ -27,6 +27,7 @@ import { LineupEditor } from './LineupEditor'
 import { OnAirSourceSetting } from './OnAirSourceSetting'
 import { ResetSettingsSetting } from './ResetSettingsSetting'
 import { ChoiceRow, SliderRow, TextRow, ToggleRow } from './SettingControls'
+import { TempoOutputSection } from './TempoOutputSection'
 import { TrackDownloadSetting } from './TrackDownloadSetting'
 
 const asPercent = (value: number): string => `${Math.round(value * 100)} %`
@@ -36,6 +37,7 @@ const SETTINGS_TABS = [
   'Deck view',
   'Line up',
   'Timecode',
+  'BPM output',
   'Remote view',
   'Devices',
   'About'
@@ -51,7 +53,13 @@ const WIDE_TABS: readonly SettingsTab[] = ['Line up']
  *  remote link itself treats as untrusted. About opens its links through the shell,
  *  like the welcome notice it mirrors. */
 const IS_TAURI = isTauri()
-const SHELL_ONLY_TABS: readonly SettingsTab[] = ['Timecode', 'Remote view', 'Devices', 'About']
+const SHELL_ONLY_TABS: readonly SettingsTab[] = [
+  'Timecode',
+  'BPM output',
+  'Remote view',
+  'Devices',
+  'About'
+]
 const VISIBLE_SETTINGS_TABS = SETTINGS_TABS.filter(
   (tab) => IS_TAURI || !SHELL_ONLY_TABS.includes(tab)
 )
@@ -435,6 +443,8 @@ export function SettingsDialog({
                 ))}
             </section>
           )}
+
+          {IS_TAURI && activeTab === 'BPM output' && <TempoOutputSection />}
 
           {IS_TAURI && activeTab === 'Remote view' && (
             <section className="settings-section">
