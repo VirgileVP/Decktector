@@ -1,7 +1,12 @@
 import { useState } from 'react'
 
-import { FILL_STEP_PRESETS, parseCustomStep, stepFrames } from '../lib/show-summary-view'
-import type { ShowFps } from '../lib/show-timecode'
+import {
+  CUSTOM_STEP_LENGTH,
+  FILL_STEP_PRESETS,
+  parseCustomStep,
+  stepFrames
+} from '../lib/show-summary-view'
+import { keepTimecodeCharacters, type ShowFps } from '../lib/show-timecode'
 import { fillBlanks, respaceStarts } from '../lib/show-validation'
 import { useShow } from '../state/show'
 import { useOnAirConfirmation } from './useOnAirConfirmation'
@@ -71,7 +76,7 @@ export function FillBlanksControl({ fps, blankRows }: FillBlanksControlProps): R
         placeholder="HH:MM:SS"
         aria-label="Custom step"
         onChange={(event) => {
-          setCustom(event.target.value)
+          setCustom(keepTimecodeCharacters(event.target.value, CUSTOM_STEP_LENGTH))
           setError(null)
         }}
         onKeyDown={(event) => {

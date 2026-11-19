@@ -55,6 +55,19 @@ const MS_PER_SECOND = 1000
 /** Two digits per field, colon-separated: the only shape a label may take. */
 const TIMECODE_LABEL_PATTERN = /^(\d{2}):(\d{2}):(\d{2}):(\d{2})$/
 
+/** Characters of an `HH:MM:SS:FF` label. */
+export const TIMECODE_LABEL_LENGTH = 11
+
+const NOT_TIMECODE_CHARACTER = /[^\d:]/g
+
+/**
+ * `text` as typed into a timecode field, keeping only digits and colons and
+ * at most `maxLength` of them — letters and other keys never reach the field.
+ */
+export function keepTimecodeCharacters(text: string, maxLength: number): string {
+  return text.replace(NOT_TIMECODE_CHARACTER, '').slice(0, maxLength)
+}
+
 /** The four fields of a well-formed `HH:MM:SS:FF` label. */
 export interface TimecodeFields {
   hours: number

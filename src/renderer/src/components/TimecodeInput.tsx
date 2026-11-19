@@ -1,6 +1,11 @@
 import { useState } from 'react'
 
-import { readTimecodeLabel, type ShowFps } from '../lib/show-timecode'
+import {
+  keepTimecodeCharacters,
+  readTimecodeLabel,
+  TIMECODE_LABEL_LENGTH,
+  type ShowFps
+} from '../lib/show-timecode'
 
 interface TimecodeInputProps {
   /** The stored `HH:MM:SS:FF` label; null while blank. */
@@ -23,8 +28,8 @@ function rejection(text: string, fps: ShowFps, allowBlank: boolean): string | nu
 }
 
 /**
- * A start timecode typed as free text and committed on blur or Enter, kept as
- * the label the operator typed. Input that is not a timecode at the show's
+ * A start timecode typed as digits and colons — nothing else reaches the
+ * field — and committed on blur or Enter, kept as the label the operator typed. Input that is not a timecode at the show's
  * fps is refused with the reason, and the stored value stays; Escape gives
  * the stored value back.
  */
@@ -68,7 +73,7 @@ export function TimecodeInput({
         spellCheck={false}
         disabled={disabled}
         onChange={(event) => {
-          setDraft(event.target.value)
+          setDraft(keepTimecodeCharacters(event.target.value, TIMECODE_LABEL_LENGTH))
           setError(null)
         }}
         onBlur={commit}

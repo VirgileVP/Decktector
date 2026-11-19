@@ -30,6 +30,9 @@ export function stepFrames(seconds: number, fps: ShowFps): number {
 
 const CUSTOM_STEP_PATTERN = /^(\d{1,2}):(\d{2}):(\d{2})$/
 
+/** Characters of a custom `HH:MM:SS` step. */
+export const CUSTOM_STEP_LENGTH = 8
+
 /**
  * A custom `HH:MM:SS` step in seconds, or null when it is malformed or zero —
  * a zero step would stack every blank row on the one before it.

@@ -3,10 +3,12 @@ import { describe, expect, it } from 'vitest'
 import {
   FALLBACK_START_TC_DEFAULT,
   SHOW_FPS_OPTIONS,
+  TIMECODE_LABEL_LENGTH,
   formatTimecode,
   fpsOfFrameRate,
   frameRateOfFps,
   framesPerDay,
+  keepTimecodeCharacters,
   parseTimecode,
   readTimecodeLabel,
   trimFramesToMs,
@@ -44,6 +46,17 @@ describe('parseTimecode', () => {
     for (const text of ['1:2:3', '1:02:03:04', '01:02:03', '01:02:03:04:05', ' 01:02:03:04', '']) {
       expect(parseTimecode(text, 25)).toBeNull()
     }
+  })
+})
+
+describe('keepTimecodeCharacters', () => {
+  it('drops letters and other characters, keeping digits and colons', () => {
+    expect(keepTimecodeCharacters('0a1:b3c0: 00;00', TIMECODE_LABEL_LENGTH)).toBe('01:30:0000')
+  })
+
+  it('caps the text at the given length', () => {
+    expect(keepTimecodeCharacters('01:30:00:00:99', TIMECODE_LABEL_LENGTH)).toBe('01:30:00:00')
+    expect(keepTimecodeCharacters('01:30:00:00', 8)).toBe('01:30:00')
   })
 })
 
