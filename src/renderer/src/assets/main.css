@@ -2847,6 +2847,21 @@ input[type='checkbox']:focus-visible {
   opacity: 0.5;
 }
 
+/* A row a deck is playing: washed in the status green, marked by its deck. */
+.show-row-playing td {
+  background: color-mix(in srgb, var(--status-ok) 12%, transparent);
+}
+
+.show-row-playing td:first-child {
+  box-shadow: inset 3px 0 0 var(--status-ok);
+}
+
+.show-row-deck {
+  margin-left: 6px;
+  font-weight: 600;
+  color: var(--status-ok);
+}
+
 /* Start timecodes read as clocks: green, whatever the theme. */
 .show-table .timecode-input-field {
   color: var(--status-ok);

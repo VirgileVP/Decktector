@@ -2,6 +2,7 @@ import type { ShowRow } from '../lib/show'
 import { durationLabel, rowBadges, stepTrim, trimLabel } from '../lib/show-row-view'
 import type { ShowFps } from '../lib/show-timecode'
 import type { RowIssue } from '../lib/show-validation'
+import type { DeckId } from '../model'
 import type { ShowRowPatch } from '../state/show'
 import { TimecodeInput } from './TimecodeInput'
 
@@ -11,6 +12,8 @@ interface ShowRowEditorProps {
   position: number
   fps: ShowFps
   issues: readonly RowIssue[]
+  /** The decks playing this row now, in deck order; empty when none is. */
+  playingDecks: readonly DeckId[]
   /** A mirror (a Show panel window) shows the row without letting it change. */
   readOnly: boolean
   onChange: (patch: ShowRowPatch) => void
@@ -22,22 +25,32 @@ const TRIM_HINT = '+ = cues fire earlier'
 /**
  * One track of the show: its identity from the import (read-only), the start
  * timecode typed as a label, the trim stepped one frame at a time, and the
- * row's issues as badges.
+ * row's issues as badges. A row a deck is playing is marked with that deck.
  */
 export function ShowRowEditor({
   row,
   position,
   fps,
   issues,
+  playingDecks,
   readOnly,
   onChange,
   onRemove
 }: ShowRowEditorProps): React.JSX.Element {
   const label = `${row.title}${row.artist === '' ? '' : ` — ${row.artist}`}`
+  const playing = playingDecks.length > 0
+  const rowClass = `show-row${row.absent ? ' show-row-absent' : ''}${playing ? ' show-row-playing' : ''}`
 
   return (
-    <tr className={`show-row${row.absent ? ' show-row-absent' : ''}`} data-row-id={row.id}>
-      <td className="show-cell-position">{position}</td>
+    <tr className={rowClass} data-row-id={row.id}>
+      <td className="show-cell-position">
+        {position}
+        {playing && (
+          <span className="show-row-deck" title={`Playing on deck ${playingDecks.join(', ')}`}>
+            ▶ {playingDecks.join(' ')}
+          </span>
+        )}
+      </td>
       <td className="show-cell-text" title={row.title}>
         {row.title}
       </td>
