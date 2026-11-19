@@ -16,7 +16,7 @@ function mismatchKey(showFps: ShowFps, outputFps: ShowFps): string {
  * rate is converted — so the operator either switches the output to the
  * show's rate or leaves it cut. Blocking: a click outside or Escape does not
  * dismiss it. Leaving it cut holds for that pair of rates; another mismatch
- * raises it again, and Settings > Timecode keeps a note until they match.
+ * raises it again, and Settings > Show keeps a note until they match.
  */
 export function FrameRateMismatchDialog(): React.JSX.Element | null {
   const show = useShow((state) => state.show)

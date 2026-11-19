@@ -25,7 +25,7 @@ import { DeckLabelsEditor } from './DeckLabelsEditor'
 import { DevicesPanel } from './DevicesPanel'
 import { LineupEditor } from './LineupEditor'
 import { ShowPanel } from './ShowPanel'
-import { ShowSettingsSection } from './ShowSettingsSection'
+import { ShowTimecodeRules } from './ShowTimecodeRules'
 import { TimecodeHandoverSetting } from './TimecodeHandoverSetting'
 import { OnAirSourceSetting } from './OnAirSourceSetting'
 import { ResetSettingsSetting } from './ResetSettingsSetting'
@@ -359,7 +359,12 @@ export function SettingsDialog({
           )}
 
           {activeTab === 'Line up' && <LineupEditor />}
-          {IS_TAURI && activeTab === 'Show' && <ShowPanel />}
+          {IS_TAURI && activeTab === 'Show' && (
+            <>
+              <ShowPanel />
+              <ShowTimecodeRules />
+            </>
+          )}
 
           {IS_TAURI && activeTab === 'Timecode' && (
             <>
@@ -453,7 +458,6 @@ export function SettingsDialog({
                     </p>
                   ))}
               </section>
-              <ShowSettingsSection />
             </>
           )}
 

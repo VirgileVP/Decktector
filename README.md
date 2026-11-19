@@ -298,7 +298,7 @@ in the show by title and artist — ignoring case, accents and spacing — and b
 length, within 2 seconds. A track the show does not list, one that matches
 several rows, one without a length, or one still unidentified after 10 seconds
 runs from the **fallback start timecode** (`23:00:00:00` unless you change it
-in **Settings → Timecode**), or sends nothing at all if **Cut timecode when a
+in **Settings → Show**), or sends nothing at all if **Cut timecode when a
 track is unknown** is on. Editing a start, replacing the show or importing
 over it while a deck on air would change timecode asks first, naming the deck
 with its old and new timecode.
