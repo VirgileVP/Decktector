@@ -315,7 +315,7 @@ input[type='checkbox']:focus-visible {
 }
 
 .network-failed .network-dot {
-  background: var(--onair);
+  background: var(--status-alert);
 }
 
 /* Only the `failed` state is ever interactive (a shortcut into Devices) —
@@ -894,7 +894,7 @@ input[type='checkbox']:focus-visible {
 }
 
 .lineup-warning {
-  color: var(--warn);
+  color: var(--status-warning);
 }
 
 /* ---------- Lineup rail ---------- */
@@ -1238,8 +1238,8 @@ input[type='checkbox']:focus-visible {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   border-radius: 4px;
-  color: var(--warn);
-  border: 1px solid var(--warn);
+  color: var(--status-warning);
+  border: 1px solid var(--status-warning);
 }
 
 .device-table {
@@ -1804,11 +1804,11 @@ input[type='checkbox']:focus-visible {
 }
 
 .deck-tc-warning {
-  color: var(--warn);
+  color: var(--status-warning);
 }
 
 .deck-tc-alert {
-  color: var(--onair);
+  color: var(--status-alert);
   font-weight: 600;
 }
 
@@ -2542,7 +2542,7 @@ input[type='checkbox']:focus-visible {
   text-align: center;
   font-size: 12px;
   font-weight: 600;
-  color: var(--onair);
+  color: var(--status-alert);
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
 }
@@ -2576,7 +2576,7 @@ input[type='checkbox']:focus-visible {
 }
 
 .setting-error {
-  color: rgb(var(--onair-rgb));
+  color: var(--status-alert);
 }
 
 .custom-logo-actions {
@@ -2627,7 +2627,7 @@ input[type='checkbox']:focus-visible {
   margin-bottom: 10px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--warn);
+  color: var(--status-warning);
 }
 
 .confirm-body {
@@ -2647,8 +2647,8 @@ input[type='checkbox']:focus-visible {
 }
 
 .confirm-accept {
-  border-color: var(--warn);
-  color: var(--warn);
+  border-color: var(--status-warning);
+  color: var(--status-warning);
 }
 
 .confirm-accept:disabled {
@@ -2847,6 +2847,11 @@ input[type='checkbox']:focus-visible {
   opacity: 0.5;
 }
 
+/* Start timecodes read as clocks: green, whatever the theme. */
+.show-table .timecode-input-field {
+  color: var(--status-ok);
+}
+
 .timecode-input {
   display: inline-flex;
   flex-direction: column;
@@ -2874,14 +2879,14 @@ input[type='checkbox']:focus-visible {
 }
 
 .timecode-input-invalid {
-  border-color: var(--warn);
+  border-color: var(--status-warning);
 }
 
 .timecode-input-error {
   max-width: 180px;
   font-size: 10px;
   line-height: 1.3;
-  color: var(--warn);
+  color: var(--status-warning);
 }
 
 .show-trim {
@@ -2954,11 +2959,11 @@ input[type='checkbox']:focus-visible {
 }
 
 .show-ready {
-  color: var(--ok);
+  color: var(--status-ok);
 }
 
 .show-not-ready {
-  color: var(--onair);
+  color: var(--status-alert);
 }
 
 /* A count is a badge that jumps to its first row. */
@@ -3003,11 +3008,11 @@ input[type='checkbox']:focus-visible {
 
 /* A conflict keeps the show from being ready; a warning does not. */
 .show-badge-conflict {
-  color: var(--onair);
+  color: var(--status-alert);
 }
 
 .show-badge-warning {
-  color: var(--warn);
+  color: var(--status-warning);
 }
 
 /* ---------- Welcome dialog ---------- */
@@ -3051,7 +3056,7 @@ input[type='checkbox']:focus-visible {
 }
 
 .project-link-error {
-  color: var(--warn);
+  color: var(--status-warning);
 }
 
 /* ---------- Update notice ---------- */

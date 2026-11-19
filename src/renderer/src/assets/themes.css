@@ -253,3 +253,21 @@
   --flag-text: #14030e;
   --loop-active: #ff8a00;
 }
+
+/*
+ * Status hues sit outside the palettes: an error or a warning must stay
+ * readable as one in every theme, monochrome and amber included, so they
+ * keep their hue whatever the palette. The light theme only darkens them,
+ * to hold contrast on a white surface.
+ */
+:root {
+  --status-ok: #30d158;
+  --status-warning: #ffcc00;
+  --status-alert: #ff453a;
+}
+
+[data-theme='light'] {
+  --status-ok: #168a46;
+  --status-warning: #a86400;
+  --status-alert: #c62828;
+}
