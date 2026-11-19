@@ -10,6 +10,7 @@ import { ShowFileActions } from './ShowFileActions'
 import { ShowImportAction } from './ShowImportAction'
 import { ShowRowEditor } from './ShowRowEditor'
 import { ShowSummary } from './ShowSummary'
+import { TimecodeClock } from './TimecodeClock'
 import { useOnAirConfirmation } from './useOnAirConfirmation'
 
 const NO_ISSUES = [] as const
@@ -21,7 +22,8 @@ const NO_DECKS: RowDecks = { playing: [], loaded: [] }
  * window mirrors it read-only, since only the main window pushes the show to
  * the timecode service. A start edit or a removal that would move a deck on
  * air asks first; a trim nudge applies at once. A row a deck is playing
- * stands out and a row a deck has loaded names it, in both.
+ * stands out and a row a deck has loaded names it, in both; the timecode
+ * being sent runs in the header, to read against the starts.
  */
 export function ShowEditor(): React.JSX.Element {
   const show = useShow((state) => state.show)
@@ -72,6 +74,10 @@ export function ShowEditor(): React.JSX.Element {
           {countLabel(show.rows.length, 'track')} · {show.fps} fps
         </span>
         {readOnly && <span className="setting-hint">Read-only here — edit in the main window</span>}
+        <span className="show-editor-clock" title="The timecode being sent now">
+          <span className="setting-hint">TC out</span>
+          <TimecodeClock />
+        </span>
       </div>
       {analysis !== null && <ShowSummary show={show} analysis={analysis} readOnly={readOnly} />}
       {actions}

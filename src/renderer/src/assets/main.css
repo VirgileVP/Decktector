@@ -2771,6 +2771,19 @@ input[type='checkbox']:focus-visible {
   color: var(--text);
 }
 
+/* The timecode being sent, at the head's far end, read against the starts. */
+.show-editor-clock {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.show-editor-clock .timecode-clock {
+  font-size: 18px;
+  line-height: 22px;
+}
+
 /* The table scrolls inside the tab or the window; its head stays put. */
 .show-table-scroll {
   flex: 1;
