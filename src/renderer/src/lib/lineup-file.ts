@@ -46,9 +46,12 @@ export function serializeLineup({ slots, endOffset, doorsOffset }: LineupData): 
   return `${JSON.stringify(file, null, 2)}\n`
 }
 
-/** A suggested file name for today's export, e.g. `lineup-2026-10-09.json`. */
+/** The lineup file's extension: Decktector set times, JSON inside. */
+export const LINEUP_FILE_EXTENSION = 'dtime'
+
+/** A suggested file name for today's export, e.g. `lineup-2026-10-09.dtime`. */
 export function lineupFileName(date: Date): string {
-  return `lineup-${localDayStamp(date)}.json`
+  return `lineup-${localDayStamp(date)}.${LINEUP_FILE_EXTENSION}`
 }
 
 class LineupFileError extends Error {}

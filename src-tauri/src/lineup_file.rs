@@ -9,7 +9,9 @@ use crate::text_file::{self, TextDocument};
 
 const LINEUP: TextDocument = TextDocument {
     filter_name: "Decktector lineup",
-    extensions: &["json"],
+    // `.dtime` for a Decktector set-times file; JSON inside. Lineups
+    // exported as `.json` before the extension existed still open.
+    extensions: &["dtime", "json"],
     // Far beyond any real lineup.
     max_import_bytes: 1024 * 1024,
     noun: "lineup",

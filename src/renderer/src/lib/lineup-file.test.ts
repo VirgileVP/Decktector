@@ -102,6 +102,6 @@ describe('parseLineupFile rejects', () => {
 
 describe('lineupFileName', () => {
   it('dates the file with the local day', () => {
-    expect(lineupFileName(new Date(2026, 9, 9, 23, 30))).toBe('lineup-2026-10-09.json')
+    expect(lineupFileName(new Date(2026, 9, 9, 23, 30))).toBe('lineup-2026-10-09.dtime')
   })
 })
