@@ -1,10 +1,11 @@
 import { useMemo } from 'react'
 
 import { countLabel } from '../lib/count-label'
+import type { RowDecks } from '../lib/show-row-decks'
 import { analyseShow } from '../lib/show-validation'
 import { isPanelWindow } from '../panels/params'
 import { useShow, type ShowRowPatch } from '../state/show'
-import { usePlayingRows } from '../state/show-playing'
+import { useRowDecks } from '../state/show-row-decks'
 import { ShowFileActions } from './ShowFileActions'
 import { ShowImportAction } from './ShowImportAction'
 import { ShowRowEditor } from './ShowRowEditor'
@@ -12,7 +13,7 @@ import { ShowSummary } from './ShowSummary'
 import { useOnAirConfirmation } from './useOnAirConfirmation'
 
 const NO_ISSUES = [] as const
-const NO_DECKS = [] as const
+const NO_DECKS: RowDecks = { playing: [], loaded: [] }
 
 /**
  * The show as a table: a row per track, its start timecode and trim
@@ -20,7 +21,7 @@ const NO_DECKS = [] as const
  * window mirrors it read-only, since only the main window pushes the show to
  * the timecode service. A start edit or a removal that would move a deck on
  * air asks first; a trim nudge applies at once. A row a deck is playing
- * stands out, in both.
+ * stands out and a row a deck has loaded names it, in both.
  */
 export function ShowEditor(): React.JSX.Element {
   const show = useShow((state) => state.show)
@@ -28,7 +29,7 @@ export function ShowEditor(): React.JSX.Element {
   const readOnly = isPanelWindow(window.location)
   const analysis = useMemo(() => (show === null ? null : analyseShow(show)), [show])
   const { confirmShowChange, dialog } = useOnAirConfirmation()
-  const playing = usePlayingRows()
+  const decksByRow = useRowDecks()
 
   const actions = !readOnly && (
     <div className="show-actions">
@@ -102,7 +103,7 @@ export function ShowEditor(): React.JSX.Element {
                 position={index + 1}
                 fps={show.fps}
                 issues={analysis?.byRow.get(row.id) ?? NO_ISSUES}
-                playingDecks={playing.get(row.id) ?? NO_DECKS}
+                decks={decksByRow.get(row.id) ?? NO_DECKS}
                 readOnly={readOnly}
                 onChange={(patch) => changeRow(row.id, patch)}
                 onRemove={() => deleteRow(row.id)}
