@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import type { DeckMatchStatus, DeckResolution, PositionQuality } from '../model'
-import { deckTimecodeView, qualityLabel, type DeckTimecodeRates } from './deck-timecode-view'
+import type { DeckMatchStatus, DeckResolution } from '../model'
+import { deckTimecodeView, type DeckTimecodeRates } from './deck-timecode-view'
 
 const RATES: DeckTimecodeRates = { showFps: 25, outputFps: 30 }
 const FRAMES_PER_HOUR_AT_25 = 25 * 3600
@@ -79,18 +79,5 @@ describe('deckTimecodeView', () => {
   it('a deck with no show renders no line', () => {
     expect(deckTimecodeView(status({ type: 'inactive' }), RATES)).toBeNull()
     expect(deckTimecodeView(status({ type: 'none' }), RATES)).toBeNull()
-  })
-
-  it('carries the position quality, or none when the service has not said', () => {
-    expect(deckTimecodeView(status({ type: 'pending' }), RATES)?.qualityLabel).toBe('grid')
-    const unknown = { ...status({ type: 'pending' }), positionQuality: null }
-    expect(deckTimecodeView(unknown, RATES)?.qualityLabel).toBeNull()
-  })
-})
-
-describe('qualityLabel', () => {
-  it('quality labels cover precise grid and estimate', () => {
-    const qualities: PositionQuality[] = ['precise', 'beatGrid', 'estimate']
-    expect(qualities.map(qualityLabel)).toEqual(['precise', 'grid', 'est.'])
   })
 })

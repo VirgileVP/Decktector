@@ -1,11 +1,10 @@
 /**
  * What a deck's bar says about its timecode against the show: the row it
- * runs on, or why it falls back, is cut, or waits — and where its playhead
- * comes from. A deck on air whose timecode is frozen, at the fallback or
+ * runs on, or why it falls back, is cut, or waits. A deck on air whose timecode is frozen, at the fallback or
  * silent must be readable in its own bar, not only in logs.
  */
 
-import type { DeckMatchStatus, PositionQuality, UnidentifiedReason } from '../model'
+import type { DeckMatchStatus, UnidentifiedReason } from '../model'
 import { formatTimecode, type ShowFps } from './show-timecode'
 
 /** How much the operator should worry: on its row, waiting, off its row, sending nothing. */
@@ -14,8 +13,6 @@ export type DeckTimecodeTone = 'ok' | 'pending' | 'warning' | 'alert'
 export interface DeckTimecodeView {
   tone: DeckTimecodeTone
   text: string
-  /** Where the playhead comes from, or null when the service has not said. */
-  qualityLabel: string | null
 }
 
 /** Rates the line needs to read frames and to name a mismatch. */
@@ -24,17 +21,6 @@ export interface DeckTimecodeRates {
   showFps: ShowFps
   /** The timecode output's fps. */
   outputFps: ShowFps
-}
-
-const QUALITY_LABELS: Readonly<Record<PositionQuality, string>> = {
-  precise: 'precise',
-  beatGrid: 'grid',
-  estimate: 'est.'
-}
-
-/** What the badge says about where a deck's playhead comes from. */
-export function qualityLabel(quality: PositionQuality): string {
-  return QUALITY_LABELS[quality]
 }
 
 /** Why a deck is not on a row's timeline, in a few words. */
@@ -66,12 +52,7 @@ export function deckTimecodeView(
   status: DeckMatchStatus,
   rates: DeckTimecodeRates
 ): DeckTimecodeView | null {
-  const quality = status.positionQuality === null ? null : qualityLabel(status.positionQuality)
-  const view = (tone: DeckTimecodeTone, text: string): DeckTimecodeView => ({
-    tone,
-    text,
-    qualityLabel: quality
-  })
+  const view = (tone: DeckTimecodeTone, text: string): DeckTimecodeView => ({ tone, text })
   const { resolution } = status
   switch (resolution.type) {
     case 'none':

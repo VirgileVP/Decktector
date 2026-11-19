@@ -8,14 +8,13 @@ import { useTimecodeStore } from '../state/timecode'
 
 interface DeckTimecodeLineProps {
   deckId: DeckId
-  /** In the narrow rail only the tone and the quality badge fit; the text moves to the tooltip. */
+  /** In the narrow rail only the tone fits; the text moves to the tooltip. */
   compact: boolean
 }
 
 /**
  * One line in a loaded deck's bar: the show row it runs on and from which
- * timecode, or why it falls back, is cut or waits, plus where its playhead
- * comes from. Rendered for every deck, not only the timecode source; only
+ * timecode, or why it falls back, is cut or waits. Rendered for every deck, not only the timecode source; only
  * the source announces its changes, so a screen reader is not flooded.
  */
 export function DeckTimecodeLine({
@@ -40,11 +39,6 @@ export function DeckTimecodeLine({
         <span className="deck-tc-dot" aria-label={view.text} role="img" />
       ) : (
         <span className="deck-tc-text">{view.text}</span>
-      )}
-      {view.qualityLabel !== null && (
-        <span className="deck-tc-quality" title="Where the playhead comes from">
-          {view.qualityLabel}
-        </span>
       )}
     </div>
   )
