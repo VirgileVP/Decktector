@@ -317,8 +317,8 @@ source: following playback, a deck cued in the headphones would count as on
 air and take the timecode, so the choice is held at the default otherwise.
 
 **On the decks.** Every loaded deck's bar says where it stands: the row it runs
-on and its start (`▸ Strobe · 00:20:00:00`), or why it is at the fallback, cut
-or still identifying.
+on and its start (`Strobe · 00:20:00:00`) behind a chain link, or — behind a
+broken one — why it is at the fallback, cut or still identifying.
 The **TC status** toggle in the Deck view tab hides or shows this line.
 
 **The show file.** The show is kept across restarts with no manual save.

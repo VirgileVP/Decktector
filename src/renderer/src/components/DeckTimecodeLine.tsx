@@ -42,7 +42,10 @@ export function DeckTimecodeLine({
           <TcLinkIcon linked={view.linked} />
         </span>
       ) : (
-        <span className="deck-tc-text">{view.text}</span>
+        <>
+          <TcLinkIcon linked={view.linked} />
+          <span className="deck-tc-text">{view.text}</span>
+        </>
       )}
     </div>
   )

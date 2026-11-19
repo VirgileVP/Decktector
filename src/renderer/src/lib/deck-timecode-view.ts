@@ -71,7 +71,7 @@ export function deckTimecodeView(
     case 'matched':
       return view(
         'ok',
-        `▸ ${status.rowTitle ?? 'Untitled'} · ${startLabel(status.startFrames, rates.showFps)}`
+        `${status.rowTitle ?? 'Untitled'} · ${startLabel(status.startFrames, rates.showFps)}`
       )
     case 'fallback':
       return view(

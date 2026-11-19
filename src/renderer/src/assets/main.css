@@ -1789,6 +1789,11 @@ input[type='checkbox']:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+/* The link glyph keeps its size while the text gives way. */
+.deck-tc-line > svg {
+  flex-shrink: 0;
+}
+
 .deck-tc-text {
   overflow: hidden;
   text-overflow: ellipsis;

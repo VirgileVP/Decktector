@@ -41,7 +41,7 @@ describe('deckTimecodeView', () => {
         deckTimecodeView(status(resolution, startFrames, rowTitle), RATES)?.text
     )
     expect(texts).toEqual([
-      '▸ Strobe · 00:20:00:00',
+      'Strobe · 00:20:00:00',
       'identifying…',
       'TC cut · show 25 fps, output 30 fps',
       'fallback 23:00:00:00 · unknown track',
