@@ -39,7 +39,7 @@ const SETTINGS_TABS = [
   'Deck view',
   'Line up',
   'Show',
-  'Timecode',
+  'TC Settings',
   'Remote view',
   'Devices',
   'About'
@@ -57,7 +57,7 @@ const WIDE_TABS: readonly SettingsTab[] = ['Line up', 'Show']
 const IS_TAURI = isTauri()
 const SHELL_ONLY_TABS: readonly SettingsTab[] = [
   'Show',
-  'Timecode',
+  'TC Settings',
   'Remote view',
   'Devices',
   'About'
@@ -366,7 +366,7 @@ export function SettingsDialog({
             </>
           )}
 
-          {IS_TAURI && activeTab === 'Timecode' && (
+          {IS_TAURI && activeTab === 'TC Settings' && (
             <>
               <section className="settings-section">
                 <h3>Timecode</h3>
