@@ -74,10 +74,13 @@ describe('readTimecodeLabel', () => {
 
 describe('formatTimecode', () => {
   it('round trips every frame of an hour at every rate', () => {
+    // One assertion per rate: an expect() per frame (~284k) outruns the CI test timeout.
     for (const fps of SHOW_FPS_OPTIONS) {
+      const mismatches: number[] = []
       for (let frames = 0; frames < SECONDS_PER_HOUR * fps; frames++) {
-        expect(parseTimecode(formatTimecode(frames, fps), fps)).toBe(frames)
+        if (parseTimecode(formatTimecode(frames, fps), fps) !== frames) mismatches.push(frames)
       }
+      expect(mismatches, `frames that do not round trip at ${fps} fps`).toEqual([])
     }
   })
 
