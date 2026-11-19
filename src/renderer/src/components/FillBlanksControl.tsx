@@ -78,15 +78,16 @@ export function FillBlanksControl({ fps, blankRows }: FillBlanksControlProps): R
           if (event.key === 'Enter') fillCustom()
         }}
       />
-      <button
-        type="button"
-        className="lineup-file-button"
-        title={actionTitle}
-        disabled={custom.trim() === ''}
-        onClick={fillCustom}
-      >
-        {respacing ? 'Respace' : 'Fill'}
-      </button>
+      {custom.trim() !== '' && (
+        <button
+          type="button"
+          className="lineup-file-button"
+          title={actionTitle}
+          onClick={fillCustom}
+        >
+          {respacing ? 'Respace' : 'Fill'}
+        </button>
+      )}
       {error !== null && (
         <span className="timecode-input-error" role="alert">
           {error}
